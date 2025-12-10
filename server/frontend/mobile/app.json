@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "Project Manager",
+    "slug": "project-manager",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "extra": {
+      "apiBaseUrl": "http://localhost:5000"
+    },
+    "owner": "project-manager",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.projectmanager",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app needs access to location to track your work location and provide location-based features.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to location to track your work location and provide location-based features.",
+        "NSCameraUsageDescription": "This app needs access to camera to scan QR codes for organization onboarding.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone for voice-to-text feature.",
+        "NSSpeechRecognitionUsageDescription": "This app needs speech recognition permission to convert your voice to text."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.projectmanager"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes for organization onboarding."
+        }
+      ],
+      "expo-localization",
+      [
+        "@react-native-voice/voice",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice-to-text feature.",
+          "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to recognize your speech for voice-to-text conversion."
+        }
+      ]
+    ]
+  }
+}

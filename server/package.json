@@ -1,0 +1,48 @@
+{
+  "name": "project-manager-fullstack",
+  "version": "1.0.0",
+  "description": "Full-stack Project Time Manager application with React Native frontend and Node.js backend",
+  "private": true,
+  "scripts": {
+    "start": "node start.js",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd server-backend && npm run dev",
+    "dev:frontend": "cd frontend/mobile && npm start",
+    "start:backend": "cd server-backend && npm start",
+    "start:frontend": "cd frontend/mobile && npm start",
+    "install:all": "npm install && cd server-backend && npm install && cd ../frontend/mobile && npm install",
+    "setup": "npm run install:all && npm run setup:db && npm run seed:db",
+    "setup:db": "cd server-backend && npm run setup-db",
+    "seed:db": "cd server-backend && npm run seed",
+    "restore:db": "cd server-backend && npm run restore",
+    "restore-all:db": "cd server-backend && npm run restore-all",
+    "test": "cd server-backend && npm test",
+    "android": "cd frontend/mobile && expo run:android",
+    "ios": "cd frontend/mobile && expo run:ios",
+    "web": "cd frontend/mobile && expo start --web",
+    "build:backend": "cd server-backend && npm run build",
+    "clean": "rm -rf node_modules server-backend/node_modules frontend/mobile/node_modules",
+    "logs:backend": "cd server-backend && npm run logs",
+    "health": "node health-check.js",
+    "clear-auth": "node clear-auth.js"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "concurrently": "^8.2.2",
+    "typescript": "~5.9.2",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "@react-native-community/datetimepicker": "^8.4.4",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.3",
+    "expo": "^54.0.20",
+    "pg": "^8.16.3",
+    "react": "19.1.0",
+    "react-native": "^0.81.5"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  }
+}

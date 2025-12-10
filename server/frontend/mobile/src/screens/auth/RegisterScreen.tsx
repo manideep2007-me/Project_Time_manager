@@ -1,0 +1,293 @@
+import React, { useState, useContext } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { AuthContext } from '../../context/AuthContext';
+import Input from '../../components/shared/Input';
+import Button from '../../components/shared/Button';
+import Card from '../../components/shared/Card';
+
+export default function RegisterScreen({ navigation, route }: any) {
+  const { register } = useContext(AuthContext);
+  const { t } = useTranslation();
+  const organizationCode = route?.params?.organizationCode;
+  const organizationName = route?.params?.organizationName;
+  
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = t('auth.first_name') + ' ' + t('common.error').toLowerCase();
+    }
+
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = t('auth.last_name') + ' ' + t('common.error').toLowerCase();
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = t('auth.email') + ' ' + t('common.error').toLowerCase();
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email';
+    }
+
+    if (!formData.password) {
+      newErrors.password = t('auth.password') + ' ' + t('common.error').toLowerCase();
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleRegister = async () => {
+    if (!validateForm()) return;
+
+    setLoading(true);
+    try {
+      await register({
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        organizationCode: organizationCode, // Pass organization code if available
+        role: 'employee', // Default to employee role for QR code registrations
+      });
+      Alert.alert('Success', 'Account created successfully!');
+    } catch (e: any) {
+      console.error('Registration error details:', e);
+      const errorMessage = e.response?.data?.error || e.message || 'Registration failed. Please try again.';
+      Alert.alert('Registration Failed', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <Text style={styles.logo}>⏱️</Text>
+            <Text style={styles.appName}>Project Manager</Text>
+          </View>
+        </View>
+
+        <Card style={styles.card}>
+          <View style={styles.formHeader}>
+            <Text style={styles.title}>{t('auth.create_account')}</Text>
+            {organizationName && (
+              <Text style={styles.orgText}>Joining: {organizationName}</Text>
+            )}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <View style={styles.nameRow}>
+              <View style={styles.nameInput}>
+                <Input
+                  label={t('auth.first_name')}
+                  placeholder={t('auth.first_name')}
+                  value={formData.firstName}
+                  onChangeText={(text) => setFormData({ ...formData, firstName: text })}
+                  error={errors.firstName}
+                />
+              </View>
+              <View style={styles.nameInput}>
+                <Input
+                  label={t('auth.last_name')}
+                  placeholder={t('auth.last_name')}
+                  value={formData.lastName}
+                  onChangeText={(text) => setFormData({ ...formData, lastName: text })}
+                  error={errors.lastName}
+                />
+              </View>
+            </View>
+
+            <Input
+              label={t('auth.email')}
+              placeholder={t('auth.email')}
+              value={formData.email}
+              onChangeText={(text) => setFormData({ ...formData, email: text })}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={errors.email}
+            />
+
+            <Input
+              label={t('auth.password')}
+              placeholder={t('auth.password')}
+              value={formData.password}
+              onChangeText={(text) => setFormData({ ...formData, password: text })}
+              secureTextEntry={true}
+              error={errors.password}
+            />
+
+            <Input
+              label={t('auth.confirm_password')}
+              placeholder={t('auth.confirm_password')}
+              value={formData.confirmPassword}
+              onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
+              secureTextEntry={true}
+              error={errors.confirmPassword}
+            />
+          </View>
+
+          <View style={styles.registerButton}>
+            <Button
+              title={t('auth.create_account')}
+              onPress={handleRegister}
+              loading={loading}
+            />
+          </View>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.loginContainer}>
+            <Text style={styles.loginText}>{t('auth.already_have_account')} </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.loginLink}>{t('auth.sign_in')}</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logo: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  appName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  welcomeText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  formHeader: {
+    marginBottom: 32,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  formSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  orgText: {
+    fontSize: 14,
+    color: '#007AFF',
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  inputContainer: {
+    marginBottom: 24,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  nameInput: {
+    flex: 1,
+  },
+  registerButton: {
+    marginBottom: 24,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e1e5e9',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  loginContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loginText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  loginLink: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+});
