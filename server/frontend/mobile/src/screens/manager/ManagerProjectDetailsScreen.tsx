@@ -7,6 +7,7 @@ import { getProject, listProjectTasks, getProjectTeam, listTimeEntries } from '.
 import { dashboardApi } from '../../api/dashboard';
 import { api } from '../../api/client';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
+import { typography } from '../../design/tokens';
 
 export default function ManagerProjectDetailsScreen() {
   const route = useRoute<any>();
@@ -402,14 +403,14 @@ export default function ManagerProjectDetailsScreen() {
     const colors = [
       '#8B4513', // Brown
       '#708090', // Blue-grey
-      '#34C759', // Green
+      '#B99696',
       '#FF9500', // Orange
       '#5AC8FA', // Light blue
-      '#007AFF', // Blue
-      '#AF52DE', // Purple
+      '#8DBDC3',
+      '#96A9B9',
       '#FF3B30', // Red
-      '#FF9500', // Orange
-      '#34C759', // Green
+      '#8DBDC3',
+      '#9FB996',
     ];
     const index = name.charCodeAt(0) % colors.length;
     return colors[index];
@@ -474,8 +475,8 @@ export default function ManagerProjectDetailsScreen() {
   return (
     <SafeAreaWrapper backgroundColor="#F5F6FA">
       <View style={styles.container}>
-        {/* Purple Header */}
-        <View style={styles.header}>
+        {/* Fixed Header with Purple Background */}
+        <View style={styles.fixedHeader}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
               <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
@@ -497,8 +498,18 @@ export default function ManagerProjectDetailsScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             showsVerticalScrollIndicator={false}
           >
+            {/* Purple Background Section (100px height) */}
+            <View style={styles.purpleBackgroundSection}>
+              <View style={styles.purpleBackgroundSpacer} />
+            </View>
+            
             {/* Project Information Card */}
             <View style={[styles.contentCard, styles.overlappingCard]}>
+              {/* Project Location */}
+              {project.location && (
+                <Text style={styles.projectLocation}>{project.location}</Text>
+              )}
+
               {/* Project Title */}
               <Text style={styles.projectTitle}>{project.name || 'Project'}</Text>
 
@@ -555,8 +566,10 @@ export default function ManagerProjectDetailsScreen() {
               <View style={styles.progressContainer}>
                 <View style={styles.progressBar}>
                   <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                  <View style={[styles.progressTextContainer, { left: `${progress}%` }]}>
+                    <Text style={styles.progressText}>{progress}%</Text>
+                  </View>
                 </View>
-                <Text style={styles.progressText}>{progress}%</Text>
               </View>
 
               {/* Task Status Section within the same card */}
@@ -826,6 +839,7 @@ export default function ManagerProjectDetailsScreen() {
                       <Ionicons name="chevron-back" size={20} color="#000000" />
                     </TouchableOpacity>
                     <View style={styles.productivityWeekNavText}>
+                      <Text style={styles.productivityWeekLabel}>Week</Text>
                       <Text style={styles.productivityWeekRange}>{getProductivityWeekRange()}</Text>
                     </View>
                     <TouchableOpacity onPress={() => navigateWeek('next')} style={styles.productivityNavButton}>
@@ -895,10 +909,11 @@ export default function ManagerProjectDetailsScreen() {
             </View>
 
             {/* Team Section */}
+            <Text style={styles.teamCardTitle}>Team</Text>
             <View style={styles.teamSection}>
               <View style={styles.teamCard}>
                 <View style={styles.teamCardHeader}>
-                  <Text style={styles.teamCardTitle}>Team</Text>
+                  
                   <Text style={styles.teamCardTotalTime}>Total Time</Text>
                 </View>
                 {teamMembersWithTime.map((member) => {
@@ -920,9 +935,16 @@ export default function ManagerProjectDetailsScreen() {
                         <Text style={styles.teamMemberName}>{memberName}</Text>
                         <Text style={styles.teamMemberRole}>{memberRole}</Text>
                       </View>
-                      <Text style={styles.teamMemberTime}>
-                        {formatTime(member.hours || 0, member.minutes || 0)}
-                      </Text>
+                      <View style={styles.teamMemberTimeContainer}>
+                        <Text style={styles.teamMemberTimeNumber}>
+                          {(member.hours || 0).toString().padStart(2, '0')}
+                        </Text>
+                        <Text style={styles.teamMemberTimeUnit}>hr </Text>
+                        <Text style={styles.teamMemberTimeNumber}>
+                          {(member.minutes || 0).toString().padStart(2, '0')}
+                        </Text>
+                        <Text style={styles.teamMemberTimeUnit}>min</Text>
+                      </View>
                     </View>
                   );
                 })}
@@ -1007,8 +1029,16 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '600',
   },
-  header: {
+  fixedHeader: {
     backgroundColor: '#877ED2',
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    zIndex: 100,
+    elevation: 5,
+  },
+  header: {
+    // backgroundColor: '#877ED2',
     paddingTop: 12,
     paddingBottom: 140,
     paddingHorizontal: 16,
@@ -1030,79 +1060,99 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
     color: '#FFFFFF',
     marginLeft: 2,
   },
   cardContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 10,
-    pointerEvents: 'box-none',
+    flex: 1,
+    // backgroundColor: '#877ED2',
   },
   scrollView: {
     flex: 1,
     backgroundColor: 'transparent',
+    // backgroundColor: '#877ED2',
   },
   scrollContent: {
     padding: 16,
-    paddingTop: 168,
+    paddingTop: 0,
     paddingBottom: 20,
+  },
+  purpleBackgroundSection: {
+    backgroundColor: '#877ED2',
+    height: 150,
+    marginTop: -16,
+    marginHorizontal: -16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    marginBottom: -40,
+  },
+  purpleBackgroundSpacer: {
+    height: 60,
   },
   contentCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 20,
+    elevation: 4,
     zIndex: 10,
     marginBottom: 16,
   },
   overlappingCard: {
-    marginTop: -80,
+    marginTop: -70,
+    zIndex: 10,
+  },
+  projectLocation: {
+    fontSize: 10,
+    color: '#727272',
+    marginBottom: 2,
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
   },
   projectTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 16,
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#404040',
+    marginBottom: 12,
+    height: 32,
+    fontFamily: typography.families.medium,
   },
   description: {
     fontSize: 12,
-    color: '#000000',
+    color: '#8F8F8F',
     lineHeight: 24,
-    marginBottom: 20,
+    marginBottom: 14,
     fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   locationIcon: {
-    marginRight: 8,
+    marginRight: 4,
     marginTop: 2,
   },
   addressText: {
     flex: 1,
     fontSize: 12,
-    color: '#877ED2',
+    color: '#404040',
     textDecorationLine: 'underline',
     lineHeight: 20,
     fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   footerStats: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
     paddingTop: 6,
-    borderTopWidth: 1,
     borderTopColor: '#F5F6FA',
   },
   statItem: {
@@ -1112,13 +1162,14 @@ const styles = StyleSheet.create({
   },
   statNumber: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    color: '#727272',
     marginLeft: 8,
   },
   statusCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 20,
     marginBottom: 16,
     shadowColor: '#000',
@@ -1134,61 +1185,74 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   statusTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#404040',
   },
   statusPill: {
-    backgroundColor: '#5AC8FA',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#7E99D2',
     borderRadius: 12,
+    width: 70,
+    height: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusPillText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '400',
     color: '#FFFFFF',
+    fontFamily: typography.families.regular,
   },
   datesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 22,
   },
   dateItem: {
     flex: 1,
   },
   dateLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 12,
+    color: '#727272',
     marginBottom: 4,
     fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   dateValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#404040',
   },
   progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    position: 'relative',
+    marginBottom: 4,
   },
   progressBar: {
-    flex: 1,
+    width: '100%',
     height: 8,
     backgroundColor: '#F5F6FA',
     borderRadius: 4,
-    overflow: 'hidden',
+    overflow: 'visible',
+    position: 'relative',
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#34C759',
     borderRadius: 4,
   },
+  progressTextContainer: {
+    position: 'absolute',
+    top: -18,
+    marginLeft: -26,
+    zIndex: 1,
+  },
   progressText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#727272',
   },
   taskStatusSection: {
     marginTop: 24,
@@ -1208,9 +1272,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   taskStatusTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#404040',
     marginBottom: 16,
   },
   taskList: {
@@ -1227,9 +1292,10 @@ const styles = StyleSheet.create({
   },
   taskName: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    color: '#404040',
     marginRight: 12,
   },
   taskMeta: {
@@ -1239,12 +1305,14 @@ const styles = StyleSheet.create({
   },
   taskDuration: {
     fontSize: 12,
-    fontWeight: '400',
-    color: '#8E8E93',
+    fontWeight: '500',
+    color: '#4C4C4C',
+    fontFamily: typography.families.medium,
   },
   taskStatusText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
   },
   taskStatusBar: {
     height: 2,
@@ -1256,9 +1324,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   moreTaskText: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 12,
+    color: '#8F8F8F',
     fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   viewTasksButton: {
     backgroundColor: '#007AFF',
@@ -1274,8 +1343,9 @@ const styles = StyleSheet.create({
   },
   tasksSection: {
     marginTop: 24,
-    paddingHorizontal: 0,
     paddingBottom: 20,
+    paddingHorizontal: 0,
+    height: 320,
   },
   tasksHeader: {
     flexDirection: 'row',
@@ -1284,9 +1354,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   tasksTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '500',
     color: '#000000',
+    fontFamily: typography.families.medium,
   },
   allButton: {
     flexDirection: 'row',
@@ -1294,7 +1365,9 @@ const styles = StyleSheet.create({
   },
   allButtonText: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#8F8F8F',
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
     marginRight: 4,
   },
   tasksScrollContent: {
@@ -1306,6 +1379,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginRight: 12,
     width: 280,
+    height: 250,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1334,8 +1408,9 @@ const styles = StyleSheet.create({
   },
   taskTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#000000',
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
     marginBottom: 12,
     lineHeight: 22,
   },
@@ -1344,21 +1419,22 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   taskDateLabel: {
-    fontSize: 14,
-    color: '#000000',
+    fontSize: 10,
+    color: '#727272',
     fontWeight: '400',
-    marginBottom: 4,
+    fontFamily: typography.families.regular,
   },
   taskDateValue: {
-    fontSize: 14,
-    color: '#000000',
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#404040',
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    height: 16,
   },
   taskFooter: {
     flexDirection: 'row',
     marginTop: 12,
     paddingTop: 12,
-    borderTopWidth: 1,
     borderTopColor: '#F5F6FA',
   },
   taskStatItem: {
@@ -1367,10 +1443,11 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   taskStatNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#727272',
     marginLeft: 6,
+    fontFamily: typography.families.regular,
   },
   noTasksContainer: {
     paddingVertical: 40,
@@ -1387,8 +1464,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   productivityTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
     color: '#000000',
     marginBottom: 16,
   },
@@ -1396,36 +1474,48 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   productivityFiltersLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
+    fontSize: 10,
+    color: '#727272',
     marginBottom: 8,
     fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   productivityFiltersScroll: {
     paddingRight: 16,
   },
   productivityFilterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F5F6FA',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#8F8F8F',
+    backgroundColor: '#F1F1F4',
     marginRight: 8,
+    height: 30,
+    width: 100,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productivityFilterButtonActive: {
-    backgroundColor: '#877ED2',
+    backgroundColor: '#F1F1F4',
   },
   productivityFilterButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#8E8E93',
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    color: '#8F8F8F',
+    textAlign: 'center',
   },
   productivityFilterButtonTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '400',
+    fontSize: 12,
+    fontFamily: typography.families.regular,
+    color: '#000000',
   },
   productivityCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1444,46 +1534,68 @@ const styles = StyleSheet.create({
   },
   productivityHeaderLeft: {
     alignItems: 'flex-start',
+    height: 32,
+    width: 200,
+    borderRadius: 60,
   },
   productivityViewToggle: {
     flexDirection: 'row',
     backgroundColor: '#F5F6FA',
-    borderRadius: 8,
+    borderRadius: 30,
     padding: 2,
   },
   productivityToggleButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 30,
+    height: 32,
+    width: 95,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productivityToggleButtonActive: {
-    backgroundColor: '#877ED2',
+    backgroundColor: '#6F67CC',
+    borderRadius: 30,
+    height: 32,
+    width: 95,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productivityToggleText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#8E8E93',
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#727272',
+    fontFamily: typography.families.regular,
   },
   productivityToggleTextActive: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    fontSize: 12,
   },
   productivityChartToggle: {
     flexDirection: 'row',
     backgroundColor: '#F5F6FA',
     borderRadius: 8,
-    padding: 2,
+    paddingRight: 22,
     gap: 2,
+    width: 74,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productivityChartToggleButton: {
-    width: 32,
+    width: 45,
     height: 32,
-    borderRadius: 6,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
   productivityChartToggleButtonActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#6F67CC',
+    borderRadius: 30,
+    width: 45,
+    height: 32,
   },
   productivityWeekNav: {
     flexDirection: 'row',
@@ -1492,6 +1604,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     position: 'relative',
+    height: 42,
   },
   productivityNavButton: {
     zIndex: 1,
@@ -1503,10 +1616,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 0,
   },
+  productivityWeekLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#727272',
+    fontFamily: typography.families.regular,
+  },
   productivityWeekRange: {
     fontSize: 14,
     fontWeight: '600',
     color: '#000000',
+    marginBottom: 4,
   },
   productivityChartContainer: {
     marginBottom: 16,
@@ -1615,7 +1735,7 @@ const styles = StyleSheet.create({
   },
   teamCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1625,19 +1745,23 @@ const styles = StyleSheet.create({
   },
   teamCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginBottom: 16,
   },
   teamCardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '500',
     color: '#000000',
+    fontFamily: typography.families.medium,
+    paddingLeft: 4,
+    marginBottom: -6,
   },
   teamCardTotalTime: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#8E8E93',
+    fontSize: 10,
+    fontWeight: '400',
+    color: '#727272',
+    fontFamily: typography.families.regular,
   },
   teamMemberRow: {
     flexDirection: 'row',
@@ -1661,7 +1785,8 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontFamily: typography.families.bold,
     color: '#FFFFFF',
   },
   teamMemberInfo: {
@@ -1669,34 +1794,49 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   teamMemberName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
     marginBottom: 2,
   },
   teamMemberRole: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 10,
+    color: '#727272',
     fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
-  teamMemberTime: {
+  teamMemberTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  teamMemberTimeNumber: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#000000',
+    fontFamily: typography.families.medium,
+  },
+  teamMemberTimeUnit: {
+    fontSize: 10,
+    fontWeight: '400',
+    color: '#727272',
+    fontFamily: typography.families.regular,
+    marginRight: 2,
   },
   manageTeamButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+    alignSelf: 'flex-end',
     marginTop: 8,
     paddingTop: 16,
-    borderTopWidth: 1,
     borderTopColor: '#F5F6FA',
   },
   manageTeamText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#877ED2',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
     marginLeft: 6,
   },
   attachmentsSection: {
@@ -1705,9 +1845,10 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   attachmentsTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '500',
     color: '#000000',
+    fontFamily: typography.families.medium,
     marginBottom: 16,
   },
   attachmentCategories: {

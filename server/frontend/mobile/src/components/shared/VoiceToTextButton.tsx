@@ -165,87 +165,122 @@ export default function VoiceToTextButton({
           setIsSupported(false);
         });
       
-      // Set up voice recognition event handlers
-      Voice.onSpeechStart = () => {
-        console.log('Speech recognition started');
-        setIsListening(true);
-      };
+      // Set up voice recognition event handlers only if Voice is available
+      if (Voice) {
+        try {
+          // Only set handlers if Voice object exists and has the properties
+          if (Voice && typeof Voice === 'object') {
+            Voice.onSpeechStart = () => {
+              console.log('Speech recognition started');
+              setIsListening(true);
+            };
 
-      Voice.onSpeechEnd = () => {
-        console.log('Speech recognition ended');
-        setIsListening(false);
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-      };
+            Voice.onSpeechEnd = () => {
+              console.log('Speech recognition ended');
+              setIsListening(false);
+              if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
+              }
+            };
 
-      Voice.onSpeechResults = (e: any) => {
-        console.log('Speech results:', e);
-        if (e.value && e.value.length > 0) {
-          const transcript = e.value[0];
-          console.log('Transcript:', transcript);
-          onResult(transcript.trim());
-        }
-        setIsListening(false);
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-      };
+            Voice.onSpeechResults = (e: any) => {
+              console.log('Speech results:', e);
+              if (e.value && e.value.length > 0) {
+                const transcript = e.value[0];
+                console.log('Transcript:', transcript);
+                onResult(transcript.trim());
+              }
+              setIsListening(false);
+              if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
+              }
+            };
 
-      Voice.onSpeechPartialResults = (e: any) => {
-        console.log('Partial results:', e);
-      };
+            Voice.onSpeechPartialResults = (e: any) => {
+              console.log('Partial results:', e);
+            };
 
-      Voice.onSpeechError = (e: any) => {
-        console.error('Speech error:', e);
-        setIsListening(false);
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-        
-        let errorMessage = 'Voice recognition error';
-        
-        if (e.error) {
-          if (e.error.code === 'ERROR_NO_MATCH') {
-            errorMessage = 'No speech detected. Please try again.';
-          } else if (e.error.code === 'ERROR_AUDIO') {
-            errorMessage = 'Microphone permission denied. Please allow microphone access in your device settings.';
-          } else if (e.error.code === 'ERROR_SERVER') {
-            errorMessage = 'Server error. Please check your internet connection.';
-          } else if (e.error.code === 'ERROR_NETWORK') {
-            errorMessage = 'Network error. Please check your connection.';
-          } else if (e.error.message) {
-            errorMessage = e.error.message;
-          } else if (typeof e.error === 'string') {
-            errorMessage = e.error;
+            Voice.onSpeechError = (e: any) => {
+              console.error('Speech error:', e);
+              setIsListening(false);
+              if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
+              }
+              
+              let errorMessage = 'Voice recognition error';
+              
+              if (e.error) {
+                if (e.error.code === 'ERROR_NO_MATCH') {
+                  errorMessage = 'No speech detected. Please try again.';
+                } else if (e.error.code === 'ERROR_AUDIO') {
+                  errorMessage = 'Microphone permission denied. Please allow microphone access in your device settings.';
+                } else if (e.error.code === 'ERROR_SERVER') {
+                  errorMessage = 'Server error. Please check your internet connection.';
+                } else if (e.error.code === 'ERROR_NETWORK') {
+                  errorMessage = 'Network error. Please check your connection.';
+                } else if (e.error.message) {
+                  errorMessage = e.error.message;
+                } else if (typeof e.error === 'string') {
+                  errorMessage = e.error;
+                }
+              }
+
+              if (onError) {
+                onError(errorMessage);
+              } else {
+                Alert.alert('Voice Recognition Error', errorMessage, [{ text: 'OK' }]);
+              }
+            };
           }
+        } catch (error) {
+          console.error('Error setting up Voice event handlers:', error);
+          setIsSupported(false);
         }
-
-        if (onError) {
-          onError(errorMessage);
-        } else {
-          Alert.alert('Voice Recognition Error', errorMessage, [{ text: 'OK' }]);
-        }
-      };
+      }
 
       // Cleanup on unmount
       return () => {
-        if (Voice && isListeningRef.current) {
-          Voice.stop()
-            .then(() => {
-              Voice.destroy().then(() => Voice.removeAllListeners());
-            })
-            .catch(() => {
-              Voice.removeAllListeners();
-            });
-        } else if (Voice) {
-          Voice.removeAllListeners();
+        try {
+          if (Voice && Voice !== null && typeof Voice === 'object') {
+            // Clear event handlers first
+            try {
+              if (typeof Voice.removeAllListeners === 'function') {
+                Voice.removeAllListeners();
+              }
+              // Clear individual handlers if they exist
+              if (Voice.onSpeechStart) Voice.onSpeechStart = null;
+              if (Voice.onSpeechEnd) Voice.onSpeechEnd = null;
+              if (Voice.onSpeechResults) Voice.onSpeechResults = null;
+              if (Voice.onSpeechPartialResults) Voice.onSpeechPartialResults = null;
+              if (Voice.onSpeechError) Voice.onSpeechError = null;
+            } catch (e) {
+              // Ignore errors when clearing handlers
+            }
+            
+            if (isListeningRef.current) {
+              Voice.stop()
+                .then(() => {
+                  if (Voice && typeof Voice.destroy === 'function') {
+                    Voice.destroy().catch(() => {
+                      // Ignore destroy errors
+                    });
+                  }
+                })
+                .catch(() => {
+                  // Ignore stop errors
+                });
+            }
+          }
+        } catch (error) {
+          // Silently fail - component is unmounting anyway
+          // Don't log errors during cleanup to avoid noise
         }
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
         }
       };
     } else {
@@ -314,37 +349,39 @@ export default function VoiceToTextButton({
         }, 30000);
       } 
       // Priority 2: Native Voice module (for development builds)
-      else if (Voice) {
+      else if (Voice && typeof Voice.isAvailable === 'function') {
         // Check availability first
-        const available = await Voice.isAvailable();
-        if (!available) {
-          Alert.alert(
-            'Not Available', 
-            'Voice recognition is not available on this device. Please check your device settings and ensure microphone permissions are granted.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
-
-        // Request permissions (this will show permission dialog if needed)
         try {
-          // Start listening - this will request permissions automatically
-          await Voice.start(getLanguageCode());
-          setIsListening(true);
-          console.log('Voice recognition started successfully');
+          const available = await Voice.isAvailable();
+          if (!available) {
+            Alert.alert(
+              'Not Available', 
+              'Voice recognition is not available on this device. Please check your device settings and ensure microphone permissions are granted.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
 
-          // Auto-stop after 30 seconds
-          timeoutRef.current = setTimeout(async () => {
-            if (isListeningRef.current && Voice) {
-              try {
-                await Voice.stop();
-                setIsListening(false);
-              } catch (error) {
-                console.error('Error stopping voice:', error);
-                setIsListening(false);
+          // Request permissions (this will show permission dialog if needed)
+          if (typeof Voice.start === 'function') {
+            // Start listening - this will request permissions automatically
+            await Voice.start(getLanguageCode());
+            setIsListening(true);
+            console.log('Voice recognition started successfully');
+
+            // Auto-stop after 30 seconds
+            timeoutRef.current = setTimeout(async () => {
+              if (isListeningRef.current && Voice && typeof Voice.stop === 'function') {
+                try {
+                  await Voice.stop();
+                  setIsListening(false);
+                } catch (error) {
+                  console.error('Error stopping voice:', error);
+                  setIsListening(false);
+                }
               }
-            }
-          }, 30000);
+            }, 30000);
+          }
         } catch (startError: any) {
           console.error('Error starting voice recognition:', startError);
           setIsListening(false);
@@ -405,7 +442,7 @@ export default function VoiceToTextButton({
         } catch (e) {
           console.error('Error stopping web recognition:', e);
         }
-      } else if (Voice && isListeningRef.current) {
+      } else if (Voice && typeof Voice.stop === 'function' && isListeningRef.current) {
         try {
           await Voice.stop();
           console.log('Voice recognition stopped');

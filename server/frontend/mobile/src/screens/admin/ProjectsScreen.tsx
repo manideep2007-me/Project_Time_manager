@@ -1,171 +1,158 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, StyleSheet, TextInput, RefreshControl, Modal, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  RefreshControl,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import Card from '../../components/shared/Card';
-import ProjectCard from '../../components/shared/ProjectCard';
-import AppHeader from '../../components/shared/AppHeader';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import { api } from '../../api/client';
 import VoiceToTextButton from '../../components/shared/VoiceToTextButton';
+import { tokens } from '../../design/tokens';
+
+const { typography } = tokens;
 
 export default function ProjectsScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [hasNext, setHasNext] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'active' | 'completed' | 'on_hold' | 'cancelled' | 'todo' | 'pending' | 'all'>('all');
-  const [showAll, setShowAll] = useState(false);
-  const [allItems, setAllItems] = useState<any[]>([]);
   const { user } = useContext(AuthContext);
 
-  // Filter modal state
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<string[]>(['all']);
-  const [appliedFilters, setAppliedFilters] = useState({
-    status: ['all'] as string[]
-  });
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<'in_progress' | 'new' | 'completed' | 'all'>('in_progress');
 
-  const load = async (pageNum = 1, q = '', status = statusFilter) => {
-    setLoading(true);
+  const loadProjects = async () => {
     try {
-      console.log('🔄 Loading projects from database for ADMIN...');
-      console.log('👤 User role:', user?.role);
-      
-      // Admin: Show ALL projects with full access
-      let all = [];
-      try {
-        console.log('📡 Making API call to /api/projects with status filter:', status);
-        const response = await api.get('/api/projects', { params: { page: 1, limit: 100, status: status === 'all' ? '' : status } });
-        console.log('📊 API Response:', response.data);
-        
-        const apiProjects = response.data?.projects || [];
-        console.log('✅ Projects loaded from database:', apiProjects.length);
-        
-        all = apiProjects.map((p: any, index: number) => ({
-          id: p.id,
-          name: p.name,
-          projectCode: `PRJ-${String(index + 1).padStart(3, '0')}`,
-          totalHours: 0,
-          totalCost: 0,
-          status: p.status,
-          startDate: p.start_date,
-          endDate: p.end_date,
-          location: p.location,
-          assignedEmployees: [],
-          employees: [],
-          clientId: p.client_id,
-          clientName: p.client_name,
-          budget: p.budget || 0,
-          allocatedHours: p.allocated_hours || 0,
-        }));
-        
-        console.log('📋 Mapped projects:', all.length);
-        
-      } catch (error) {
-        console.log('❌ Projects API failed:', (error as Error).message);
-        console.log('Error details:', (error as any).response?.data || error);
-        all = [];
+      setLoading(true);
+      if (!user?.id) {
+        setProjects([]);
+        return;
       }
-      
-      let filtered = q
-        ? all.filter((p: any) => p.name.toLowerCase().includes(q.toLowerCase()))
-        : all;
-      
-      // Store all items for show all functionality
-      setAllItems(filtered);
-      
-      // Status filtering is now handled by the API
-      const pageSize = 20;
-      const start = (pageNum - 1) * pageSize;
-      const slice = filtered.slice(start, start + pageSize);
-      setItems(pageNum === 1 ? slice : [...items, ...slice]);
-      setHasNext(start + pageSize < filtered.length);
-      setPage(pageNum);
-      
-      console.log('✅ Final projects loaded:', all.length, 'Filtered:', filtered.length, 'Displayed:', slice.length);
+      // Admin: Show all projects (not just assigned)
+      const response = await api.get('/api/projects', { params: { page: 1, limit: 100 } });
+      const allProjects = response.data?.projects || [];
+      setProjects(allProjects);
     } catch (error) {
-      console.error('❌ Error loading projects:', error);
+      console.error('Error loading projects:', error);
+      setProjects([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Only load projects if user is authenticated
-    if (user) {
-      console.log('👤 User authenticated, loading projects...');
-      load(1, search, statusFilter);
-    } else {
-      console.log('⏳ Waiting for user authentication...');
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    loadProjects();
+  }, [user?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load(1, search, statusFilter);
+    await loadProjects();
     setRefreshing(false);
   };
 
-  const loadMore = async () => {
-    if (hasNext && !loading) {
-      await load(page + 1, search, statusFilter);
+  const getStatusCounts = () => {
+    const inProgress = projects.filter(p => p.status === 'active' || p.status === 'in_progress').length;
+    const newProjects = projects.filter(p => p.status === 'pending' || p.status === 'todo').length;
+    const completed = projects.filter(p => p.status === 'completed').length;
+    return {
+      in_progress: inProgress,
+      new: newProjects,
+      completed,
+      all: projects.length,
+    };
+  };
+
+  const statusCounts = getStatusCounts();
+
+  const filteredProjects = projects.filter(project => {
+    if (selectedFilter === 'in_progress') {
+      if (project.status !== 'active' && project.status !== 'in_progress') return false;
+    } else if (selectedFilter === 'new') {
+      if (project.status !== 'pending' && project.status !== 'todo') return false;
+    } else if (selectedFilter === 'completed') {
+      if (project.status !== 'completed') return false;
+    }
+
+    if (search) {
+      const s = search.toLowerCase();
+      if (
+        !project.name?.toLowerCase().includes(s) &&
+        !project.location?.toLowerCase().includes(s)
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'active':
+      case 'in_progress':
+        return '#877ED2';
+      case 'completed':
+        return '#34C759';
+      case 'pending':
+      case 'todo':
+      case 'on_hold':
+        return '#FF9500';
+      case 'cancelled':
+        return '#FF3B30';
+      default:
+        return '#8E8E93';
     }
   };
 
-  const toggleShowAll = () => {
-    if (showAll) {
-      // Show only first 20 items
-      setItems(allItems.slice(0, 20));
-      setShowAll(false);
-    } else {
-      // Show all items
-      setItems(allItems);
-      setShowAll(true);
+  const getStatusText = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'active':
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Completed';
+      case 'pending':
+      case 'todo':
+        return 'New';
+      case 'on_hold':
+        return 'On Hold';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status || 'Unknown';
     }
   };
+
+  const getDaysRemaining = (endDate: string) => {
+    if (!endDate) return 0;
+    const due = new Date(endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+    const diffTime = due.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const isOverdue = (endDate: string) => getDaysRemaining(endDate) < 0;
 
   const handleProjectPress = (project: any) => {
     navigation.navigate('ProjectDetails', { id: project.id });
   };
 
-  // Filter functions
-  const openFilterModal = () => {
-    setFilterStatus(appliedFilters.status);
-    setShowFilterModal(true);
-  };
-
-  const closeFilterModal = () => {
-    setShowFilterModal(false);
-  };
-
-  // Instant apply when status is selected
-  const handleStatusSelect = (status: string) => {
-    setFilterStatus([status]);
-    setAppliedFilters({ status: [status] });
-    setStatusFilter(status as any);
-    load(1, search, status as any);
-    closeFilterModal();
-  };
-
-  const getFilterButtonText = () => {
-    const activeFilters = [] as string[];
-    if (appliedFilters.status.length > 0 && appliedFilters.status[0] !== 'all') {
-      activeFilters.push('Status');
-    }
-    return activeFilters.length > 0 ? `Filter (${activeFilters.length})` : 'Filter';
-  };
-
-  if (loading && items.length === 0) {
+  if (loading && projects.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#877ED2" />
         <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
@@ -173,119 +160,186 @@ export default function ProjectsScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader
-        rightAction={allItems.length > 20 ? {
-          title: showAll ? 'Show Less' : `Show All (${allItems.length})`,
-          onPress: toggleShowAll,
-          style: styles.toggleButton,
-          textStyle: styles.toggleButtonText
-        } : undefined}
-      />
-      
-      <View style={styles.screenContent}>
-        <Text style={styles.title}>
-          {t('projects.projects')} ({showAll ? allItems.length : items.length}/{allItems.length})
-        </Text>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Projects</Text>
+        <TouchableOpacity style={styles.headerButton}>
+          <Ionicons name="ellipsis-vertical" size={24} color="#1A1A1A" />
+        </TouchableOpacity>
+      </View>
 
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Status filters */}
+        <View style={styles.filterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterContent}
+          >
+            <TouchableOpacity
+              style={[styles.filterTab, selectedFilter === 'in_progress' && styles.filterTabActive]}
+              onPress={() => setSelectedFilter('in_progress')}
+            >
+              <Text style={[styles.filterText, selectedFilter === 'in_progress' && styles.filterTextActive]}>
+                In Progress ({statusCounts.in_progress})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterTab, selectedFilter === 'new' && styles.filterTabActive]}
+              onPress={() => setSelectedFilter('new')}
+            >
+              <Text style={[styles.filterText, selectedFilter === 'new' && styles.filterTextActive]}>
+                New ({statusCounts.new})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterTab, selectedFilter === 'completed' && styles.filterTabActive]}
+              onPress={() => setSelectedFilter('completed')}
+            >
+              <Text style={[styles.filterText, selectedFilter === 'completed' && styles.filterTextActive]}>
+                Completed ({statusCounts.completed})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterTab, selectedFilter === 'all' && styles.filterTabActive]}
+              onPress={() => setSelectedFilter('all')}
+            >
+              <Text style={[styles.filterText, selectedFilter === 'all' && styles.filterTextActive]}>
+                All ({statusCounts.all})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* Search bar */}
         <View style={styles.searchContainer}>
           <View style={styles.searchRow}>
             <View style={styles.searchInputContainer}>
               <TextInput
                 value={search}
                 onChangeText={setSearch}
-                placeholder={t('common.search')}
-                style={styles.search}
-                onSubmitEditing={() => load(1, search, statusFilter)}
+                placeholder="Search"
+                style={styles.searchInput}
+                placeholderTextColor="#9CA3AF"
               />
               <VoiceToTextButton
-                onResult={(text) => {
+                onResult={text => {
                   setSearch(text);
-                  load(1, text, statusFilter);
                 }}
                 size="small"
-                style={{ marginRight: 4 }}
+                style={styles.voiceButton}
+                color="#877ED2"
               />
-              <TouchableOpacity
-                onPress={() => load(1, search, statusFilter)}
-                style={styles.searchIconButton}
-              >
-                <Text style={styles.searchIconText}>🔍</Text>
+              <TouchableOpacity style={styles.searchIconButton}>
+                <Ionicons name="search" size={20} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={openFilterModal}
-              style={styles.filterButton}
-            >
-              <Text style={styles.filterButtonText}>{getFilterButtonText()}</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
-      <FlatList
-        data={items}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <ProjectCard 
-            project={item} 
-            onPress={() => handleProjectPress(item)}
-          />
-        )}
-        onEndReached={showAll ? undefined : loadMore}
-        onEndReachedThreshold={0.6}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>{t('projects.no_projects')}</Text>
-            <Text style={styles.emptySubtext}>
-              {search ? t('common.search') : t('projects.create_project')}
-            </Text>
-          </View>
-        }
-        contentContainerStyle={styles.listContent}
-        />
-      </View>
-
-      {/* Filter Modal */}
-      <Modal
-        visible={showFilterModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeFilterModal}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={closeFilterModal}
-        >
-          <TouchableOpacity 
-            style={styles.modalContent} 
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.modalBody}>
-              <View style={styles.statusContainer}>
-                {['all', 'active', 'todo', 'pending', 'completed', 'on_hold', 'cancelled'].map((status) => (
-                  <TouchableOpacity
-                    key={status}
-                    onPress={() => handleStatusSelect(status)}
-                    style={[
-                      styles.statusChip,
-                      filterStatus.includes(status) && styles.statusChipActive
-                    ]}
-                  >
-                    <Text style={[
-                      styles.statusChipText,
-                      filterStatus.includes(status) && styles.statusChipTextActive
-                    ]}>
-                      {status.replace('_', ' ').toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+        {/* Project cards */}
+        <View style={styles.projectsContainer}>
+          {filteredProjects.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No Projects Found</Text>
+              <Text style={styles.emptySubtitle}>No projects match your current filters.</Text>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+          ) : (
+            filteredProjects.map(project => {
+              const overdue = isOverdue(project.end_date || project.endDate);
+              const daysRemaining = getDaysRemaining(project.end_date || project.endDate);
+              const statusColor = getStatusColor(project.status);
+
+              return (
+                <TouchableOpacity
+                  key={project.id}
+                  style={styles.projectCard}
+                  onPress={() => handleProjectPress(project)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.projectCardTop}>
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                      <Text style={styles.statusBadgeText}>{getStatusText(project.status)}</Text>
+                    </View>
+                    <View style={styles.avatarContainer}>
+                      <View style={styles.avatar}>
+                        <Ionicons name="person" size={16} color="#fff" />
+                      </View>
+                      <View style={styles.avatarPlus}>
+                        <Text style={styles.avatarPlusText}>+</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {project.location && (
+                    <View style={styles.locationRow}>
+                      <Text style={styles.locationText}>{project.location}</Text>
+                    </View>
+                  )}
+
+                  <Text style={styles.projectName}>{project.name}</Text>
+
+                  <View style={styles.datesContainer}>
+                    <View style={styles.dateSection}>
+                      <Text style={styles.dateLabel}>Start</Text>
+                      <Text style={styles.dateValue}>
+                        {project.start_date || project.startDate
+                          ? new Date(project.start_date || project.startDate).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '-'}
+                      </Text>
+                    </View>
+                    <View style={styles.dateSection}>
+                      <Text style={styles.dateLabel}>End</Text>
+                      <Text style={styles.dateValue}>
+                        {project.end_date || project.endDate
+                          ? new Date(project.end_date || project.endDate).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '-'}
+                      </Text>
+                    </View>
+                    <View style={styles.dateSection}>
+                      {overdue ? (
+                        <>
+                          <View style={styles.overdueRow}>
+                            <Text style={styles.dateLabel}>Over due</Text>
+                            <Text style={styles.overdueValue}>{Math.abs(daysRemaining)}d</Text>
+                          </View>
+                          <View style={styles.overdueBar} />
+                        </>
+                      ) : project.status === 'active' || project.status === 'in_progress' ? (
+                        <>
+                          <View style={styles.overdueRow}>
+                            <Text style={styles.dateLabel}>In Progress</Text>
+                            <Text style={styles.inProgressValue}>{daysRemaining}d</Text>
+                          </View>
+                          <View style={styles.inProgressBar} />
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.dateLabel}>Status</Text>
+                          <Text style={styles.dateValue}>-</Text>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -293,245 +347,273 @@ export default function ProjectsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  screenContent: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
+    backgroundColor: '#F5F6FA',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F5F6FA',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
     color: '#666',
   },
-  toggleButton: {
-    backgroundColor: '#f0f8ff',
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 24,
+    paddingBottom: 12,
+    backgroundColor: '#F5F5F5',
   },
-  toggleButtonText: {
-    fontSize: 12,
-    color: '#007AFF',
+  headerButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#1A1A1A',
+    fontFamily: typography.families.semibold,
+    marginLeft: 8,
+    flex: 1,
   },
-  addButton: {
-    backgroundColor: '#007AFF',
+  scrollView: {
+    flex: 1,
+  },
+  filterContainer: {
+    backgroundColor: '#fff',
+    paddingTop: 16,
+    paddingBottom: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E6EB',
+  },
+  filterContent: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingBottom: 0,
   },
-  addButtonText: {
-    color: '#fff',
+  filterTab: {
+    marginRight: 20,
+    paddingBottom: 6,
+    position: 'relative',
+  },
+  filterTabActive: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#877ED2',
+    marginBottom: -1,
+  },
+  filterText: {
     fontSize: 14,
+    color: '#9CA3AF',
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
+  },
+  filterTextActive: {
+    color: '#1A1A1A',
     fontWeight: '600',
+    fontFamily: typography.families.semibold,
   },
   searchContainer: {
+    backgroundColor: '#fff',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
+    borderBottomColor: '#E5E6EB',
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   searchInputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
+    backgroundColor: '#F5F5F5',
     borderRadius: 12,
-    paddingRight: 4,
+    paddingRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E6EB',
   },
-  search: {
+  searchInput: {
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    fontSize: 16,
-    backgroundColor: 'transparent',
+    fontSize: 14,
+    color: '#1A1A1A',
+    fontFamily: typography.families.regular,
+  },
+  voiceButton: {
+    marginRight: 4,
   },
   searchIconButton: {
     padding: 8,
-    paddingHorizontal: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  searchIconText: {
-    fontSize: 20,
+  projectsContainer: {
+    padding: 16,
   },
-  filterButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  filterButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
+  projectCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    width: '90%',
-    maxWidth: 500,
-    maxHeight: '80%',
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 3,
+    overflow: 'hidden',
   },
-  modalHeader: {
+  projectCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: -14,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+    fontFamily: typography.families.semibold,
+  },
+  avatarContainer: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 40,
+    right: 36,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  closeButton: {
+  avatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#FF9500',
+    alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
+  },
+  avatarPlus: {
+    width: 38,
+    height: 38,
+    borderRadius: 30,
+    backgroundColor: '#666666',
     alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    bottom: 0,
+    left: 26,
+    borderWidth: 2,
+    borderColor: '#fff',
+    zIndex: 2,
   },
-  closeButtonText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '600',
-  },
-  modalBody: {
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 8,
-  },
-  filterInput: {
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  statusChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-  },
-  statusChipActive: {
-    backgroundColor: '#e6f0ff',
-    borderColor: '#007AFF',
-  },
-  statusChipText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  statusChipTextActive: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e1e5e9',
-    gap: 12,
-  },
-  clearButton: {
-    flex: 1,
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  clearButtonText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '600',
-  },
-  applyButton: {
-    flex: 1,
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  applyButtonText: {
-    fontSize: 16,
+  avatarPlusText: {
+    fontSize: 30,
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '200',
+    lineHeight: 18,
   },
-  listContent: {
-    padding: 16,
+  locationRow: {
+    paddingHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  locationText: {
+    fontSize: 12,
+    color: '#6A6D73',
+    fontFamily: typography.families.regular,
+  },
+  projectName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 8,
+    marginTop: 0,
+    paddingHorizontal: 16,
+    fontFamily: typography.families.bold,
+  },
+  datesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  dateSection: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 4,
+    fontFamily: typography.families.regular,
+  },
+  dateValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    fontFamily: typography.families.semibold,
+    marginTop: -4,
+  },
+  overdueValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF3B30',
+    fontFamily: typography.families.semibold,
+  },
+  overdueBar: {
+    height: 2,
+    backgroundColor: '#FF3B30',
+    borderRadius: 1,
+    width: '100%',
+    marginTop: 4,
+  },
+  inProgressValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#34C759',
+    fontFamily: typography.families.semibold,
+  },
+  inProgressBar: {
+    height: 2,
+    backgroundColor: '#34C759',
+    borderRadius: 3,
+    width: '100%',
+    marginTop: 4,
+  },
+  overdueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 32,
   },
-  emptyText: {
+  emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#666',
     marginBottom: 8,
+    fontFamily: typography.families.semibold,
   },
-  emptySubtext: {
-    fontSize: 16,
+  emptySubtitle: {
+    fontSize: 14,
     color: '#999',
     textAlign: 'center',
+    fontFamily: typography.families.regular,
   },
 });

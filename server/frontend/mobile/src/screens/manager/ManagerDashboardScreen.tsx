@@ -35,6 +35,7 @@ interface Task {
   updated_at: string;
   assigned_employees?: any[];
   priority?: string;
+  location?: string;
 }
 
 export default function ManagerDashboardScreen() {
@@ -195,10 +196,17 @@ export default function ManagerDashboardScreen() {
     return `Due in ${diffDays} days`;
   };
 
+  const formatTaskDate = (dateString: string) => {
+    if (!dateString) return '—';
+    const date = new Date(dateString);
+    const formatted = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    // Add comma after month: "16 Nov 2025" -> "16 Nov, 2025"
+    return formatted.replace(/(\w+)\s+(\d{4})/, '$1, $2');
+  };
+
   const formatTaskAssignedDate = (assignedDate: string) => {
     if (!assignedDate) return 'Unknown';
-    const date = new Date(assignedDate);
-    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    return formatTaskDate(assignedDate);
   };
 
   if (loading) {
@@ -249,24 +257,22 @@ export default function ManagerDashboardScreen() {
           </View>
         </View>
 
-        {/* Team Overview Card - Replaces Attendance Card */}
+        {/* Mark your attendance Card */}
         <View style={styles.attendanceWrapper}>
           <Card style={styles.attendanceCard}>
             <View style={styles.attendanceContent}>
               <View style={styles.attendanceIconContainer}>
-                <Ionicons name="people-outline" size={28} color="#877ED2" />
+                <Ionicons name="calendar-outline" size={28} color="#877ED2" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.attendanceTitle}>Team Overview</Text>
-                <Text style={styles.attendanceTime}>
-                  {overview?.totalActiveEmployees || 0} Active Employees · {overview?.totalActiveProjects || allProjects.length} Projects
-                </Text>
+                <Text style={styles.attendanceTitle}>Mark your attendance</Text>
+                <Text style={styles.attendanceTime}>9 AM - 5 PM</Text>
               </View>
               <TouchableOpacity
                 style={styles.attendanceButton}
-                onPress={() => navigation.navigate('Employees')}
+                onPress={() => navigation.navigate('ProofOfWorkCapture')}
               >
-                <Text style={styles.attendanceButtonText}>View</Text>
+                <Text style={styles.attendanceButtonText}>Submit</Text>
               </TouchableOpacity>
             </View>
           </Card>
@@ -280,20 +286,22 @@ export default function ManagerDashboardScreen() {
               <Text style={styles.sectionAction}>All ›</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.projectsHorizontalList}>
             {allProjects.slice(0, 5).map(project => (
               <TouchableOpacity
                 key={project.id}
-                style={[styles.miniCard, { width: layout?.projectCardWidth || 200 }]}
+                style={[styles.miniCard]}
                 onPress={() => navigation.navigate('ProjectDetails', { id: project.id })}
               >
-                <Text style={styles.miniCardTitle} numberOfLines={2}>{project.name}</Text>
-                <Text style={styles.miniCardMeta} numberOfLines={1}>{project.client_name || 'No client'}</Text>
-                {project.start_date && project.end_date && (
-                  <Text style={styles.miniCardDates}>
-                    Start <Text style={styles.miniCardDateValue}>{new Date(project.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text> · End <Text style={styles.miniCardDateValue}>{new Date(project.end_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-                  </Text>
-                )}
+                <View style={styles.miniCardContent}>
+                  <Text style={styles.miniCardTitle} numberOfLines={2}>{project.name}</Text>
+                  <Text style={styles.miniCardMeta} numberOfLines={1}>{project.client_name || 'No client'}</Text>
+                  {project.start_date && project.end_date && (
+                    <Text style={styles.miniCardDates}>
+                      Start <Text style={styles.miniCardDateValue}>{new Date(project.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text> · End <Text style={styles.miniCardDateValue}>{new Date(project.end_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                    </Text>
+                  )}
+                </View>
               </TouchableOpacity>
             ))}
             {allProjects.length === 0 && (
@@ -307,7 +315,7 @@ export default function ManagerDashboardScreen() {
         {/* Tasks Section */}
         <View style={styles.sectionBlock}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.dashboardSectionTitle}>Tasks</Text>
+            <Text style={styles.dashboardSectionTitle}>Task</Text>
             <TouchableOpacity onPress={() => navigation.navigate('AllTasks')}>
               <Text style={styles.sectionAction}>All ›</Text>
             </TouchableOpacity>
@@ -324,8 +332,10 @@ export default function ManagerDashboardScreen() {
                     <Text style={styles.smallStatusText}>{getTaskStatusText(task.status)}</Text>
                   </View>
                 </View>
+                {task.location && (
+                  <Text style={styles.taskLocation} numberOfLines={1}>{task.location}</Text>
+                )}
                 <Text style={styles.taskMiniTitle} numberOfLines={2}>{task.title}</Text>
-                <Text style={styles.taskMiniMeta} numberOfLines={1}>{task.project_name}</Text>
                 <View style={styles.taskDateRow}>
                   <View style={styles.taskDateItem}>
                     <Text style={styles.taskDateLabel}>Assigned date</Text>
@@ -335,7 +345,7 @@ export default function ManagerDashboardScreen() {
                 <View style={styles.taskDateRow}>
                   <View style={styles.taskDateItem}>
                     <Text style={styles.taskDateLabel}>Due date</Text>
-                    <Text style={styles.taskDateValue}>{task.due_date ? new Date(task.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</Text>
+                    <Text style={styles.taskDateValue}>{formatTaskDate(task.due_date)}</Text>
                   </View>
                 </View>
                 <View style={styles.taskFooterIcons}>
@@ -352,10 +362,10 @@ export default function ManagerDashboardScreen() {
           </ScrollView>
         </View>
 
-        {/* Team Productivity Section */}
+        {/*Productivity Section */}
         <View style={styles.sectionBlock}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.dashboardSectionTitle}>Team Productivity</Text>
+            <Text style={styles.dashboardSectionTitle}>Productivity</Text>
             <TouchableOpacity onPress={() => navigation.navigate('TimeEntries')}>
               <Text style={styles.sectionAction}>All ›</Text>
             </TouchableOpacity>
@@ -364,18 +374,18 @@ export default function ManagerDashboardScreen() {
             <View style={styles.productivityContent}>
               <View style={styles.productivityTextColumn}>
                 <View style={styles.productivityInfoRow}>
-                  <Text style={styles.productivityInfoLabel}>This week:</Text>
+                  <Text style={styles.productivityInfoLabel}>This week</Text>
                   <Text style={styles.productivityInfoValue}>{getWeekDateRange()}</Text>
                 </View>
                 <View style={styles.productivityInfoRow}>
-                  <Text style={styles.productivityInfoLabel}>Team hours:</Text>
+                  <Text style={styles.productivityInfoLabel}>Time Worked</Text>
                   <View style={styles.hoursContainer}>
                     <Text style={styles.hoursNumber}>{getWeekTotalHours()}</Text>
-                    <Text style={styles.hoursUnit}> hr / 5 d</Text>
+                    <Text style={styles.hoursUnit}>hr / 5 d</Text>
                   </View>
                 </View>
                 <View style={styles.productivityInfoRow}>
-                  <Text style={styles.productivityInfoLabel}>Active projects:</Text>
+                  <Text style={styles.productivityInfoLabel}>Task</Text>
                   <Text style={styles.productivityInfoValue}>{overview?.totalActiveProjects || allProjects.filter(p => p.status === 'active').length}</Text>
                 </View>
               </View>
@@ -445,9 +455,6 @@ export default function ManagerDashboardScreen() {
 
         {/* Quick Action Row */}
         <View style={styles.quickActionRow}>
-          <TouchableOpacity style={styles.quickActionPrimary} onPress={() => navigation.navigate('AddProject')}>
-            <Text style={styles.quickActionPrimaryText}>New Project</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionSecondary} onPress={() => navigation.navigate('CreateTask')}>
             <Text style={styles.quickActionSecondaryText}>Add Task</Text>
           </TouchableOpacity>
@@ -481,21 +488,21 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   heroGreeting: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
     fontFamily: typography.families.bold,
   },
   heroSubGreeting: {
-    fontSize: 15,
-    color: colors.primaryPurpleLight,
-    marginTop: 2,
-    fontFamily: typography.families.semibold,
+    fontSize: 20,
+    fontWeight: '400',
+    color: '#FFFFFF',
+    fontFamily: typography.families.regular,
   },
   headerDateTop: {
     alignSelf: 'flex-end',
-    fontSize: 13,
-    color: '#ECE7FF',
+    fontSize: 12,
+    color: '#FFFFFF',
     fontWeight: '500',
     marginTop: 8,
     marginBottom: 6,
@@ -507,70 +514,93 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   heroMeta: {
-    fontSize: 12,
-    color: '#ECE7FF',
-    marginTop: 4,
+    fontSize: 10,
+    color: '#E8E7ED',
+    fontWeight: '400',
     fontFamily: typography.families.regular,
+    textTransform: 'uppercase',
   },
   avatarCircleLeft: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 41,
+    height: 41,
+    borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
     marginTop: 6,
-    marginBottom: 4,
+    marginBottom: 24,
   },
   avatarInitial: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
   },
+  // ============================================
+  // ATTENDANCE CARD STYLES
+  // ============================================
   attendanceWrapper: {
     marginTop: -55,
     paddingHorizontal: 18,
   },
   attendanceCard: {
-    padding: spacing.lg,
-    borderRadius: radii.lg,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
+    height: 69,
+    width: 372,
+    padding: spacing.lg + 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F0F0F5',
+    shadowColor: '#877ED2',
+    shadowOpacity: 0.15,
     shadowOffset: { width: 4, height: 4 },
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 12,
+    elevation: 8,
+    justifyContent: 'center',
   },
   attendanceContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
   },
   attendanceIconContainer: {
-    marginRight: 12,
+    marginRight: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: '#F3F2FF',
   },
   attendanceTitle: {
-    fontSize: typography.fontSizes.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    fontFamily: typography.families.semibold,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
   },
   attendanceTime: {
-    fontSize: typography.fontSizes.sm,
-    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#727272',
+    fontFamily: typography.families.regular,
     marginTop: 4,
   },
   attendanceButton: {
     backgroundColor: '#877ED2',
-    paddingHorizontal: spacing.xxl,
-    paddingVertical: spacing.xs + 4,
-    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    width: 81,
+    height: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   attendanceButtonText: {
-    color: '#fff',
-    fontSize: typography.fontSizes.md,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
   },
   sectionBlock: {
     paddingTop: 24,
@@ -583,197 +613,269 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dashboardSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#000000',
+    fontFamily: typography.families.medium,
   },
   sectionAction: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: '#8F8F8F',
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
   },
   horizontalList: {
     paddingLeft: 20,
     paddingRight: 10,
     gap: 12,
+    paddingBottom: 10,
+    paddingTop: 10,
   },
-  miniCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: 10,
-    marginRight: 12,
+  projectsHorizontalList: {
+    paddingLeft: 20,
+    paddingRight: 20,
+    gap: 12,
+    paddingBottom: 10,
+    paddingTop: 10,
     justifyContent: 'center',
+  },
+  // ============================================
+  // PROJECT CARD STYLES
+  // ============================================
+  miniCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    width: 332,
+    height: 95,
+    marginRight: 12,
+    justifyContent: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E5E6EB',
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  miniCardContent: {
+    width: '100%',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
   },
   miniCardTitle: {
-    fontSize: typography.fontSizes.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: 2,
-    fontFamily: typography.families.semibold,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#404040',
+    marginBottom: 4,
+    fontFamily: typography.families.medium,
+    lineHeight: 22,
+    textAlign: 'left',
   },
   miniCardMeta: {
-    fontSize: typography.fontSizes.sm,
-    color: colors.textSecondary,
-    marginBottom: 1,
+    fontSize: 10,
+    color: '#727272',
+    fontWeight: '400',
+    marginBottom: 6,
+    fontFamily: typography.families.regular,
+    textAlign: 'left',
   },
   miniCardDates: {
-    fontSize: typography.fontSizes.sm,
-    color: colors.textSecondary,
+    fontSize: 10,
+    color: '#727272',
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    lineHeight: 18,
+    textAlign: 'left',
   },
   miniCardDateValue: {
-    fontWeight: '900',
-    fontFamily: typography.families.bold,
-    fontSize: typography.fontSizes.sm + 1,
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 0.5, height: 0.5 },
-    textShadowRadius: 1,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    fontSize: 12,
+    color: '#404040',
   },
   miniCardEmpty: {
-    backgroundColor: '#F5F5F8',
-    borderRadius: radii.lg,
-    padding: spacing.md + 2,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E8E8ED',
+    borderStyle: 'dashed',
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 2, height: 4 },
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
   },
   emptyMiniText: {
     fontSize: 12,
     color: '#999',
   },
+  // ============================================
+  // TASK CARD STYLES
+  // ============================================
   taskMiniCard: {
-    backgroundColor: '#fff',
-    borderRadius: radii.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
-    minHeight: 200,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg + 2,
+    height: 250,
+    borderWidth: 1,
+    borderColor: '#F0F0F5',
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 2, height: 4 },
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 14,
+    elevation: 6,
     marginRight: 12,
   },
   taskBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   smallStatusBadge: {
-    backgroundColor: '#EEE',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderTopLeftRadius: radii.sm,
-    borderTopRightRadius: radii.sm,
-    borderBottomLeftRadius: radii.lg,
-    borderBottomRightRadius: radii.lg,
+    backgroundColor: '#6FC264',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
     marginRight: 6,
-    marginTop: -20,
+    marginTop: -19,
   },
   smallStatusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: 10,
+    fontWeight: '400',
+    color: '#FFFFFF',
+    fontFamily: typography.families.regular,
+    letterSpacing: 0.3,
   },
   taskMiniTitle: {
-    fontSize: typography.fontSizes.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: 4,
-    fontFamily: typography.families.semibold,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#404040',
+    marginBottom: 12,
+    fontFamily: typography.families.medium,
+    lineHeight: 22,
+    height: 44,
   },
   taskFooterIcons: {
     flexDirection: 'row',
-    marginTop: spacing.sm,
-    gap: spacing.md,
+    marginTop: spacing.md,
+    gap: spacing.lg,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F5',
   },
   iconStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   iconStatText: {
-    fontSize: typography.fontSizes.sm,
-    color: colors.textSecondary,
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#727272',
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   taskMiniMeta: {
-    fontSize: typography.fontSizes.sm,
-    color: colors.textSecondary,
-    marginBottom: 8,
+    fontSize: typography.fontSizes.base,
+    color: '#6A6D73',
+    marginBottom: 10,
+    fontFamily: typography.families.regular,
+  },
+  taskLocation: {
+    fontSize: 10,
+    color: '#727272',
+    marginBottom: 2,
+    marginTop: 4,
+    fontFamily: typography.families.regular, 
+    fontWeight: '400',
   },
   taskDateRow: {
-    marginBottom: 6,
+    marginBottom: 8,
   },
   taskDateItem: {
     flexDirection: 'column',
   },
   taskDateLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginBottom: 2,
+    fontSize: 10,
+    color: '#727272',
+    marginBottom: 3,
+    fontFamily: typography.families.regular,
+    // textTransform: 'uppercase',
+    fontWeight: '400',
+    // letterSpacing: 0.5,
   },
   taskDateValue: {
     fontSize: 12,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    fontFamily: typography.families.bold,
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
+    letterSpacing: 0,
   },
+  // ============================================
+  // PRODUCTIVITY CARD STYLES
+  // ============================================
   productivityCard: {
     marginHorizontal: 20,
-    padding: 16,
-    borderRadius: radii.lg,
-    backgroundColor: colors.surface,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 2, height: 4 },
-    shadowRadius: 8,
-    elevation: 4,
+    padding: 20,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E8E8ED',
+    shadowColor: '#877ED2',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 16,
+    elevation: 7,
     marginBottom: 16,
   },
   productivityContent: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 20,
   },
   productivityTextColumn: {
     flex: 1,
     justifyContent: 'flex-start',
   },
   productivityInfoRow: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   productivityInfoLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginBottom: 4,
+    fontSize: 10,
+    color: '#727272',
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    letterSpacing: 0,
   },
   productivityInfoValue: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '700',
+    color: '#404040',
+    fontFamily: typography.families.bold,
   },
   hoursContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
   },
   hoursNumber: {
-    fontSize: 32,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#000000',
+    color: '#404040',
     fontFamily: typography.families.bold,
+    letterSpacing: -0.5,
   },
   hoursUnit: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginLeft: 2,
+    fontSize: 10,
+    color: '#727272',
+    marginLeft: 4,
+    fontFamily: typography.families.regular,
   },
   productivityBars: {
     flex: 1.5,
@@ -791,12 +893,16 @@ const styles = StyleSheet.create({
   barCount: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#000000',
+    color: '#6F67CC',
     marginBottom: 4,
     textAlign: 'center',
   },
   barCountZero: {
-    color: '#8E8E93',
+    color: '#727272',
+    height: 14,
+    width: 14,
+    backgroundColor: '#F4F4F4',
+    borderRadius: 8,
   },
   barWrapper: {
     width: '80%',
@@ -810,7 +916,7 @@ const styles = StyleSheet.create({
   bar: {
     width: '40%',
     height: 100,
-    borderRadius: 4,
+    borderRadius: 20,
     backgroundColor: '#E5E5EA',
     position: 'absolute',
     bottom: 0,

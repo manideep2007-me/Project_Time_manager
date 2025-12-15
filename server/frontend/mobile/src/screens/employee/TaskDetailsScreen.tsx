@@ -29,6 +29,7 @@ import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import TimestampCamera from '../../components/camera/TimestampCamera';
 import PhotoProofViewer from '../../components/camera/PhotoProofViewer';
 import { savePhotoProof, createPhotoProof } from '../../services/photoProofService';
+import { typography } from '../../design/tokens';
 
 
 interface TaskDetails {
@@ -95,6 +96,7 @@ export default function TaskDetailsScreen() {
   // Productivity section state
   const [productivityView, setProductivityView] = useState<'week' | 'month'>('week');
   const [chartView, setChartView] = useState<'bar' | 'list'>('bar');
+  const [showProductivityReportModal, setShowProductivityReportModal] = useState(false);
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const today = new Date();
     const day = today.getDay();
@@ -1663,13 +1665,18 @@ interface Photo {
 
   // Calculate remaining days
   const getRemainingDays = () => {
-    if (!taskDetails.dueDate) return 5;
-    const due = new Date(taskDetails.dueDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    due.setHours(0, 0, 0, 0);
-    const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(0, diff);
+    try {
+      if (!taskDetails.dueDate) return 5;
+      const due = new Date(taskDetails.dueDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      due.setHours(0, 0, 0, 0);
+      const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const days = Math.max(0, diff);
+      return isNaN(days) ? 5 : days;
+    } catch (error) {
+      return 5;
+    }
   };
 
   // Calculate progress percentage (for progress bar)
@@ -1855,47 +1862,68 @@ interface Photo {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView 
-        ref={scrollViewRef}
-        style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Purple Header */}
-        <View style={styles.headerContainer}>
-          <View style={styles.header}>
+    <SafeAreaWrapper backgroundColor="#F5F6FA">
+      <View style={styles.container}>
+        {/* Fixed Header with Purple Background */}
+        <View style={styles.fixedHeader}>
+          <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
               <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>My Task</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              My Task
+            </Text>
             <TouchableOpacity style={styles.headerButton}>
               <Ionicons name="ellipsis-vertical" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-
-          {/* Project Info in Header */}
-          <View style={styles.headerProjectInfo}>
-            <Text style={styles.headerProjectLabel}>Project</Text>
-            <Text style={styles.headerProjectName}>{taskDetails.projectName}</Text>
-            <Text style={styles.headerLocation}>{taskDetails.location}</Text>
-            <Text style={styles.headerDates}>
-              Start {taskDetails.projectStartDate || taskDetails.assignedDate || '-'}   End {taskDetails.projectEndDate || taskDetails.dueDate || '-'}
-            </Text>
-          </View>
         </View>
-        {/* Task Details Card */}
-        <View style={[styles.card, styles.firstCard]}>
-          <View style={[styles.cardHeader, styles.firstCardHeader]}>
-            <View style={[styles.statusBadge, { backgroundColor: '#E3F2FD' }]}>
-              <Text style={[styles.statusBadgeText, { color: '#1976D2' }]}>In Progress</Text>
+
+        {/* Content */}
+        <View style={styles.cardContainer}>
+          <ScrollView 
+            ref={scrollViewRef}
+            style={styles.scrollView} 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Purple Background Section (150px height) */}
+            <View style={styles.purpleBackgroundSection}>
+              <View style={styles.purpleBackgroundContent}>
+                <Text style={styles.purpleProjectLabel}>Project</Text>
+                <Text style={styles.purpleProjectName}>{taskDetails.projectName || 'Project'}</Text>
+                <Text style={styles.purpleLocation}>{taskDetails.location || 'Location'}</Text>
+                <View style={styles.purpleDatesRow}>
+                  <View style={styles.purpleDateItem}>
+                    <Text style={styles.purpleDateLabel}>Start </Text>
+                    <Text style={styles.purpleDateValue}>
+                      {taskDetails.projectStartDate || taskDetails.assignedDate || '-'}
+                    </Text>
+                  </View>
+                  <View style={styles.purpleDateItem}>
+                    <Text style={styles.purpleDateLabel}>End </Text>
+                    <Text style={styles.purpleDateValue}>
+                      {taskDetails.projectEndDate || taskDetails.dueDate || '-'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
+            
+            {/* Task Details Card */}
+            <View style={[styles.card, styles.firstCard]}>
+          <View style={[styles.cardHeader, styles.firstCardHeader]}>
+            <View style={[styles.statusBadge]}>
+              <Text style={styles.statusBadgeText}>In Progress</Text>
+            </View>
+          </View>
+          
+          <View style={styles.taskTitleRow}>
+            <Text style={styles.taskTitle}>{taskDetails.title}</Text>
             <TouchableOpacity>
               <Ionicons name="chevron-up" size={20} color="#8E8E93" />
             </TouchableOpacity>
           </View>
-          
-          <Text style={styles.taskTitle}>{taskDetails.title}</Text>
           <Text style={styles.taskDescription}>
             {taskDetails.description || 'Full-height wardrobe for the master bedroom with hanging space, shelves, drawers and loft storage. Spec details is added. Contact Akash for light fittings.'}
           </Text>
@@ -1912,7 +1940,7 @@ interface Photo {
             <View style={styles.progressColumn}>
               <View style={styles.progressLabelRow}>
                 <Text style={styles.progressLabel}>In Progress</Text>
-                <Text style={styles.progressDays}>{getRemainingDays()}d</Text>
+                <Text style={styles.progressDays}>{String(getRemainingDays())}d</Text>
               </View>
               <View style={styles.progressBarContainer}>
                 <View style={[styles.progressBar, { width: `${getProgressPercentage()}%` }]} />
@@ -1922,7 +1950,7 @@ interface Photo {
         </View>
 
         {/* Live Timer Card */}
-        <View style={styles.card}>
+        <View style={[styles.card, styles.liveTimerCard]}>
           <View style={styles.timerHeader}>
             <View style={styles.timerHeaderLeft}>
               <Text style={styles.timerTitle}>Live Timer</Text>
@@ -1958,7 +1986,7 @@ interface Photo {
         </View>
 
         {/* Task Status Card */}
-        <View style={styles.card}>
+        <View style={[styles.card, styles.taskStatusCard]}>
           <View style={styles.taskStatusRow}>
             <View style={styles.taskStatusIconContainer}>
               <Ionicons name="checkmark" size={24} color="#FFFFFF" />
@@ -1971,192 +1999,6 @@ interface Photo {
               <TouchableOpacity style={styles.taskStatusButton} onPress={showCameraOptions}>
                 <Ionicons name="camera" size={20} color="#FFFFFF" />
               </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* Productivity Section */}
-        <View style={styles.productivitySection}>
-          <Text style={styles.productivityTitle}>Productivity</Text>
-          
-          <View style={styles.productivityCard}>
-            {/* Header with toggles and navigation */}
-            <View style={styles.productivityCardHeader}>
-              {/* First Row: Toggles */}
-              <View style={styles.productivityHeaderTopRow}>
-                {/* Left: Week/Month Toggle with Week text below */}
-                <View style={styles.productivityHeaderLeft}>
-                  <View style={styles.productivityViewToggle}>
-                    <TouchableOpacity
-                      style={[styles.productivityToggleButton, productivityView === 'week' && styles.productivityToggleButtonActive]}
-                      onPress={() => setProductivityView('week')}
-                    >
-                      <Text style={[styles.productivityToggleText, productivityView === 'week' && styles.productivityToggleTextActive]}>Week</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.productivityToggleButton, productivityView === 'month' && styles.productivityToggleButtonActive]}
-                      onPress={() => setProductivityView('month')}
-                    >
-                      <Text style={[styles.productivityToggleText, productivityView === 'month' && styles.productivityToggleTextActive]}>Month</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Right: Chart Type Toggle */}
-                <View style={styles.productivityChartToggle}>
-                  <TouchableOpacity
-                    style={[styles.productivityChartToggleButton, chartView === 'bar' && styles.productivityChartToggleButtonActive]}
-                    onPress={() => setChartView('bar')}
-                  >
-                    <Ionicons name="bar-chart" size={20} color={chartView === 'bar' ? '#877ED2' : '#8E8E93'} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.productivityChartToggleButton, chartView === 'list' && styles.productivityChartToggleButtonActive]}
-                    onPress={() => setChartView('list')}
-                  >
-                    <Ionicons name="list" size={20} color={chartView === 'list' ? '#877ED2' : '#8E8E93'} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Second Row: Week/Month Navigation - Full Width */}
-              <View style={styles.productivityWeekNav}>
-                <TouchableOpacity onPress={() => navigateWeek('prev')} style={styles.productivityNavButton}>
-                  <Ionicons name="chevron-back" size={20} color="#000000" />
-                </TouchableOpacity>
-                <View style={styles.productivityWeekNavText}>
-                  <Text style={styles.productivityWeekLabelCenter}>{productivityView === 'week' ? 'Week' : 'Month'}</Text>
-                  <Text style={styles.productivityWeekRange}>{getProductivityWeekRange()}</Text>
-                </View>
-                <TouchableOpacity onPress={() => navigateWeek('next')} style={styles.productivityNavButton}>
-                  <Ionicons name="chevron-forward" size={20} color="#000000" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Bar Chart */}
-            {chartView === 'bar' && (
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                style={styles.productivityChartScrollContainer}
-                contentContainerStyle={[
-                  productivityView === 'week' ? styles.productivityChartScrollContentWeek : styles.productivityChartScrollContent,
-                  productivityView === 'week' && styles.productivityChartScrollContentCentered
-                ]}
-                scrollEnabled={productivityView !== 'week'}
-              >
-                <View style={[styles.productivityChartContainer, productivityView === 'week' && { width: '100%' }]}>
-                  <View style={[styles.productivityChart, productivityView === 'week' && { justifyContent: 'space-between', width: '100%' }]}>
-                    {productivityData.map((item, index) => {
-                      const barHeightPercent = maxHours > 0 && item.hours > 0 ? (item.hours / maxHours) * 100 : 0;
-                      // Calculate actual pixel height (100px is the full bar height)
-                      const fillHeight = item.hours > 0 ? (barHeightPercent / 100) * 100 : 4;
-                      const fillColor = item.hours > 0 ? '#877ED2' : '#E5E5EA';
-                      
-                      return (
-                        <View key={index} style={styles.productivityBarColumn}>
-                          <Text style={[styles.productivityBarValue, item.hours === 0 && styles.productivityBarValueZero]}>{item.hours}</Text>
-                          <View style={styles.productivityBarWrapper}>
-                            <View style={styles.productivityBarBackground} />
-                            <View 
-                              style={[
-                                styles.productivityBarFill, 
-                                { 
-                                  height: fillHeight,
-                                  backgroundColor: fillColor
-                                }
-                              ]} 
-                            />
-                          </View>
-                          <View style={styles.productivityBarLabels}>
-                            <Text style={styles.productivityBarDay}>{item.day}</Text>
-                            <Text style={styles.productivityBarDate}>{item.date}</Text>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-              </ScrollView>
-            )}
-
-            {/* List View */}
-            {chartView === 'list' && (
-              <View style={styles.productivityListContainer}>
-                <ScrollView style={styles.productivityListScroll} showsVerticalScrollIndicator={false}>
-                  {productivityData.map((item, index) => {
-                    const hours = item.hours;
-                    const minutes = Math.round((hours - Math.floor(hours)) * 60);
-                    const displayHours = Math.floor(hours);
-                    
-                    return (
-                      <View key={index} style={styles.productivityListItem}>
-                        <View style={styles.productivityListItemLeft}>
-                          <View style={styles.productivityListItemDateContainer}>
-                            <Text style={styles.productivityListItemDay}>{item.day}</Text>
-                            <Text style={styles.productivityListItemDate}>{item.date}</Text>
-                          </View>
-                        </View>
-                        <View style={styles.productivityListItemRight}>
-                          {hours > 0 ? (
-                            <Text style={styles.productivityListItemTime}>
-                              {displayHours > 0 ? `${displayHours}h` : ''} {minutes > 0 ? `${minutes}m` : ''}
-                            </Text>
-                          ) : (
-                            <Text style={[styles.productivityListItemTime, styles.productivityListItemTimeZero]}>No time</Text>
-                          )}
-                        </View>
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* Summary */}
-            <View style={styles.productivitySummary}>
-              <View style={styles.productivitySummaryLeft}>
-                <Text style={styles.productivitySummaryLabel}>Time worked</Text>
-                <View style={styles.productivitySummaryHours}>
-                  <Text style={styles.productivitySummaryHoursNumber}>
-                    {Math.round(productivityData.reduce((sum, d) => sum + d.hours, 0) * 10) / 10}
-                  </Text>
-                  <Text style={styles.productivitySummaryHoursUnit}>
-                    {' hr / '}
-                    {productivityData.filter(d => d.hours > 0).length}
-                    {productivityView === 'week' ? ' d' : ' days'}
-                  </Text>
-                </View>
-                <Text style={styles.productivitySummarySubtext}>
-                  Avg: {productivityData.filter(d => d.hours > 0).length > 0 
-                    ? (Math.round((productivityData.reduce((sum, d) => sum + d.hours, 0) / productivityData.filter(d => d.hours > 0).length) * 10) / 10)
-                    : 0} hr/day
-                </Text>
-              </View>
-              <View style={styles.productivitySummaryRight}>
-                <Text style={styles.productivitySummaryLabel}>Entries</Text>
-                <Text style={styles.productivitySummaryTaskNumber}>
-                  {timeEntries.filter(entry => {
-                    if (productivityView === 'week') {
-                      const sunday = new Date(currentWeekStart);
-                      sunday.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
-                      const weekEnd = new Date(sunday);
-                      weekEnd.setDate(sunday.getDate() + 6);
-                      const weekStartStr = sunday.toISOString().split('T')[0];
-                      const weekEndStr = weekEnd.toISOString().split('T')[0];
-                      return entry.workDate && entry.workDate >= weekStartStr && entry.workDate <= weekEndStr;
-                    } else {
-                      const firstDay = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), 1);
-                      const lastDay = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth() + 1, 0);
-                      const monthStartStr = firstDay.toISOString().split('T')[0];
-                      const monthEndStr = lastDay.toISOString().split('T')[0];
-                      return entry.workDate && entry.workDate >= monthStartStr && entry.workDate <= monthEndStr;
-                    }
-                  }).length}
-                </Text>
-                <Text style={styles.productivitySummarySubtext}>Time entries</Text>
-              </View>
             </View>
           </View>
         </View>
@@ -2237,8 +2079,7 @@ interface Photo {
         <TouchableOpacity 
           style={styles.bottomNavItem}
           onPress={() => {
-            // Scroll to productivity section
-            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            setShowProductivityReportModal(true);
           }}
         >
           <View style={styles.bottomNavIcon}>
@@ -3089,7 +2930,233 @@ interface Photo {
           </View>
         </View>
       </Modal>
-    </View>
+
+      {/* Productivity Report Modal */}
+      <Modal
+        visible={showProductivityReportModal}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowProductivityReportModal(false);
+        }}
+      >
+        <SafeAreaWrapper backgroundColor="#F5F6FA">
+          <View style={styles.productivityReportContainer}>
+            {/* Header */}
+            <View style={styles.productivityReportHeader} pointerEvents="box-none">
+              <TouchableOpacity 
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setShowProductivityReportModal(false);
+                }}
+                style={styles.productivityReportBackButton}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="chevron-back" size={24} color="#000000" />
+              </TouchableOpacity>
+              <Text style={styles.productivityReportTitle}>Productivity Report</Text>
+              <TouchableOpacity style={styles.productivityReportMenuButton}>
+                <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
+              </TouchableOpacity>
+            </View>
+
+            {/* ScrollView for content */}
+            <ScrollView 
+              style={styles.productivityReportScrollView}
+              contentContainerStyle={styles.productivityReportScrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Existing Productivity Section */}
+              <View style={styles.productivitySection}>
+                <View style={styles.productivityCard}>
+                  {/* Header with toggles and navigation */}
+                  <View style={styles.productivityCardHeader}>
+                    {/* First Row: Toggles */}
+                    <View style={styles.productivityHeaderTopRow}>
+                      {/* Left: Week/Month Toggle with Week text below */}
+                      <View style={styles.productivityHeaderLeft}>
+                        <View style={styles.productivityViewToggle}>
+                          <TouchableOpacity
+                            style={[styles.productivityToggleButton, productivityView === 'week' && styles.productivityToggleButtonActive]}
+                            onPress={() => setProductivityView('week')}
+                          >
+                            <Text style={[styles.productivityToggleText, productivityView === 'week' && styles.productivityToggleTextActive]}>Week</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.productivityToggleButton, productivityView === 'month' && styles.productivityToggleButtonActive]}
+                            onPress={() => setProductivityView('month')}
+                          >
+                            <Text style={[styles.productivityToggleText, productivityView === 'month' && styles.productivityToggleTextActive]}>Month</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Right: Chart Type Toggle */}
+                      <View style={styles.productivityChartToggle}>
+                        <TouchableOpacity
+                          style={[styles.productivityChartToggleButton, chartView === 'bar' && styles.productivityChartToggleButtonActive]}
+                          onPress={() => setChartView('bar')}
+                        >
+                          <Ionicons name="bar-chart" size={20} color={chartView === 'bar' ? '#877ED2' : '#8E8E93'} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.productivityChartToggleButton, chartView === 'list' && styles.productivityChartToggleButtonActive]}
+                          onPress={() => setChartView('list')}
+                        >
+                          <Ionicons name="list" size={20} color={chartView === 'list' ? '#877ED2' : '#8E8E93'} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Second Row: Week/Month Navigation - Full Width */}
+                    <View style={styles.productivityWeekNav}>
+                      <TouchableOpacity onPress={() => navigateWeek('prev')} style={styles.productivityNavButton}>
+                        <Ionicons name="chevron-back" size={20} color="#000000" />
+                      </TouchableOpacity>
+                      <View style={styles.productivityWeekNavText}>
+                        <Text style={styles.productivityWeekLabelCenter}>{productivityView === 'week' ? 'Week' : 'Month'}</Text>
+                        <Text style={styles.productivityWeekRange}>{getProductivityWeekRange()}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => navigateWeek('next')} style={styles.productivityNavButton}>
+                        <Ionicons name="chevron-forward" size={20} color="#000000" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Bar Chart */}
+                  {chartView === 'bar' && (
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.productivityChartScrollContainer}
+                      contentContainerStyle={[
+                        productivityView === 'week' ? styles.productivityChartScrollContentWeek : styles.productivityChartScrollContent,
+                        productivityView === 'week' && styles.productivityChartScrollContentCentered
+                      ]}
+                      scrollEnabled={productivityView !== 'week'}
+                    >
+                      <View style={[styles.productivityChartContainer, productivityView === 'week' && { width: '100%' }]}>
+                        <View style={[styles.productivityChart, productivityView === 'week' && { justifyContent: 'space-between', width: '100%' }]}>
+                          {productivityData.map((item, index) => {
+                            const barHeightPercent = maxHours > 0 && item.hours > 0 ? (item.hours / maxHours) * 100 : 0;
+                            // Calculate actual pixel height (100px is the full bar height)
+                            const fillHeight = item.hours > 0 ? (barHeightPercent / 100) * 100 : 4;
+                            const fillColor = item.hours > 0 ? '#877ED2' : '#E5E5EA';
+                            
+                            return (
+                              <View key={index} style={styles.productivityBarColumn}>
+                                <Text style={[styles.productivityBarValue, item.hours === 0 && styles.productivityBarValueZero]}>{item.hours}</Text>
+                                <View style={styles.productivityBarWrapper}>
+                                  <View style={styles.productivityBarBackground} />
+                                  <View 
+                                    style={[
+                                      styles.productivityBarFill, 
+                                      { 
+                                        height: fillHeight,
+                                        backgroundColor: fillColor
+                                      }
+                                    ]} 
+                                  />
+                                </View>
+                                <View style={styles.productivityBarLabels}>
+                                  <Text style={styles.productivityBarDay}>{item.day}</Text>
+                                  <Text style={styles.productivityBarDate}>{item.date}</Text>
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    </ScrollView>
+                  )}
+
+                  {/* List View */}
+                  {chartView === 'list' && (
+                    <View style={styles.productivityListContainer}>
+                      <ScrollView style={styles.productivityListScroll} showsVerticalScrollIndicator={false}>
+                        {productivityData.map((item, index) => {
+                          const hours = item.hours;
+                          const minutes = Math.round((hours - Math.floor(hours)) * 60);
+                          const displayHours = Math.floor(hours);
+                          
+                          return (
+                            <View key={index} style={styles.productivityListItem}>
+                              <View style={styles.productivityListItemLeft}>
+                                <View style={styles.productivityListItemDateContainer}>
+                                  <Text style={styles.productivityListItemDay}>{item.day}</Text>
+                                  <Text style={styles.productivityListItemDate}>{item.date}</Text>
+                                </View>
+                              </View>
+                              <View style={styles.productivityListItemRight}>
+                                {hours > 0 ? (
+                                  <Text style={styles.productivityListItemTime}>
+                                    {displayHours > 0 ? `${displayHours}h` : ''} {minutes > 0 ? `${minutes}m` : ''}
+                                  </Text>
+                                ) : (
+                                  <Text style={[styles.productivityListItemTime, styles.productivityListItemTimeZero]}>No time</Text>
+                                )}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {/* Summary */}
+                  <View style={styles.productivitySummary}>
+                    <View style={styles.productivitySummaryLeft}>
+                      <Text style={styles.productivitySummaryLabel}>Time worked</Text>
+                      <View style={styles.productivitySummaryHours}>
+                        <Text style={styles.productivitySummaryHoursNumber}>
+                          {Math.round(productivityData.reduce((sum, d) => sum + d.hours, 0) * 10) / 10}
+                        </Text>
+                        <Text style={styles.productivitySummaryHoursUnit}>
+                          {' hr / '}
+                          {productivityData.filter(d => d.hours > 0).length}
+                          {productivityView === 'week' ? ' d' : ' days'}
+                        </Text>
+                      </View>
+                      <Text style={styles.productivitySummarySubtext}>
+                        Avg: {productivityData.filter(d => d.hours > 0).length > 0 
+                          ? (Math.round((productivityData.reduce((sum, d) => sum + d.hours, 0) / productivityData.filter(d => d.hours > 0).length) * 10) / 10)
+                          : 0} hr/day
+                      </Text>
+                    </View>
+                    <View style={styles.productivitySummaryRight}>
+                      <Text style={styles.productivitySummaryLabel}>Entries</Text>
+                      <Text style={styles.productivitySummaryTaskNumber}>
+                        {timeEntries.filter(entry => {
+                          if (productivityView === 'week') {
+                            const sunday = new Date(currentWeekStart);
+                            sunday.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+                            const weekEnd = new Date(sunday);
+                            weekEnd.setDate(sunday.getDate() + 6);
+                            const weekStartStr = sunday.toISOString().split('T')[0];
+                            const weekEndStr = weekEnd.toISOString().split('T')[0];
+                            return entry.workDate && entry.workDate >= weekStartStr && entry.workDate <= weekEndStr;
+                          } else {
+                            const firstDay = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), 1);
+                            const lastDay = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth() + 1, 0);
+                            const monthStartStr = firstDay.toISOString().split('T')[0];
+                            const monthEndStr = lastDay.toISOString().split('T')[0];
+                            return entry.workDate && entry.workDate >= monthStartStr && entry.workDate <= monthEndStr;
+                          }
+                        }).length}
+                      </Text>
+                      <Text style={styles.productivitySummarySubtext}>Time entries</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </SafeAreaWrapper>
+      </Modal>
+        </View>
+      </View>
+    </SafeAreaWrapper>
   );
 }
 
@@ -3098,20 +3165,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F6FA',
   },
-  headerContainer: {
+  fixedHeader: {
     backgroundColor: '#877ED2',
-    marginTop: 0,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    zIndex: 100,
+    elevation: 5,
   },
-  header: {
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 20,
-    paddingBottom: 16,
-    paddingHorizontal: 12,
   },
   headerButton: {
     width: 40,
@@ -3120,59 +3185,94 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
     flex: 1,
-    marginLeft: 8,
-  },
-  headerProjectInfo: {
-    paddingHorizontal: 16,
-    paddingBottom: 44,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerProjectLabel: {
-    fontSize: 12,
+    // marginLeft: 10,
+    fontSize: 20,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
     color: '#FFFFFF',
-    opacity: 0.9,
-    marginBottom: 2,
-    marginLeft: 10,
-    marginTop: -10,
+    marginLeft: 2,
   },
-  headerProjectName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-    marginLeft: 10,
-  },
-  headerLocation: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-    marginLeft: 10,
-    marginBottom: 4,
-  },
-  headerDates: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.8,
-    marginLeft: 10,
-    marginTop: 14,
+  cardContainer: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
+    padding: 16,
+    paddingTop: 10,
     paddingBottom: 100, // Extra padding for bottom navigation
+  },
+  purpleBackgroundSection: {
+    backgroundColor: '#877ED2',
+    height: 180,
+    marginTop: -16,
+    marginHorizontal: -16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    marginBottom: -40,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  purpleBackgroundContent: {
+    flex: 1,
+  },
+  purpleProjectLabel: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    marginLeft: 16,
+  },
+  purpleProjectName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    fontFamily: typography.families.medium,
+    marginLeft: 16,
+  },
+  purpleLocation: {
+    fontSize: 11,
+    color: '#E8E7ED',
+    opacity: 0.9,
+    marginBottom: 16,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    marginLeft: 16,
+  },
+  purpleDatesRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginTop: 4,
+    gap: 16,
+  },
+  purpleDateItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginLeft: 16,
+  },
+  purpleDateLabel: {
+    fontSize: 10,
+    color: '#E8E7ED',
+    opacity: 0.8,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+  },
+  purpleDateValue: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    fontFamily: typography.families.medium,
   },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    marginHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -3180,8 +3280,22 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   firstCard: {
-    marginTop: -30,
+    zIndex: 10,
     paddingTop: 0,
+    width: 372,
+    height: 200,
+    alignSelf: 'center',
+    borderRadius: 10,
+  },
+  liveTimerCard: {
+    width: 372,
+    alignSelf: 'center',
+    borderRadius: 10,
+  },
+  taskStatusCard: {
+    width: 372,
+    alignSelf: 'center',
+    borderRadius: 10,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -3196,25 +3310,39 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
     borderBottomLeftRadius: 10,
     borderBottomRightRadius: 10,
+    backgroundColor: '#7E99D2',
+    width: 74,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    color: '#FFFFFF',
   },
-  taskTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
+  taskTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
+  taskTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#404040',
+    marginRight: 8,
+  },
   taskDescription: {
-    fontSize: 14,
-    color: '#8E8E93',
-    lineHeight: 20,
+    fontSize: 12,
+    color: '#8F8F8F',
+    fontFamily: typography.families.regular,
+    lineHeight: 18,
     marginBottom: 16,
   },
   taskDatesRow: {
@@ -3225,14 +3353,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginBottom: 4,
+    fontSize: 10,
+    color: '#727272',
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
   },
   dateValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
   },
   progressColumn: {
     flex: 1.5,
@@ -3247,15 +3377,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   progressLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
+    fontSize: 10,
+    color: '#727272',
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
+    paddingLeft: 15,
   },
   progressBarContainer: {
-    width: '90%',
+    width: '80%',
     height: 6,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: '#85C369',
     borderRadius: 3,
     overflow: 'hidden',
+    marginTop: -2,
   },
   progressBar: {
     height: '100%',
@@ -3263,10 +3397,12 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   progressDays: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#85C369',
+    fontFamily: typography.families.bold,
     minWidth: 24,
+    paddingLeft: 14,
   },
   timerHeader: {
     flexDirection: 'row',
@@ -3284,24 +3420,30 @@ const styles = StyleSheet.create({
   },
   timerTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#404040',
     marginBottom: 2,
     marginTop: -4,
   },
   timerDate: {
     fontSize: 10,
-    color: '#8E8E93',
+    color: '#8D8D8D',
+    fontFamily: typography.families.medium,
+    fontWeight: '500',
   },
   elapsedLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
+    fontSize: 10,
+    color: '#727272',
     marginTop: 12,
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
   },
   elapsedTime: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#000000',
+    fontSize: 32,
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
     marginTop: -6,
   },
   timerTimesRow: {
@@ -3313,28 +3455,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   timerTimeLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
+    fontSize: 10,
+    color: '#727272',
     marginBottom: 4,
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
   },
   timerTimeValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
   },
   stopTimerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#877ED2',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    backgroundColor: '#6F67CC',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 25,
     gap: 6,
+    marginLeft: 50,
   },
   stopTimerText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '400',
     color: '#FFFFFF',
+    fontFamily: typography.families.regular,
   },
   taskStatusRow: {
     flexDirection: 'row',
@@ -3745,7 +3892,7 @@ const styles = StyleSheet.create({
   },
   teamSection: {
     marginBottom: 16,
-    marginHorizontal: 16,
+    marginHorizontal: 8,
   },
   teamTitle: {
     fontSize: 18,
@@ -3755,7 +3902,9 @@ const styles = StyleSheet.create({
   },
   teamCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 10,
+    width: 372,
+    alignSelf: 'center',
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -4365,5 +4514,218 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  productivityReportContainer: {
+    flex: 1,
+    backgroundColor: '#F5F6FA',
+  },
+  productivityReportScrollView: {
+    flex: 1,
+  },
+  productivityReportScrollContent: {
+    padding: 16,
+    paddingBottom: 20,
+  },
+  productivityReportHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
+    zIndex: 1000,
+    elevation: 5,
+  },
+  productivityReportBackButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1001,
+    elevation: 6,
+  },
+  productivityReportTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+    textAlign: 'center',
+    marginLeft: -40,
+  },
+  productivityReportMenuButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productivityReportCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    margin: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  productivityReportToggleRow: {
+    marginBottom: 16,
+  },
+  productivityReportViewToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F5F6FA',
+    borderRadius: 30,
+    padding: 2,
+    alignSelf: 'flex-start',
+  },
+  productivityReportToggleButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 30,
+  },
+  productivityReportToggleButtonActive: {
+    backgroundColor: '#877ED2',
+  },
+  productivityReportToggleText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#8E8E93',
+  },
+  productivityReportToggleTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  productivityReportWeekNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 8,
+  },
+  productivityReportWeekLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginRight: 8,
+  },
+  productivityReportNavButton: {
+    padding: 4,
+  },
+  productivityReportWeekRange: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  productivityReportChartToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F5F6FA',
+    borderRadius: 8,
+    padding: 2,
+    gap: 2,
+  },
+  productivityReportChartToggleButton: {
+    padding: 6,
+    borderRadius: 6,
+  },
+  productivityReportChartToggleButtonActive: {
+    backgroundColor: '#877ED2',
+  },
+  productivityReportChartContainer: {
+    marginBottom: 24,
+  },
+  productivityReportChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 200,
+  },
+  productivityReportBarColumn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  productivityReportBarValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  productivityReportBarValueZero: {
+    color: '#8E8E93',
+  },
+  productivityReportBarWrapper: {
+    width: '80%',
+    height: 120,
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+    position: 'relative',
+    alignSelf: 'center',
+  },
+  productivityReportBarBackground: {
+    width: '100%',
+    height: 120,
+    borderRadius: 4,
+    backgroundColor: '#E5E5EA',
+    position: 'absolute',
+    bottom: 0,
+  },
+  productivityReportBarFill: {
+    width: '100%',
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    position: 'absolute',
+    bottom: 0,
+    minHeight: 4,
+  },
+  productivityReportBarLabels: {
+    alignItems: 'center',
+  },
+  productivityReportBarDay: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#8E8E93',
+  },
+  productivityReportBarDate: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#8E8E93',
+  },
+  productivityReportSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F6FA',
+  },
+  productivityReportSummaryLeft: {
+    flex: 1,
+  },
+  productivityReportSummaryRight: {
+    alignItems: 'flex-end',
+  },
+  productivityReportSummaryLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  productivityReportSummaryHours: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  productivityReportSummaryHoursNumber: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  productivityReportSummaryHoursUnit: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontWeight: '400',
+  },
+  productivityReportSummaryValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000000',
   },
 });

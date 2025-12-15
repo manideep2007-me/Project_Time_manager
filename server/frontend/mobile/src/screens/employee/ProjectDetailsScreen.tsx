@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, RefreshControl, Linking, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, RefreshControl, Linking, BackHandler, Image } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
-import { getProject, listProjectTasks } from '../../api/endpoints';
+import { getProject, listProjectTasks, getProjectTeam, listTimeEntries } from '../../api/endpoints';
 import { dashboardApi } from '../../api/dashboard';
 import { api } from '../../api/client';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
+import { typography } from '../../design/tokens';
 
 export default function ProjectDetailsScreen() {
   const route = useRoute<any>();
@@ -17,12 +18,13 @@ export default function ProjectDetailsScreen() {
   const [project, setProject] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [attachmentsCount, setAttachmentsCount] = useState<number>(0);
-  const [tasksCount, setTasksCount] = useState<number>(0);
-  const [employeeTasks, setEmployeeTasks] = useState<any[]>([]);
-  const [teamMembersWithTime, setTeamMembersWithTime] = useState<any[]>([]);
   const [projectAttachments, setProjectAttachments] = useState<any[]>([]);
+  const [progress, setProgress] = useState(0);
+  const [showMoreTasks, setShowMoreTasks] = useState(false);
+  const [timeEntries, setTimeEntries] = useState<any[]>([]);
 
   const loadData = async () => {
     try {
@@ -39,152 +41,56 @@ export default function ProjectDetailsScreen() {
       }
 
       if (!projectData) return;
-      setProject(projectData);
+      setProject({
+        ...projectData,
+        client_name: projectData.client_name || 'Client',
+      });
 
       // Load tasks
-      let totalTasks = 0;
-      try {
-        const taskRes = await listProjectTasks(String(id), 1, 200);
-        totalTasks = (taskRes.tasks || []).length;
-      } catch (e) {
-        totalTasks = 0;
-      }
-
-      // Load team members
-      let teamMembersData: any[] = [];
-      try {
-        const teamResponse = await api.get(`/api/projects/${id}/team`);
-        const members = teamResponse.data?.teamMembers || [];
-        teamMembersData = members.map((member: any) => ({
-          id: member.id,
-          name: `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Unknown',
-        }));
-      } catch (e: any) {
-        teamMembersData = [];
-      }
-
-      setTeamMembers(teamMembersData);
-      setTasksCount(totalTasks);
-
-      // Load team members with time logged for the project
-      try {
-        const teamData = await dashboardApi.getProjectTeam(String(id));
-        const stats = await dashboardApi.getProjectStats(String(id));
-        const employeeBreakdown = stats?.employeeBreakdown || [];
-        
-        const teamWithTime = teamData.teamMembers.map((member: any) => {
-          const statsForMember = employeeBreakdown.find((emp: any) => emp.id === member.id);
-          const totalMinutes = statsForMember ? (statsForMember.totalMinutes || 0) : 0;
-          const hours = Math.floor(totalMinutes / 60);
-          const minutes = totalMinutes % 60;
-          
-          return {
-            id: member.id,
-            name: `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Unknown',
-            role: member.role || member.department || 'Team Member',
-            totalTime: totalMinutes,
-            hours,
-            minutes,
-            avatar: member.avatar || null,
-          };
-        });
-        
-        setTeamMembersWithTime(teamWithTime);
-      } catch (error) {
-        console.error('Error loading team with time:', error);
-        setTeamMembersWithTime([]);
-      }
-
-      // Fetch attachments count and filter employee tasks
-      try {
-        const tasks = await listProjectTasks(String(id), 1, 200);
-        let allAttachments: any[] = [];
-        
-        // Filter tasks where current employee is a team member
-        const employeeId = user?.id;
-        const userEmail = user?.email?.toLowerCase();
-        console.log('Employee ID:', employeeId);
-        console.log('User Email:', userEmail);
-        console.log('All tasks:', tasks.tasks?.length);
-        
-        const filteredTasks = (tasks.tasks || []).filter((task: any) => {
-          // Parse assigned_employees if it's a string (JSON)
-          let assignedEmployees = task.assigned_employees || [];
-          if (typeof assignedEmployees === 'string') {
-            try {
-              assignedEmployees = JSON.parse(assignedEmployees);
-            } catch (e) {
-              console.error('Error parsing assigned_employees:', e);
-              assignedEmployees = [];
-            }
-          }
-          
-          // Normalize IDs for comparison
-          const employeeIdStr = employeeId?.toString();
-          const employeeIdNum = typeof employeeId === 'number' ? employeeId : null;
-          
-          // Check if employee is in assigned_employees array (by ID or email)
-          const isAssigned = assignedEmployees.some((emp: any) => {
-            if (!emp) return false;
-            
-            // Match by ID
-            if (emp.id) {
-              const empIdStr = emp.id?.toString();
-              const empIdNum = typeof emp.id === 'number' ? emp.id : null;
-              
-              const idMatch = (
-                empIdStr === employeeIdStr ||
-                empIdNum === employeeIdNum ||
-                emp.id === employeeId ||
-                empIdStr === String(employeeId) ||
-                String(emp.id) === employeeIdStr
-              );
-              
-              if (idMatch) return true;
-            }
-            
-            // Match by email (fallback if IDs don't match)
-            if (userEmail && emp.email) {
-              const empEmail = emp.email?.toLowerCase();
-              if (empEmail === userEmail) {
-                console.log(`  Matched by email: ${empEmail}`);
-                return true;
-              }
-            }
-            
-            return false;
-          });
-          
-          // Also check if task.assigned_to matches (for backward compatibility)
-          const assignedToStr = task.assigned_to?.toString();
-          const assignedToNum = typeof task.assigned_to === 'number' ? task.assigned_to : null;
-          const isDirectlyAssigned = (
-            assignedToStr === employeeIdStr ||
-            assignedToNum === employeeIdNum ||
-            task.assigned_to === employeeId ||
-            assignedToStr === String(employeeId) ||
-            String(task.assigned_to) === employeeIdStr
-          );
-          
-          const isMatch = isAssigned || isDirectlyAssigned;
-          console.log(`Task ${task.id} "${task.title}": assigned_employees=${assignedEmployees.length}, isAssigned=${isAssigned}, assigned_to=${task.assigned_to}, isDirectlyAssigned=${isDirectlyAssigned}, MATCH=${isMatch}`);
-          if (assignedEmployees.length > 0) {
-            console.log(`  Employee IDs in task:`, assignedEmployees.map((e: any) => `${e.id} (${e.email || 'no email'})`));
-          }
-          
-          return isMatch;
-        });
-        
-        console.log('Filtered tasks count:', filteredTasks.length);
-        if (filteredTasks.length > 0) {
-          console.log('Filtered task IDs:', filteredTasks.map((t: any) => t.id));
+      const taskRes = await listProjectTasks(String(id), 1, 200);
+      const allTasks = taskRes.tasks || [];
+      
+      // Calculate task durations and format them
+      const formattedTasks = allTasks.map((task: any) => {
+        let duration = 0;
+        if (task.due_date && task.created_at) {
+          const start = new Date(task.created_at);
+          const end = new Date(task.due_date);
+          const diffTime = Math.abs(end.getTime() - start.getTime());
+          duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        } else if (task.estimated_duration) {
+          duration = task.estimated_duration;
         }
         
-        // Fetch attachments for each filtered task
+        return {
+          ...task,
+          duration: duration || 0,
+        };
+      });
+      
+      // Calculate progress
+      const completed = formattedTasks.filter((t: any) => 
+        t.status?.toLowerCase() === 'done' || t.status?.toLowerCase() === 'completed'
+      ).length;
+      setProgress(formattedTasks.length > 0 ? Math.round((completed / formattedTasks.length) * 100) : 0);
+
+      // Load team members
+      try {
+        const teamResponse = await getProjectTeam(id as string);
+        const teamData = teamResponse?.teamMembers || [];
+        setTeamMembers(teamData);
+      } catch (e) {
+        setTeamMembers([]);
+      }
+
+      // Load attachments count and attach to tasks
+      try {
+        let allAttachments: any[] = [];
         const tasksWithAttachments = await Promise.all(
-          filteredTasks.map(async (task: any) => {
+          formattedTasks.map(async (task: any) => {
             try {
               const taskAttachments = await dashboardApi.getTaskAttachments(task.id.toString());
+              allAttachments.push(...taskAttachments);
               return {
                 ...task,
                 attachments: taskAttachments,
@@ -197,24 +103,26 @@ export default function ProjectDetailsScreen() {
             }
           })
         );
-        
-        setEmployeeTasks(tasksWithAttachments);
-        console.log('Employee tasks set:', tasksWithAttachments.length);
-        
-        for (const task of tasks.tasks || []) {
-          try {
-            const taskAttachments = await dashboardApi.getTaskAttachments(task.id.toString());
-            allAttachments.push(...taskAttachments);
-          } catch (error) {
-            // Ignore individual task errors
-          }
-        }
+        setTasks(tasksWithAttachments);
         setAttachmentsCount(allAttachments.length);
         setProjectAttachments(allAttachments);
       } catch (error) {
+        setTasks(formattedTasks);
         setAttachmentsCount(0);
-        setEmployeeTasks([]);
         setProjectAttachments([]);
+      }
+
+      // Load time entries for team section
+      try {
+        const entriesRes = await listTimeEntries({ 
+          projectId: id, 
+          page: 1, 
+          limit: 1000 
+        });
+        setTimeEntries(entriesRes.timeEntries || []);
+      } catch (error) {
+        console.error('Error loading time entries:', error);
+        setTimeEntries([]);
       }
 
     } catch (error: any) {
@@ -226,8 +134,17 @@ export default function ProjectDetailsScreen() {
     if (id) {
       loadData().finally(() => setLoading(false));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, user]);
+
+  // Handle Android back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.goBack();
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, [navigation]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -276,7 +193,108 @@ export default function ProjectDetailsScreen() {
     }
   };
 
-  // Get initials for avatar
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${d.getDate()} ${months[d.getMonth()]}, ${d.getFullYear()}`;
+  };
+
+  const getStatusColor = (status: string, dueDate?: string) => {
+    const statusLower = status?.toLowerCase() || '';
+    const now = new Date();
+    
+    // Check if task is delayed (overdue and not completed)
+    if (dueDate && statusLower !== 'done' && statusLower !== 'completed') {
+      const due = new Date(dueDate);
+      if (due < now) {
+        return '#FF3B30'; // Red for delayed
+      }
+    }
+    
+    switch (statusLower) {
+      case 'done':
+      case 'completed':
+        return '#34C759'; // Green
+      case 'in_progress':
+      case 'in process':
+        return '#5AC8FA'; // Blue
+      case 'overdue':
+        return '#FF3B30'; // Red
+      case 'todo':
+      case 'to do':
+        return '#8E8E93'; // Grey
+      default:
+        return '#8E8E93';
+    }
+  };
+
+  const getStatusText = (status: string, dueDate?: string) => {
+    const statusLower = status?.toLowerCase() || '';
+    const now = new Date();
+    
+    // Check if task is delayed (overdue and not completed)
+    if (dueDate) {
+      const due = new Date(dueDate);
+      if (due < now && statusLower !== 'done' && statusLower !== 'completed') {
+        const daysOverdue = Math.ceil((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+        return `Delayed ${daysOverdue}d`;
+      }
+    }
+    
+    switch (statusLower) {
+      case 'done':
+      case 'completed':
+        return 'Complete';
+      case 'in_progress':
+      case 'in process':
+        return 'In Process';
+      case 'overdue':
+        if (dueDate) {
+          const due = new Date(dueDate);
+          const daysOverdue = Math.ceil((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+          return `Delayed ${daysOverdue}d`;
+        }
+        return 'Delayed';
+      case 'todo':
+      case 'to do':
+        return 'To Do';
+      default:
+        return 'To Do';
+    }
+  };
+
+  const getProjectStatus = () => {
+    if (!project?.status) return 'In Progress';
+    const status = project.status.toLowerCase();
+    if (status === 'active' || status === 'in_progress') return 'In Progress';
+    if (status === 'completed' || status === 'done') return 'Completed';
+    if (status === 'on_hold') return 'On Hold';
+    return 'In Progress';
+  };
+
+  const displayedTasks = showMoreTasks ? tasks : tasks.slice(0, 4);
+
+  // Team members with time calculation
+  const getTeamMembersWithTime = () => {
+    return teamMembers.map(member => {
+      const memberTimeEntries = timeEntries.filter(entry => entry.employee_id === member.id);
+      const totalMinutes = memberTimeEntries.reduce((sum, entry) => sum + (entry.duration_minutes || 0), 0);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      return {
+        ...member,
+        hours,
+        minutes,
+        totalMinutes,
+      };
+    });
+  };
+
+  const teamMembersWithTime = getTeamMembersWithTime();
+
+  // Helper functions for team display
   const getInitials = (name: string) => {
     const parts = name.trim().split(' ');
     if (parts.length >= 2) {
@@ -285,40 +303,27 @@ export default function ProjectDetailsScreen() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Format time as "Xhr Ymin"
-  const formatTime = (hours: number, minutes: number) => {
-    if (hours === 0 && minutes === 0) return '0hr 0min';
-    if (hours === 0) return `${minutes}min`;
-    if (minutes === 0) return `${hours}hr`;
-    return `${hours}hr ${minutes}min`;
-  };
-
-  // Get avatar color based on name
   const getAvatarColor = (name: string) => {
     const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F',
-      '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80', '#E74C3C', '#3498DB'
+      '#8B4513', // Brown
+      '#708090', // Blue-grey
+      '#B99696',
+      '#FF9500', // Orange
+      '#5AC8FA', // Light blue
+      '#8DBDC3',
+      '#96A9B9',
+      '#FF3B30', // Red
+      '#8DBDC3',
+      '#9FB996',
     ];
     const index = name.charCodeAt(0) % colors.length;
     return colors[index];
   };
 
-  const getDaysCount = () => {
-    if (project?.end_date) {
-      const endDate = new Date(project.end_date);
-      const today = new Date();
-      const diffTime = endDate.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return Math.max(0, diffDays);
-    }
-    if (project?.start_date) {
-      const startDate = new Date(project.start_date);
-      const today = new Date();
-      const diffTime = today.getTime() - startDate.getTime();
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      return Math.max(0, diffDays);
-    }
-    return tasksCount;
+  const formatTime = (hours: number, minutes: number) => {
+    const hrs = hours.toString().padStart(2, '0');
+    const mins = minutes.toString().padStart(2, '0');
+    return `${hrs}hr ${mins}min`;
   };
 
   if (loading) {
@@ -341,8 +346,8 @@ export default function ProjectDetailsScreen() {
   return (
     <SafeAreaWrapper backgroundColor="#F5F6FA">
       <View style={styles.container}>
-        {/* Purple Header */}
-        <View style={styles.header}>
+        {/* Fixed Header with Purple Background */}
+        <View style={styles.fixedHeader}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
               <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
@@ -356,7 +361,7 @@ export default function ProjectDetailsScreen() {
           </View>
         </View>
 
-        {/* White Content Card - Positioned on top */}
+        {/* Content */}
         <View style={styles.cardContainer}>
           <ScrollView 
             style={styles.scrollView}
@@ -364,182 +369,253 @@ export default function ProjectDetailsScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             showsVerticalScrollIndicator={false}
           >
+            {/* Purple Background Section (100px height) */}
+            <View style={styles.purpleBackgroundSection}>
+              <View style={styles.purpleBackgroundSpacer} />
+            </View>
+            
+            {/* Project Information Card */}
             <View style={[styles.contentCard, styles.overlappingCard]}>
-            {/* Location Label */}
-            <Text style={styles.locationLabel}>
-              {project.location || project.client_address || 'Yelahanka, Bangalore'}
-            </Text>
+              {/* Project Location */}
+              {project.location && (
+                <Text style={styles.projectLocation}>{project.location}</Text>
+              )}
 
-            {/* Project Title */}
-            <Text style={styles.projectTitle}>{project.name || 'Project'}</Text>
+              {/* Project Title */}
+              <Text style={styles.projectTitle}>{project.name || 'Project'}</Text>
 
-            {/* Description */}
-            <Text style={styles.description}>
-              {project.description || project.notes || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam'}
-            </Text>
-
-            {/* Address with Map Marker */}
-            <TouchableOpacity style={styles.addressContainer} onPress={handleAddressPress} activeOpacity={0.7}>
-              <Ionicons name="location" size={20} color="#877ED2" style={styles.locationIcon} />
-              <Text style={styles.addressText}>
-                {project.client_address || project.address || 'Doddaballapura Main Rd, Bengaluru, Karnataka 560119'}
+              {/* Description */}
+              <Text style={styles.description}>
+                {project.description || project.notes || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam'}
               </Text>
-            </TouchableOpacity>
 
-            {/* Footer Statistics */}
-            <View style={styles.footerStats}>
-              <View style={styles.statItem}>
-                <Ionicons name="people" size={24} color="#877ED2" />
-                <Text style={styles.statNumber}>{teamMembers.length || 0}</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Ionicons name="document-text" size={24} color="#877ED2" />
-                <Text style={styles.statNumber}>{attachmentsCount}</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Ionicons name="calendar" size={24} color="#877ED2" />
-                <Text style={styles.statNumber}>{getDaysCount()}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Tasks Section */}
-          <View style={styles.tasksSection}>
-            <View style={styles.tasksHeader}>
-              <Text style={styles.tasksTitle}>Task</Text>
-              <TouchableOpacity style={styles.allButton}>
-                <Text style={styles.allButtonText}>All</Text>
-                <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
+              {/* Address with Map Marker */}
+              <TouchableOpacity style={styles.addressContainer} onPress={handleAddressPress} activeOpacity={0.7}>
+                <Ionicons name="location" size={20} color="#877ED2" style={styles.locationIcon} />
+                <Text style={styles.addressText}>
+                  {project.client_address || project.address || 'Doddaballapura Main Rd, Bengaluru, Karnataka 560119'}
+                </Text>
               </TouchableOpacity>
+
+              {/* Footer Statistics */}
+              <View style={styles.footerStats}>
+                <View style={styles.statItem}>
+                  <Ionicons name="people" size={24} color="#877ED2" />
+                  <Text style={styles.statNumber}>{teamMembers.length || 0}</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Ionicons name="document-text" size={24} color="#877ED2" />
+                  <Text style={styles.statNumber}>{attachmentsCount}</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Ionicons name="clipboard" size={24} color="#877ED2" />
+                  <Text style={styles.statNumber}>{tasks.length}</Text>
+                </View>
+              </View>
             </View>
-            {employeeTasks.length > 0 ? (
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.tasksScrollContent}
-              >
-                {employeeTasks.map((task) => {
-                  const assignedEmployees = task.assigned_employees || [];
-                  const taskAttachments = task.attachments || [];
-                  
-                  // Get status badge color
-                  const getStatusColor = (status: string) => {
-                    switch (status?.toLowerCase()) {
-                      case 'new':
-                        return '#34C759';
-                      case 'in progress':
-                        return '#5AC8FA';
-                      case 'completed':
-                        return '#007AFF';
-                      case 'on hold':
-                        return '#FF9500';
-                      default:
-                        return '#8E8E93';
+
+            {/* Tasks Section */}
+            <View style={styles.tasksSection}>
+              <View style={styles.tasksHeader}>
+                <Text style={styles.tasksTitle}>Task</Text>
+                <TouchableOpacity 
+                  style={styles.allButton}
+                  onPress={() => navigation.navigate('EmployeeAllTasks', { projectId: id })}
+                >
+                  <Text style={styles.allButtonText}>All</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
+                </TouchableOpacity>
+              </View>
+              {tasks.length > 0 ? (
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.tasksScrollContent}
+                >
+                  {tasks.map((task) => {
+                    // Handle assigned_employees if it's a string (JSON) or array
+                    let assignedEmployees = task.assigned_employees || [];
+                    if (typeof assignedEmployees === 'string') {
+                      try {
+                        assignedEmployees = JSON.parse(assignedEmployees);
+                      } catch (e) {
+                        assignedEmployees = [];
+                      }
                     }
-                  };
+                    const taskAttachments = task.attachments || [];
+                    
+                    // Get status badge color
+                    const getTaskStatusColor = (status: string) => {
+                      switch (status?.toLowerCase()) {
+                        case 'new':
+                          return '#34C759';
+                        case 'in progress':
+                        case 'in_progress':
+                        case 'in process':
+                          return '#5AC8FA';
+                        case 'completed':
+                        case 'done':
+                          return '#007AFF';
+                        case 'on hold':
+                        case 'on_hold':
+                          return '#FF9500';
+                        default:
+                          return '#8E8E93';
+                      }
+                    };
 
-                  // Format date
-                  const formatDate = (dateString: string) => {
-                    if (!dateString) return '';
-                    const date = new Date(dateString);
-                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    return `${date.getDate()} ${months[date.getMonth()]}, ${date.getFullYear()}`;
-                  };
+                    // Format date
+                    const formatTaskDate = (dateString: string | null | undefined) => {
+                      if (!dateString) return 'N/A';
+                      try {
+                        const date = new Date(dateString);
+                        // Check if date is valid
+                        if (isNaN(date.getTime())) return 'N/A';
+                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        return `${date.getDate()} ${months[date.getMonth()]}, ${date.getFullYear()}`;
+                      } catch (error) {
+                        return 'N/A';
+                      }
+                    };
 
+                    // Get status text
+                    const getTaskStatusText = (status: string) => {
+                      const statusLower = status?.toLowerCase() || '';
+                      switch (statusLower) {
+                        case 'done':
+                        case 'completed':
+                          return 'Completed';
+                        case 'in_progress':
+                        case 'in progress':
+                        case 'in process':
+                          return 'In Progress';
+                        case 'on_hold':
+                        case 'on hold':
+                          return 'On Hold';
+                        case 'new':
+                          return 'New';
+                        default:
+                          return 'New';
+                      }
+                    };
+
+                    return (
+                      <TouchableOpacity
+                        key={task.id}
+                        style={styles.taskCard}
+                        onPress={() => navigation.navigate('TaskDetails', { taskId: task.id })}
+                      >
+                        {/* Status Badge */}
+                        <View style={[styles.statusBadge, { backgroundColor: getTaskStatusColor(task.status) }]}>
+                          <Text style={styles.statusBadgeText}>{getTaskStatusText(task.status)}</Text>
+                        </View>
+
+                        {/* Location/Client */}
+                        <Text style={styles.taskLocation}>
+                          {project?.client_name 
+                            ? `${project.client_name}, ${project?.location || 'yelahanka'}`.toLowerCase()
+                            : project?.location || 'Yelahanka, Bangalore'}
+                        </Text>
+
+                        {/* Task Title */}
+                        <Text style={styles.taskTitle} numberOfLines={2}>
+                          {task.title || 'Task'}
+                        </Text>
+
+                        {/* Assigned Date */}
+                        <View style={styles.taskDateRow}>
+                          <Text style={styles.taskDateLabel}>Assigned date</Text>
+                          <Text style={styles.taskDateValue}>
+                            {formatTaskDate(task.created_at)}
+                          </Text>
+                        </View>
+
+                        {/* Due Date */}
+                        <View style={styles.taskDateRow}>
+                          <Text style={styles.taskDateLabel}>Due date</Text>
+                          <Text style={styles.taskDateValue}>
+                            {formatTaskDate(task.due_date || task.dueDate || task.end_date || task.endDate)}
+                          </Text>
+                        </View>
+
+                        {/* Footer Icons */}
+                        <View style={styles.taskFooter}>
+                          <View style={styles.taskStatItem}>
+                            <Ionicons name="people" size={16} color="#877ED2" />
+                            <Text style={styles.taskStatNumber}>{assignedEmployees.length || 0}</Text>
+                          </View>
+                          <View style={styles.taskStatItem}>
+                            <Ionicons name="document-text" size={16} color="#877ED2" />
+                            <Text style={styles.taskStatNumber}>{taskAttachments.length || 0}</Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              ) : (
+                <View style={styles.noTasksContainer}>
+                  <Text style={styles.noTasksText}>No tasks available in this project</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Team Section */}
+            <Text style={styles.teamCardTitle}>Team</Text>
+            <View style={styles.teamSection}>
+              <View style={styles.teamCard}>
+                <View style={styles.teamCardHeader}>
+                  
+                  <Text style={styles.teamCardTotalTime}>Total Time</Text>
+                </View>
+                {teamMembersWithTime.map((member) => {
+                  const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.employee_id || 'Unknown';
+                  const memberRole = member.role || member.department || 'Member';
+                  
                   return (
-                    <TouchableOpacity
-                      key={task.id}
-                      style={styles.taskCard}
-                      onPress={() => navigation.navigate('TaskDetails', { id: task.id })}
-                    >
-                      {/* Status Badge */}
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(task.status) }]}>
-                        <Text style={styles.statusBadgeText}>{task.status || 'New'}</Text>
+                    <View key={member.id} style={styles.teamMemberRow}>
+                      <View style={styles.avatarContainer}>
+                        {member.avatar ? (
+                          <Image source={{ uri: member.avatar }} style={styles.avatarImage} />
+                        ) : (
+                          <View style={[styles.avatarPlaceholder, { backgroundColor: getAvatarColor(memberName) }]}>
+                            <Text style={styles.avatarText}>{getInitials(memberName)}</Text>
+                          </View>
+                        )}
                       </View>
-
-                      {/* Location/Client */}
-                      <Text style={styles.taskLocation}>
-                        {project?.client_name 
-                          ? `${project.client_name}, ${project?.location || 'yelahanka'}`.toLowerCase()
-                          : project?.location || 'Yelahanka, Bangalore'}
-                      </Text>
-
-                      {/* Task Title */}
-                      <Text style={styles.taskTitle} numberOfLines={2}>
-                        {task.title || 'Task'}
-                      </Text>
-
-                      {/* Assigned Date */}
-                      <View style={styles.taskDateRow}>
-                        <Text style={styles.taskDateLabel}>Assigned date</Text>
-                        <Text style={styles.taskDateValue}>
-                          {formatDate(task.created_at) || 'N/A'}
+                      <View style={styles.teamMemberInfo}>
+                        <Text style={styles.teamMemberName}>{memberName}</Text>
+                        <Text style={styles.teamMemberRole}>{memberRole}</Text>
+                      </View>
+                      <View style={styles.teamMemberTimeContainer}>
+                        <Text style={styles.teamMemberTimeNumber}>
+                          {(member.hours || 0).toString().padStart(2, '0')}
                         </Text>
-                      </View>
-
-                      {/* Due Date */}
-                      <View style={styles.taskDateRow}>
-                        <Text style={styles.taskDateLabel}>Due date</Text>
-                        <Text style={styles.taskDateValue}>
-                          {formatDate(task.due_date) || 'N/A'}
+                        <Text style={styles.teamMemberTimeUnit}>hr </Text>
+                        <Text style={styles.teamMemberTimeNumber}>
+                          {(member.minutes || 0).toString().padStart(2, '0')}
                         </Text>
+                        <Text style={styles.teamMemberTimeUnit}>min</Text>
                       </View>
-
-                      {/* Footer Icons */}
-                      <View style={styles.taskFooter}>
-                        <View style={styles.taskStatItem}>
-                          <Ionicons name="people" size={16} color="#877ED2" />
-                          <Text style={styles.taskStatNumber}>{assignedEmployees.length || 0}</Text>
-                        </View>
-                        <View style={styles.taskStatItem}>
-                          <Ionicons name="document-text" size={16} color="#877ED2" />
-                          <Text style={styles.taskStatNumber}>{taskAttachments.length || 0}</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
+                    </View>
                   );
                 })}
-              </ScrollView>
-            ) : (
-              <View style={styles.noTasksContainer}>
-                <Text style={styles.noTasksText}>No tasks assigned to you in this project</Text>
+                <TouchableOpacity 
+                  style={styles.manageTeamButton}
+                  onPress={() => {
+                    // Navigate to manage team screen if available
+                    // navigation.navigate('ManageTeam', { projectId: id });
+                  }}
+                >
+                  <Ionicons name="settings-outline" size={16} color="#877ED2" />
+                  <Text style={styles.manageTeamText}>Manage Team</Text>
+                </TouchableOpacity>
               </View>
-            )}
-          </View>
-
-          {/* Team Section */}
-          <View style={styles.teamSection}>
-            <View style={styles.teamCard}>
-              <View style={styles.teamCardHeader}>
-                <Text style={styles.teamCardTitle}>Team</Text>
-                <Text style={styles.teamCardTotalTime}>Total Time</Text>
-              </View>
-              {teamMembersWithTime.map((member) => (
-                <View key={member.id} style={styles.teamMemberRow}>
-                  <View style={styles.avatarContainer}>
-                    {member.avatar ? (
-                      <Image source={{ uri: member.avatar }} style={styles.avatarImage} />
-                    ) : (
-                      <View style={[styles.avatarPlaceholder, { backgroundColor: getAvatarColor(member.name) }]}>
-                        <Text style={styles.avatarText}>{getInitials(member.name)}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.teamMemberInfo}>
-                    <Text style={styles.teamMemberName}>{member.name}</Text>
-                    <Text style={styles.teamMemberRole}>{member.role}</Text>
-                  </View>
-                  <Text style={styles.teamMemberTime}>
-                    {formatTime(member.hours, member.minutes)}
-                  </Text>
-                </View>
-              ))}
             </View>
-          </View>
 
-          {/* Attachments Section */}
-          <View style={styles.attachmentsSection}>
-            <Text style={styles.sectionTitle}>Attachments</Text>
+            {/* Attachments Section */}
+            <View style={styles.attachmentsSection}>
+              <Text style={styles.attachmentsTitle}>Attachments</Text>
             {projectAttachments.length > 0 ? (
               (() => {
                 const categorized = categorizeAttachments(projectAttachments);
@@ -560,7 +636,7 @@ export default function ProjectDetailsScreen() {
                       {projectAttachments.map((attachment, index) => (
                         <View key={index} style={styles.attachmentCard}>
                           <Ionicons 
-                            name={getFileIcon(attachment.mime_type)} 
+                            name={getFileIcon(attachment.mime_type) as any} 
                             size={24} 
                             color="#877ED2" 
                           />
@@ -605,8 +681,16 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '600',
   },
-  header: {
+  fixedHeader: {
     backgroundColor: '#877ED2',
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    zIndex: 100,
+    elevation: 5,
+  },
+  header: {
+    // backgroundColor: '#877ED2',
     paddingTop: 12,
     paddingBottom: 140,
     paddingHorizontal: 16,
@@ -628,84 +712,99 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
     color: '#FFFFFF',
     marginLeft: 2,
   },
   cardContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 10,
-    pointerEvents: 'box-none',
+    flex: 1,
+    // backgroundColor: '#877ED2',
   },
   scrollView: {
     flex: 1,
     backgroundColor: 'transparent',
+    // backgroundColor: '#877ED2',
   },
   scrollContent: {
     padding: 16,
-    paddingTop: 168,
+    paddingTop: 0,
     paddingBottom: 20,
+  },
+  purpleBackgroundSection: {
+    backgroundColor: '#877ED2',
+    height: 150,
+    marginTop: -16,
+    marginHorizontal: -16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    marginBottom: -40,
+  },
+  purpleBackgroundSpacer: {
+    height: 60,
   },
   contentCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 20,
+    elevation: 4,
     zIndex: 10,
+    marginBottom: 16,
   },
   overlappingCard: {
-    marginTop: -80,
+    marginTop: -70,
+    zIndex: 10,
   },
-  locationLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginBottom: 6,
+  projectLocation: {
+    fontSize: 10,
+    color: '#727272',
+    marginBottom: 2,
+    fontFamily: typography.families.regular,
     fontWeight: '400',
   },
   projectTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 16,
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#404040',
+    marginBottom: 12,
+    height: 32,
+    fontFamily: typography.families.medium,
   },
   description: {
     fontSize: 12,
-    color: '#000000',
+    color: '#8F8F8F',
     lineHeight: 24,
-    marginBottom: 20,
+    marginBottom: 14,
     fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   locationIcon: {
-    marginRight: 8,
+    marginRight: 4,
     marginTop: 2,
   },
   addressText: {
     flex: 1,
     fontSize: 12,
-    color: '#877ED2',
+    color: '#404040',
     textDecorationLine: 'underline',
     lineHeight: 20,
     fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   footerStats: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
     paddingTop: 6,
-    borderTopWidth: 1,
     borderTopColor: '#F5F6FA',
   },
   statItem: {
@@ -715,14 +814,178 @@ const styles = StyleSheet.create({
   },
   statNumber: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    color: '#727272',
     marginLeft: 8,
+  },
+  statusCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  statusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#404040',
+  },
+  statusPill: {
+    backgroundColor: '#7E99D2',
+    borderRadius: 12,
+    width: 70,
+    height: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '400',
+    color: '#FFFFFF',
+    fontFamily: typography.families.regular,
+  },
+  datesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 22,
+  },
+  dateItem: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 12,
+    color: '#727272',
+    marginBottom: 4,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+  },
+  dateValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#404040',
+  },
+  progressContainer: {
+    position: 'relative',
+    marginBottom: 4,
+  },
+  progressBar: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#F5F6FA',
+    borderRadius: 4,
+    overflow: 'visible',
+    position: 'relative',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#34C759',
+    borderRadius: 4,
+  },
+  progressTextContainer: {
+    position: 'absolute',
+    top: -18,
+    marginLeft: -26,
+    zIndex: 1,
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#727272',
+  },
+  taskStatusSection: {
+    marginTop: 24,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F6FA',
+  },
+  taskStatusCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  taskStatusTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#404040',
+    marginBottom: 16,
+  },
+  taskList: {
+    gap: 0,
+  },
+  taskItem: {
+    marginBottom: 16,
+  },
+  taskItemContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  taskName: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    color: '#404040',
+    marginRight: 12,
+  },
+  taskMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  taskDuration: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#4C4C4C',
+    fontFamily: typography.families.medium,
+  },
+  taskStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+  },
+  taskStatusBar: {
+    height: 2,
+    borderRadius: 1,
+  },
+  moreTaskButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  moreTaskText: {
+    fontSize: 12,
+    color: '#8F8F8F',
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
   },
   tasksSection: {
     marginTop: 24,
-    paddingHorizontal: 0,
     paddingBottom: 20,
+    paddingHorizontal: 0,
+    height: 320,
   },
   tasksHeader: {
     flexDirection: 'row',
@@ -731,9 +994,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   tasksTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '500',
     color: '#000000',
+    fontFamily: typography.families.medium,
   },
   allButton: {
     flexDirection: 'row',
@@ -741,7 +1005,9 @@ const styles = StyleSheet.create({
   },
   allButtonText: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#8F8F8F',
+    fontFamily: typography.families.regular,
+    fontWeight: '400',
     marginRight: 4,
   },
   tasksScrollContent: {
@@ -753,6 +1019,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginRight: 12,
     width: 280,
+    height: 250,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -763,8 +1030,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
     marginBottom: 8,
+    marginTop: -18,
   },
   statusBadgeText: {
     fontSize: 12,
@@ -779,8 +1048,9 @@ const styles = StyleSheet.create({
   },
   taskTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#000000',
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
     marginBottom: 12,
     lineHeight: 22,
   },
@@ -789,21 +1059,22 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   taskDateLabel: {
-    fontSize: 14,
-    color: '#000000',
+    fontSize: 10,
+    color: '#727272',
     fontWeight: '400',
-    marginBottom: 4,
+    fontFamily: typography.families.regular,
   },
   taskDateValue: {
-    fontSize: 14,
-    color: '#000000',
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#404040',
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    height: 16,
   },
   taskFooter: {
     flexDirection: 'row',
     marginTop: 12,
     paddingTop: 12,
-    borderTopWidth: 1,
     borderTopColor: '#F5F6FA',
   },
   taskStatItem: {
@@ -812,27 +1083,30 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   taskStatNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#727272',
     marginLeft: 6,
+    fontFamily: typography.families.regular,
   },
   noTasksContainer: {
-    paddingVertical: 20,
+    paddingVertical: 40,
     alignItems: 'center',
   },
   noTasksText: {
     fontSize: 14,
     color: '#8E8E93',
+    fontWeight: '400',
   },
   teamSection: {
-    marginTop: 32,
+    marginTop: 24,
+    paddingHorizontal: 0,
     paddingBottom: 20,
   },
   teamCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -841,25 +1115,22 @@ const styles = StyleSheet.create({
   },
   teamCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginBottom: 16,
   },
   teamCardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '500',
     color: '#000000',
+    fontFamily: typography.families.medium,
+    paddingLeft: 4,
+    marginBottom: -6,
   },
   teamCardTotalTime: {
     fontSize: 14,
     fontWeight: '600',
     color: '#8E8E93',
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 16,
   },
   teamMemberRow: {
     flexDirection: 'row',
@@ -888,6 +1159,7 @@ const styles = StyleSheet.create({
   },
   teamMemberInfo: {
     flex: 1,
+    marginRight: 12,
   },
   teamMemberName: {
     fontSize: 16,
@@ -900,15 +1172,50 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     fontWeight: '400',
   },
-  teamMemberTime: {
+  teamMemberTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  teamMemberTimeNumber: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#000000',
+    fontFamily: typography.families.medium,
+  },
+  teamMemberTimeUnit: {
+    fontSize: 10,
+    fontWeight: '400',
+    color: '#727272',
+    fontFamily: typography.families.regular,
+    marginRight: 2,
+  },
+  manageTeamButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    paddingTop: 16,
+    borderTopColor: '#F5F6FA',
+  },
+  manageTeamText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
+    marginLeft: 6,
   },
   attachmentsSection: {
-    marginTop: 32,
-    paddingHorizontal: 16,
+    marginTop: 24,
+    paddingHorizontal: 0,
     paddingBottom: 20,
+  },
+  attachmentsTitle: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#000000',
+    fontFamily: typography.families.medium,
+    marginBottom: 16,
   },
   attachmentCategories: {
     flexDirection: 'row',
@@ -931,20 +1238,17 @@ const styles = StyleSheet.create({
   attachmentsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -6,
+    justifyContent: 'space-between',
   },
   attachmentCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
+    width: '31%',
+    backgroundColor: '#F5F6FA',
     borderRadius: 12,
     padding: 12,
-    margin: 6,
+    marginBottom: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    minHeight: 100,
+    justifyContent: 'center',
   },
   attachmentFileName: {
     fontSize: 12,
@@ -958,5 +1262,6 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     paddingVertical: 20,
+    fontWeight: '400',
   },
 });

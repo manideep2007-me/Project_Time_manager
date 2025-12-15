@@ -200,7 +200,7 @@ router.get('/employee/:employeeId', async (req, res) => {
     // Use task_assignments junction table instead of tasks.assigned_to
     const result = await pool.query(
       `SELECT t.id, t.project_id, t.title, t.status, t.due_date, t.created_at, t.updated_at,
-              p.name as project_name, p.status as project_status,
+              p.name as project_name, p.status as project_status, p.location,
               json_agg(json_build_object(
                 'id', e.id,
                 'first_name', e.first_name,
@@ -215,7 +215,7 @@ router.get('/employee/:employeeId', async (req, res) => {
        LEFT JOIN employees e ON all_ta.employee_id = e.id
        ${where}
        GROUP BY t.id, t.project_id, t.title, t.status, t.due_date, t.created_at, t.updated_at,
-                p.name, p.status
+                p.name, p.status, p.location
        ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
        LIMIT ${limit} OFFSET ${offset}`,
       params

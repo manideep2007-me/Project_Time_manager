@@ -145,6 +145,14 @@ export default function ProjectsScreen() {
 
   const isOverdue = (endDate: string) => getDaysRemaining(endDate) < 0;
 
+  const formatProjectDate = (dateString: string) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    const formatted = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    // Add comma after month: "01 Oct 2025" -> "01 Oct, 2025"
+    return formatted.replace(/(\w+)\s+(\d{4})/, '$1, $2');
+  };
+
   const handleProjectPress = (project: any) => {
     navigation.navigate('ProjectDetails', { id: project.id });
   };
@@ -162,9 +170,9 @@ export default function ProjectsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+          <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Projects</Text>
+        <Text style={styles.headerTitle}>My Projects</Text>
         <TouchableOpacity style={styles.headerButton}>
           <Ionicons name="ellipsis-vertical" size={24} color="#1A1A1A" />
         </TouchableOpacity>
@@ -227,18 +235,18 @@ export default function ProjectsScreen() {
                 style={styles.searchInput}
                 placeholderTextColor="#9CA3AF"
               />
-              <VoiceToTextButton
-                onResult={text => {
-                  setSearch(text);
-                }}
-                size="small"
-                style={styles.voiceButton}
-                color="#877ED2"
-              />
               <TouchableOpacity style={styles.searchIconButton}>
                 <Ionicons name="search" size={20} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
+            <VoiceToTextButton
+              onResult={text => {
+                setSearch(text);
+              }}
+              size="small"
+              style={styles.voiceButton}
+              color="#877ED2"
+            />
           </View>
         </View>
 
@@ -268,7 +276,7 @@ export default function ProjectsScreen() {
                     </View>
                     <View style={styles.avatarContainer}>
                       <View style={styles.avatar}>
-                        <Ionicons name="person" size={16} color="#fff" />
+                        <Ionicons name="person" size={18} color="#FF9500" />
                       </View>
                       <View style={styles.avatarPlus}>
                         <Text style={styles.avatarPlusText}>+</Text>
@@ -288,25 +296,13 @@ export default function ProjectsScreen() {
                     <View style={styles.dateSection}>
                       <Text style={styles.dateLabel}>Start</Text>
                       <Text style={styles.dateValue}>
-                        {project.start_date || project.startDate
-                          ? new Date(project.start_date || project.startDate).toLocaleDateString('en-IN', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                            })
-                          : '-'}
+                        {formatProjectDate(project.start_date || project.startDate)}
                       </Text>
                     </View>
                     <View style={styles.dateSection}>
                       <Text style={styles.dateLabel}>End</Text>
                       <Text style={styles.dateValue}>
-                        {project.end_date || project.endDate
-                          ? new Date(project.end_date || project.endDate).toLocaleDateString('en-IN', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                            })
-                          : '-'}
+                        {formatProjectDate(project.end_date || project.endDate)}
                       </Text>
                     </View>
                     <View style={styles.dateSection}>
@@ -374,10 +370,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    fontFamily: typography.families.semibold,
+    fontSize: 20,
+    fontWeight: '400',
+    color: '#000000',
+    fontFamily: typography.families.regular,
     marginLeft: 8,
     flex: 1,
   },
@@ -406,18 +402,19 @@ const styles = StyleSheet.create({
     marginBottom: -1,
   },
   filterText: {
-    fontSize: 14,
-    color: '#9CA3AF',
+    fontSize: 16,
+    color: '#8F8F8F',
     fontFamily: typography.families.regular,
     fontWeight: '400',
   },
   filterTextActive: {
-    color: '#1A1A1A',
-    fontWeight: '600',
-    fontFamily: typography.families.semibold,
+    color: '#000000',
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    fontSize: 16,
   },
   searchContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -446,7 +443,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.families.regular,
   },
   voiceButton: {
-    marginRight: 4,
+    marginLeft: 12,
   },
   searchIconButton: {
     padding: 8,
@@ -457,7 +454,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   projectCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     marginBottom: 16,
     shadowColor: '#000',
@@ -466,6 +463,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
     overflow: 'hidden',
+    height: 151,
+    width: 372,
   },
   projectCardTop: {
     flexDirection: 'row',
@@ -482,48 +481,58 @@ const styles = StyleSheet.create({
     marginTop: -14,
   },
   statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
-    fontFamily: typography.families.semibold,
+    fontSize: 10,
+    paddingTop: 2,
+    fontWeight: '400',
+    color: '#FFFFFF',
+    fontFamily: typography.families.regular,
   },
   avatarContainer: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
     position: 'absolute',
-    top: 40,
-    right: 36,
+    top: 10,
+    right: 16,
   },
   avatar: {
-    width: 32,
-    height: 32,
+    width: 22,
+    height: 22,
     borderRadius: 16,
-    backgroundColor: '#FF9500',
+    // backgroundColor: '#FF9500',
+    borderColor: '#FF9500',
+    borderStyle: 'solid',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
+    overflow: 'hidden',
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 2,
+    borderWidth: 1.5,
   },
   avatarPlus: {
-    width: 38,
-    height: 38,
-    borderRadius: 30,
+    width: 26,
+    height: 26,
+    borderRadius: 16,
     backgroundColor: '#666666',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'absolute',
     bottom: 0,
-    left: 26,
+    left: 10,
     borderWidth: 2,
-    borderColor: '#fff',
-    zIndex: 2,
+    borderColor: '#FFFFFF',
+    zIndex: 1,
   },
   avatarPlusText: {
-    fontSize: 30,
-    color: '#fff',
-    fontWeight: '200',
-    lineHeight: 18,
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontFamily: typography.families.bold,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   locationRow: {
     paddingHorizontal: 16,
@@ -531,18 +540,19 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   locationText: {
-    fontSize: 12,
-    color: '#6A6D73',
+    fontSize: 10,
+    color: '#727272',
     fontFamily: typography.families.regular,
+    fontWeight: '400',
   },
   projectName: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: '500',
+    color: '#404040',
     marginBottom: 8,
     marginTop: 0,
     paddingHorizontal: 16,
-    fontFamily: typography.families.bold,
+    fontFamily: typography.families.medium,
   },
   datesContainer: {
     flexDirection: 'row',
@@ -555,16 +565,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: 10,
+    color: '#727272',
+    fontWeight: '400',
     marginBottom: 4,
     fontFamily: typography.families.regular,
   },
   dateValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    fontFamily: typography.families.semibold,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#404040',
+    fontFamily: typography.families.medium,
     marginTop: -4,
   },
   overdueValue: {
@@ -577,26 +588,29 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: '#FF3B30',
     borderRadius: 1,
-    width: '100%',
+    width: 90,
     marginTop: 4,
+    marginLeft: 26,
   },
   inProgressValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#34C759',
-    fontFamily: typography.families.semibold,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#85C369',
+    fontFamily: typography.families.bold,
   },
   inProgressBar: {
     height: 2,
-    backgroundColor: '#34C759',
-    borderRadius: 3,
-    width: '100%',
+    backgroundColor: '#85C369',
+    borderRadius: 4,
+    width: 90,
     marginTop: 4,
+    marginLeft: 26,
   },
   overdueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingLeft: 26,
   },
   emptyState: {
     alignItems: 'center',
