@@ -13,8 +13,8 @@
     "owner": "project-manager",
     "splash": {
       "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "resizeMode": "cover",
+      "backgroundColor": "#8265F7"
     },
     "ios": {
       "supportsTablet": true,

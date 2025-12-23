@@ -1,44 +1,165 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import AppHeader from '../../components/shared/AppHeader';
 
+// Onboarding landing screen redesigned to match the provided mock
 export default function OnboardingChoiceScreen({ navigation }: any) {
-  const { t } = useTranslation();
-  
   return (
     <SafeAreaWrapper>
-      <AppHeader showLanguageSwitcher={true} />
+      <AppHeader
+        hideLogo
+        showLanguageSwitcher
+        renderLanguageTrigger={(open) => (
+          <TouchableOpacity onPress={open} style={styles.menuButton} activeOpacity={0.8}>
+            <Text style={styles.menuDots}>⋮</Text>
+          </TouchableOpacity>
+        )}
+      />
       <View style={styles.container}>
-        <Text style={styles.title}>{t('common.welcome')}</Text>
-        <Text style={styles.subtitle}>{t('organization.get_started')}</Text>
+        <View style={styles.headerBlock}>
+          <Text style={styles.welcome}>Welcome</Text>
+          <Text style={styles.tagline}>Plan tasks. Track time. Work better</Text>
+          <Text style={styles.lead}>
+            Get started by setting up your organization
+            {'\n'}
+            or connecting to an existing one.
+          </Text>
+        </View>
 
-        <TouchableOpacity style={[styles.button, styles.primary]} onPress={() => navigation.navigate('RegisterOrganization') }>
-          <Text style={styles.buttonTextPrimary}>{t('organization.register_organization')}</Text>
-        </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Are you an organization owner?</Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => navigation.navigate('RegisterOrganization')}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.primaryButtonText}>Create Organization</Text>
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity style={[styles.button, styles.secondary]} onPress={() => navigation.navigate('ScanOrganization') }>
-          <Text style={styles.buttonTextSecondary}>{t('organization.scan_to_link')}</Text>
-        </TouchableOpacity>
+        <Text style={styles.orText}>Or</Text>
 
-        <TouchableOpacity style={styles.skip} onPress={() => navigation.replace('Auth')}>
-          <Text style={styles.skipText}>{t('organization.skip_to_login')}</Text>
-        </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Are you a team member?</Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => navigation.navigate('ScanOrganization')}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.primaryButtonText}>Scan QR to Join Your Organization</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Already have an account?</Text>
+          <TouchableOpacity onPress={() => navigation.replace('Auth')} activeOpacity={0.8}>
+            <Text style={styles.loginLink}>Log in</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaWrapper>
   );
 }
 
+const PRIMARY = '#7A6AC8';
+const TEXT = '#333333';
+const MUTED = '#666666';
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '700', color: '#111', marginBottom: 8, textAlign: 'center' },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 24, textAlign: 'center' },
-  button: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 12, borderWidth: 1 },
-  primary: { backgroundColor: '#007AFF', borderColor: '#007AFF' },
-  secondary: { backgroundColor: '#fff', borderColor: '#e1e5e9' },
-  buttonTextPrimary: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  buttonTextSecondary: { color: '#111', fontWeight: '700', fontSize: 16 },
-  skip: { marginTop: 8, alignItems: 'center' },
-  skipText: { color: '#007AFF', fontWeight: '600' },
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 40,
+    justifyContent: 'flex-start',
+  },
+  headerBlock: {
+    alignItems: 'center',
+    marginTop: 22,
+  },
+  welcome: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: '#574ABF',
+    textAlign: 'center',
+    fontFamily: 'Inter_800ExtraBold',
+  },
+  tagline: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+    color: '#6256C4',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  lead: {
+    fontSize: 14,
+    color: '#404040',
+    marginTop: 14,
+    marginBottom: 80,
+    lineHeight: 20,
+    fontFamily: 'Inter_500Medium',
+    textAlign: 'center',
+  },
+  section: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    color: '#404040',
+    marginBottom: 12,
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+    textAlign: 'center',
+  },
+  primaryButton: {
+    width: '100%',
+    backgroundColor: '#877ED2',
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '500',
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+  },
+  orText: {
+    textAlign: 'center',
+    color: '#404040',
+    fontWeight: '400',
+    fontSize: 14,
+    fontFamily: 'Inter_400Medium',
+    marginVertical: 10,
+  },
+  footer: {
+    alignItems: 'center',
+    marginTop: 100,
+  },
+  footerText: {
+    color: '#404040',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+    marginBottom: 6,
+  },
+  loginLink: {
+    color: '#877ED2',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+  },
+  menuButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  menuDots: {
+    fontSize: 22,
+    color: '#111',
+    fontWeight: '700',
+    marginTop: -2,
+  },
 });

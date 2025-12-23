@@ -4,6 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { changeLanguage } from '../../i18n';
 
+type TriggerRenderer = (open: () => void) => React.ReactNode;
+
+interface LanguageSwitcherProps {
+  renderTrigger?: TriggerRenderer;
+}
+
 const languages = [
   { code: 'en', name: 'English', nativeName: 'English' },
   { code: 'hi', name: 'Hindi', nativeName: 'हिंदी' },
@@ -13,7 +19,7 @@ const languages = [
   { code: 'ml', name: 'Malayalam', nativeName: 'മലയാളം' },
 ];
 
-export default function LanguageSwitcher() {
+export default function LanguageSwitcher({ renderTrigger }: LanguageSwitcherProps) {
   const { i18n, t } = useTranslation();
   const [modalVisible, setModalVisible] = useState(false);
   // Use i18n.language directly to always reflect current language
@@ -44,16 +50,22 @@ export default function LanguageSwitcher() {
 
   const currentLang = languages.find(lang => lang.code === currentLanguage) || languages[0];
 
+  const openModal = () => setModalVisible(true);
+
   return (
     <>
-      <TouchableOpacity
-        style={styles.switcherButton}
-        onPress={() => setModalVisible(true)}
-      >
-        <Ionicons name="language" size={20} color="#007AFF" />
-        <Text style={styles.switcherText}>{currentLang.nativeName}</Text>
-        <Ionicons name="chevron-down" size={16} color="#007AFF" />
-      </TouchableOpacity>
+      {renderTrigger ? (
+        renderTrigger(openModal)
+      ) : (
+        <TouchableOpacity
+          style={styles.switcherButton}
+          onPress={openModal}
+        >
+          <Ionicons name="language" size={20} color="#007AFF" />
+          <Text style={styles.switcherText}>{currentLang.nativeName}</Text>
+          <Ionicons name="chevron-down" size={16} color="#007AFF" />
+        </TouchableOpacity>
+      )}
 
       <Modal
         visible={modalVisible}
