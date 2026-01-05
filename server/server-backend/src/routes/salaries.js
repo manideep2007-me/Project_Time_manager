@@ -7,6 +7,11 @@ const router = express.Router();
 router.use(authenticateToken);
 router.use(requireRole(['admin'])); // Only admin can access salary information
 
+// Helper to check if user is from organization registry (real org user, not demo)
+function isOrganizationUser(req) {
+  return req.user && req.user.source === 'registry';
+}
+
 // GET /api/salaries - Get all salaries with pagination and filters
 router.get('/', async (req, res) => {
   try {
@@ -20,6 +25,16 @@ router.get('/', async (req, res) => {
       end_date,
       search = '' 
     } = req.query;
+    
+    // Real organization users see empty salaries list (no dummy data)
+    if (isOrganizationUser(req)) {
+      return res.json({
+        salaries: [],
+        total: 0,
+        page: Number(page),
+        limit: Number(limit)
+      });
+    }
     
     const offset = (page - 1) * limit;
     let where = 'WHERE 1=1';

@@ -298,6 +298,16 @@ router.get('/history', authenticateToken, async (req, res) => {
     const userRole = req.user.role;
     const { limit = 50, offset = 0 } = req.query;
 
+    // Real organization users see empty proof history (no dummy data)
+    if (req.user && req.user.source === 'registry') {
+      return res.json({
+        success: true,
+        proofs: [],
+        count: 0,
+        role: userRole,
+      });
+    }
+
     console.log(`\n========== FETCHING PROOF HISTORY ==========`);
     console.log(`👤 User ID: ${userId}`);
     console.log(`👤 User Role: ${userRole}`);

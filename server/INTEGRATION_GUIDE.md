@@ -81,9 +81,6 @@ npm run android
 
 # iOS
 npm run ios
-
-# Web browser
-npm run web
 ```
 
 ## 🔧 Configuration

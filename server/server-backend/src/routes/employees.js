@@ -68,9 +68,25 @@ router.post('/:id/photo', photoUpload.single('photo'), async (req, res) => {
 });
 
 // GET /api/employees - List all employees with pagination and search
+// Helper to check if user is from organization registry (real org user, not demo)
+function isOrganizationUser(req) {
+  return req.user && req.user.source === 'registry';
+}
+
 router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 50, search = '', department = '', active = 'true' } = req.query;
+    
+    // Real organization users see empty employee list (no dummy data)
+    if (isOrganizationUser(req)) {
+      return res.json({
+        employees: [],
+        total: 0,
+        page: Number(page),
+        limit: Number(limit)
+      });
+    }
+    
     const offset = (page - 1) * limit;
     let where = 'WHERE 1=1';
     const params = [];

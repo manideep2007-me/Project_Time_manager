@@ -117,7 +117,12 @@ export function createApiClient(): AxiosInstance {
       (config.headers as any)['Authorization'] = `Bearer ${token}`;
     }
     // Only set Content-Type for non-FormData requests
-    if (!(config.data instanceof FormData)) {
+    // Check if data exists and if it has FormData-like properties (for RN compatibility)
+    const isFormData = config.data && (
+      (typeof FormData !== 'undefined' && config.data instanceof FormData) ||
+      (config.data && config.data._parts !== undefined) // React Native FormData check
+    );
+    if (!isFormData) {
       (config.headers as any)['Content-Type'] = 'application/json';
     }
     return config;

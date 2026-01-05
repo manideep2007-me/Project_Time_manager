@@ -5,10 +5,34 @@ const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 router.use(authenticateToken);
 
+// Helper: Check if user is from a real organization (not demo user)
+const isOrganizationUser = (req) => req.user?.source === 'registry';
+
 // GET /api/dashboard/overview - Get dashboard overview
 // GET /api/dashboard/overview - Get dashboard overview and recent activity
 router.get('/overview', async (req, res) => {
   try {
+    // Real organization users see empty data (their org's database would be separate)
+    // Demo users see the dummy data in project_time_manager
+    if (isOrganizationUser(req)) {
+      return res.json({
+        overview: {
+          totalClients: 0,
+          activeClients: 0,
+          totalProjects: 0,
+          activeProjects: 0,
+          completedProjects: 0,
+          pendingProjects: 0,
+          onHoldProjects: 0,
+          cancelledProjects: 0,
+          totalActiveEmployees: 0,
+          totalTimeEntries: 0,
+          totalCost: 0,
+        },
+        recentActivity: [],
+      });
+    }
+
     const [clients, activeProjects, completedProjects, pendingProjects, onHoldProjects, cancelledProjects, activeEmployees, totalTimeEntries] = await Promise.all([
       pool.query('SELECT COUNT(*) as count FROM clients'),
       pool.query("SELECT COUNT(*) as count FROM projects WHERE status = 'active'"),

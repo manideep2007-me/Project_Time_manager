@@ -7,11 +7,26 @@ const { handleValidation } = require('../middleware/validation');
 const router = express.Router();
 router.use(authenticateToken);
 
+// Helper to check if user is from organization registry (real org user, not demo)
+function isOrganizationUser(req) {
+  return req.user && req.user.source === 'registry';
+}
+
 // GET /api/tasks - Get all tasks with employee and project information
 router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 100, status = '', projectId = '', assignedTo = '' } = req.query;
     const offset = (page - 1) * limit;
+
+    // Real organization users see empty tasks list (no dummy data)
+    if (isOrganizationUser(req)) {
+      return res.json({
+        tasks: [],
+        total: 0,
+        page: Number(page),
+        limit: Number(limit)
+      });
+    }
 
     let where = 'WHERE 1=1';
     const params = [];

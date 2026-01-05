@@ -19,7 +19,6 @@
     "test": "cd server-backend && npm test",
     "android": "cd frontend/mobile && expo run:android",
     "ios": "cd frontend/mobile && expo run:ios",
-    "web": "cd frontend/mobile && expo start --web",
     "build:backend": "cd server-backend && npm run build",
     "clean": "rm -rf node_modules server-backend/node_modules frontend/mobile/node_modules",
     "logs:backend": "cd server-backend && npm run logs",

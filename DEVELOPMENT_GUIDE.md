@@ -180,7 +180,6 @@ npm start
 # Run on specific platform
 npm run android    # Android emulator
 npm run ios        # iOS simulator
-npm run web        # Web browser
 
 # Clear cache
 expo start -c

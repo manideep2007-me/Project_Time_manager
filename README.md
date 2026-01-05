@@ -118,7 +118,6 @@ This will start the Expo development server. You can then:
 - Scan the QR code with Expo Go app on your phone
 - Press `i` for iOS simulator
 - Press `a` for Android emulator
-- Press `w` for web browser
 
 ## 🔧 Configuration
 

@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const pool = require('../config/database');
+const { secondary: registryPool } = require('../config/databases');
 const { handleValidation } = require('../middleware/validation');
 
 const router = express.Router();
@@ -87,15 +88,79 @@ router.post('/login', [
 ], handleValidation, async (req, res) => {
   try {
     const { email, password } = req.body;
-    const result = await pool.query('SELECT id, email, password_hash, first_name, last_name, role FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
-    const row = result.rows[0];
-    const ok = await bcrypt.compare(password, row.password_hash);
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ userId: row.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    const { password_hash, ...user } = row;
-    res.json({ message: 'Logged in', user, token });
+    
+    // Demo accounts (for development) - these are in users table
+    // Check users table FIRST for demo accounts (admin@company.com, rajesh@company.com, etc.)
+    const demoResult = await pool.query('SELECT id, email, password_hash, first_name, last_name, role FROM users WHERE email = $1', [email]);
+    
+    if (demoResult.rows.length > 0) {
+      const row = demoResult.rows[0];
+      const ok = await bcrypt.compare(password, row.password_hash);
+      if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+      
+      // Demo accounts use 'local' source - they see demo data
+      const token = jwt.sign({ userId: row.id, source: 'local' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      const { password_hash, ...user } = row;
+      console.log(`✅ Demo user logged in: ${email} (${row.role})`);
+      return res.json({ message: 'Logged in', user, token });
+    }
+    
+    // Real organization users - check employees_registry in project_registry database
+    if (registryPool) {
+      try {
+        const registryResult = await registryPool.query(
+          `SELECT er.id, er.employee_email as email, er.password_hash, er.employee_name, er.role, er.organization_id, er.organization_name
+           FROM employees_registry er
+           WHERE er.employee_email = $1 AND er.is_active = true`,
+          [email]
+        );
+        
+        if (registryResult.rows.length > 0) {
+          const row = registryResult.rows[0];
+          
+          // Check if password_hash exists
+          if (!row.password_hash) {
+            return res.status(401).json({ error: 'Password not set. Please contact your organization admin.' });
+          }
+          
+          const ok = await bcrypt.compare(password, row.password_hash);
+          if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+          
+          // Parse name into first and last name
+          const nameParts = (row.employee_name || '').split(' ');
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+          
+          // Real organization users use 'registry' source - they see their organization's data
+          const token = jwt.sign({ 
+            userId: row.id, 
+            organizationId: row.organization_id,
+            role: row.role,
+            source: 'registry'
+          }, process.env.JWT_SECRET, { expiresIn: '7d' });
+          
+          const user = {
+            id: row.id,
+            email: row.email,
+            first_name: firstName,
+            last_name: lastName,
+            role: row.role,
+            organization_id: row.organization_id,
+            organization_name: row.organization_name
+          };
+          
+          console.log(`✅ Organization user logged in: ${email} (${row.role}) - Org: ${row.organization_name}`);
+          return res.json({ message: 'Logged in', user, token });
+        }
+      } catch (registryErr) {
+        console.log('employees_registry lookup failed:', registryErr.message);
+      }
+    }
+    
+    // No user found in either table
+    return res.status(401).json({ error: 'Invalid credentials' });
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -106,6 +171,39 @@ router.get('/profile', async (req, res) => {
     const token = auth && auth.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Access token required' });
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // If user is from employees_registry (organization admin/employee)
+    if (decoded.source === 'registry' && registryPool) {
+      try {
+        const result = await registryPool.query(
+          `SELECT id, employee_email as email, employee_name, role, organization_id, organization_name
+           FROM employees_registry WHERE id = $1`,
+          [decoded.userId]
+        );
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          const nameParts = (row.employee_name || '').split(' ');
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+          
+          return res.json({ 
+            user: {
+              id: row.id,
+              email: row.email,
+              first_name: firstName,
+              last_name: lastName,
+              role: row.role,
+              organization_id: row.organization_id,
+              organization_name: row.organization_name
+            }
+          });
+        }
+      } catch (registryErr) {
+        console.log('Registry profile lookup failed:', registryErr.message);
+      }
+    }
+    
+    // Fallback: check users table
     const result = await pool.query('SELECT id, email, first_name, last_name, role FROM users WHERE id = $1', [decoded.userId]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json({ user: result.rows[0] });

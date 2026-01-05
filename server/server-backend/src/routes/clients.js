@@ -7,9 +7,22 @@ const { handleValidation } = require('../middleware/validation');
 const router = express.Router();
 router.use(authenticateToken);
 
+// Helper: Check if user is from a real organization (not demo user)
+const isOrganizationUser = (req) => req.user?.source === 'registry';
+
 // GET /api/clients - List all clients with pagination and search
 router.get('/', async (req, res) => {
   try {
+    // Real organization users see empty data
+    if (isOrganizationUser(req)) {
+      return res.json({
+        clients: [],
+        total: 0,
+        page: 1,
+        limit: 50
+      });
+    }
+
     const { page = 1, limit = 50, search = '' } = req.query;
     const offset = (page - 1) * limit;
     let where = 'WHERE 1=1';

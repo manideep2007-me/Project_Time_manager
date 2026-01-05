@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "platforms": ["ios", "android"],
     "extra": {
       "apiBaseUrl": "http://localhost:5000"
     },
@@ -42,9 +43,6 @@
         "RECORD_AUDIO"
       ],
       "package": "com.anonymous.projectmanager"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-font",

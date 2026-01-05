@@ -1,6 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
-const pool = require('../config/database');
+const pool = require('../config/database'); // Primary DB for operational data
+const { secondary: registryPool } = require('../config/databases'); // Secondary DB for organization registry
 const { handleValidation } = require('../middleware/validation');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
@@ -36,15 +37,23 @@ router.post(
   ],
   handleValidation,
   async (req, res) => {
-    const bcrypt = require('bcrypt');
+    const bcrypt = require('bcryptjs');
+    
+    // Check if secondary database (project_registry) is configured
+    if (!registryPool) {
+      return res.status(500).json({ 
+        error: 'Organization registry database not configured. Please set DB2_HOST, DB2_NAME, DB2_USER, DB2_PASSWORD in .env' 
+      });
+    }
+    
     try {
-      const { name, address, licence_key, licence_number, max_employees, licence_type, admin_email, admin_phone, admin_password } = req.body;
+      const { name, address, industry, city, state_province, country, zip_code, logo_url, licence_key, licence_number, max_employees, licence_type, admin_email, admin_phone, admin_password } = req.body;
       
       // Use licence_key as licence_number if licence_number is empty (for trial plans)
       const finalLicenceNumber = licence_number && licence_number.trim() ? licence_number.trim() : licence_key;
       
-      // Check if email already exists
-      const existingEmail = await pool.query('SELECT 1 FROM organizations WHERE admin_email = $1', [admin_email]);
+      // Check if email already exists in registry database
+      const existingEmail = await registryPool.query('SELECT 1 FROM organizations_registry WHERE admin_email = $1', [admin_email]);
       if (existingEmail.rows.length > 0) {
         return res.status(400).json({ error: 'Email already registered' });
       }
@@ -56,7 +65,7 @@ router.post(
       let code;
       for (let i = 0; i < 5; i++) {
         code = generateJoinCode();
-        const exists = await pool.query('SELECT 1 FROM organizations WHERE join_code = $1', [code]);
+        const exists = await registryPool.query('SELECT 1 FROM organizations_registry WHERE join_code = $1', [code]);
         if (exists.rows.length === 0) break;
       }
       if (!code) return res.status(500).json({ error: 'Failed to generate join code' });
@@ -65,18 +74,58 @@ router.post(
       let organizationId;
       for (let i = 0; i < 5; i++) {
         organizationId = generateUniqueId();
-        const exists = await pool.query('SELECT 1 FROM organizations_registry WHERE organization_id = $1', [organizationId]);
+        const exists = await registryPool.query('SELECT 1 FROM organizations_registry WHERE organization_id = $1', [organizationId]);
         if (exists.rows.length === 0) break;
       }
       if (!organizationId) return res.status(500).json({ error: 'Failed to generate unique ID' });
 
-      const ins = await pool.query(
-        `INSERT INTO organizations_registry (organization_id, name, address, licence_key, licence_number, max_employees, licence_type, admin_email, admin_phone, admin_password, join_code)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         RETURNING id, organization_id, name, address, licence_key, licence_number, max_employees, licence_type, admin_email, admin_phone, join_code, created_at`,
-        [organizationId, name, address, licence_key, finalLicenceNumber, max_employees, licence_type, admin_email, admin_phone, hashedPassword, code]
+      // Insert into project_registry database (organizations_registry table)
+      const ins = await registryPool.query(
+        `INSERT INTO organizations_registry (organization_id, name, address, industry, city, state_province, country, zip_code, logo_url, licence_key, licence_number, max_employees, licence_type, admin_email, admin_phone, admin_password, join_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         RETURNING id, organization_id, name, address, industry, city, state_province, country, zip_code, logo_url, licence_key, licence_number, max_employees, licence_type, admin_email, admin_phone, join_code, created_at`,
+        [organizationId, name, address, industry || null, city || null, state_province || null, country || null, zip_code || null, logo_url || null, licence_key, finalLicenceNumber, max_employees, licence_type, admin_email, admin_phone, hashedPassword, code]
       );
-      res.json({ organization: ins.rows[0] });
+      
+      const orgRecord = ins.rows[0];
+      console.log(`✅ Organization "${name}" registered in project_registry database with ID: ${organizationId}`);
+      
+      // Add organization admin to employees_registry table in project_registry database
+      try {
+        // Extract first and last name from admin_email or use company name
+        const emailParts = admin_email.split('@')[0].split(/[._-]/);
+        const firstName = emailParts[0] ? emailParts[0].charAt(0).toUpperCase() + emailParts[0].slice(1) : 'Admin';
+        const lastName = emailParts[1] ? emailParts[1].charAt(0).toUpperCase() + emailParts[1].slice(1) : name;
+        const adminName = `${firstName} ${lastName}`;
+        
+        // Check if admin already exists in employees_registry
+        const existingAdmin = await registryPool.query(
+          'SELECT id FROM employees_registry WHERE employee_email = $1 AND organization_id = $2', 
+          [admin_email, organizationId]
+        );
+        
+        if (existingAdmin.rows.length === 0) {
+          // Add admin to employees_registry in project_registry database
+          await registryPool.query(
+            `INSERT INTO employees_registry (organization_id, organization_name, employee_email, employee_phone, employee_name, password_hash, role)
+             VALUES ($1, $2, $3, $4, $5, $6, 'admin')`,
+            [organizationId, name, admin_email, admin_phone, adminName, hashedPassword]
+          );
+          console.log(`✅ Admin "${admin_email}" added to employees_registry in project_registry database`);
+        } else {
+          console.log(`ℹ️ Admin "${admin_email}" already exists in employees_registry`);
+        }
+      } catch (adminErr) {
+        // Log error but don't fail the registration
+        console.error('Warning: Could not add admin to employees_registry:', adminErr.message);
+      }
+      
+      res.json({ 
+        organization: {
+          ...orgRecord,
+          unique_id: orgRecord.organization_id
+        }
+      });
     } catch (err) {
       console.error('Error registering organization:', err);
       res.status(500).json({ error: 'Failed to register organization' });
@@ -90,31 +139,34 @@ router.get('/resolve/:code', async (req, res) => {
     const { code } = req.params;
     let org = null;
     
-    // Try organizations table first (where dummy org was created)
-    try {
-      org = await pool.query(
-        'SELECT id, name, admin_email, admin_phone, join_code FROM organizations WHERE join_code = $1',
-        [code]
-      );
-    } catch (orgErr) {
-      console.log('organizations table query failed, trying organizations_registry:', orgErr.message);
-    }
-    
-    // If not found, try organizations_registry
-    if (!org || org.rows.length === 0) {
+    // Try organizations_registry in secondary database (project_registry) first
+    if (registryPool) {
       try {
-        org = await pool.query(
-          `SELECT id, 
+        org = await registryPool.query(
+          `SELECT id, organization_id, 
             COALESCE(name, organization_name) as name, 
             admin_email, 
             admin_phone, 
-            join_code 
+            join_code,
+            logo_url
            FROM organizations_registry 
            WHERE join_code = $1`,
           [code]
         );
       } catch (registryErr) {
-        console.log('organizations_registry table query also failed:', registryErr.message);
+        console.log('organizations_registry table query failed:', registryErr.message);
+      }
+    }
+    
+    // If not found in registry, try primary database organizations table
+    if (!org || org.rows.length === 0) {
+      try {
+        org = await pool.query(
+          'SELECT id, name, admin_email, admin_phone, join_code FROM organizations WHERE join_code = $1',
+          [code]
+        );
+      } catch (orgErr) {
+        console.log('organizations table query also failed:', orgErr.message);
       }
     }
     
@@ -135,25 +187,59 @@ router.get('/resolve/:code', async (req, res) => {
 router.get('/my-organization', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const adminEmail = req.user.email;
+    const organizationId = req.user.organization_id; // From employees_registry users
     let org = null;
     
-    // Try organizations_registry first (where register endpoint inserts)
-    try {
-      org = await pool.query(
-        `SELECT id, 
-          COALESCE(name, organization_name) as name, 
-          join_code, 
-          COALESCE(organization_id, unique_id) as unique_id 
-         FROM organizations_registry 
-         WHERE admin_email = $1`,
-        [adminEmail]
-      );
-    } catch (registryErr) {
-      // If organizations_registry doesn't exist or has wrong structure, try organizations
-      console.log('organizations_registry query failed, trying organizations table:', registryErr.message);
+    // If user has organization_id (from employees_registry), use that directly
+    if (organizationId && registryPool) {
+      try {
+        org = await registryPool.query(
+          `SELECT id, 
+            name, 
+            join_code, 
+            organization_id as unique_id,
+            logo_url
+           FROM organizations_registry 
+           WHERE organization_id = $1`,
+          [organizationId]
+        );
+        
+        if (org.rows.length > 0) {
+          const orgData = org.rows[0];
+          return res.json({ 
+            organization: {
+              id: orgData.id,
+              name: orgData.name,
+              join_code: orgData.join_code,
+              unique_id: orgData.unique_id || orgData.organization_id,
+              logo_url: orgData.logo_url
+            }
+          });
+        }
+      } catch (registryErr) {
+        console.log('organizations_registry query by org_id failed:', registryErr.message);
+      }
     }
     
-    // If not found or error, try organizations table
+    // Fallback: Try organizations_registry by admin_email
+    if (registryPool) {
+      try {
+        org = await registryPool.query(
+          `SELECT id, 
+            name, 
+            join_code, 
+            organization_id as unique_id,
+            logo_url
+           FROM organizations_registry 
+           WHERE admin_email = $1`,
+          [adminEmail]
+        );
+      } catch (registryErr) {
+        console.log('organizations_registry query failed, trying organizations table:', registryErr.message);
+      }
+    }
+    
+    // If not found in registry, try primary database organizations table
     if (!org || org.rows.length === 0) {
       try {
         org = await pool.query(
@@ -181,7 +267,8 @@ router.get('/my-organization', authenticateToken, requireRole(['admin']), async 
         id: orgData.id,
         name: orgData.name,
         join_code: orgData.join_code,
-        unique_id: orgData.unique_id || orgData.organization_id
+        unique_id: orgData.unique_id || orgData.organization_id,
+        logo_url: orgData.logo_url
       }
     });
   } catch (err) {

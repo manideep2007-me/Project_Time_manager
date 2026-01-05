@@ -88,7 +88,6 @@ npm run seed:db             # Seed database with sample data
 ```bash
 npm run android             # Run on Android device/emulator
 npm run ios                 # Run on iOS device/simulator
-npm run web                 # Run on web browser
 ```
 
 ### Utilities

@@ -7,12 +7,28 @@ const { handleValidation } = require('../middleware/validation');
 const router = express.Router();
 router.use(authenticateToken);
 
+// Helper to check if user is from organization registry (real org user, not demo)
+function isOrganizationUser(req) {
+  return req.user && req.user.source === 'registry';
+}
+
 // GET /api/time-entries - List all time entries with filters
 router.get('/', async (req, res) => {
   try {
     const { taskId, employeeId, projectId, startDate, endDate, page = 1, limit = 100 } = req.query;
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 100;
+    
+    // Real organization users see empty time entries list (no dummy data)
+    if (isOrganizationUser(req)) {
+      return res.json({
+        timeEntries: [],
+        total: 0,
+        page: pageNum,
+        limit: limitNum
+      });
+    }
+    
     const offset = (pageNum - 1) * limitNum;
     let where = 'WHERE te.is_active = true';
     const params = [];

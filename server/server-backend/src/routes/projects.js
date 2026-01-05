@@ -7,9 +7,20 @@ const { handleValidation } = require('../middleware/validation');
 const router = express.Router();
 router.use(authenticateToken);
 
+// Helper: Check if user is from a real organization (not demo user)
+const isOrganizationUser = (req) => req.user?.source === 'registry';
+
 // GET /api/projects - List all projects with pagination and filters
 router.get('/', async (req, res) => {
   try {
+    // Real organization users see empty data
+    if (isOrganizationUser(req)) {
+      return res.json({
+        projects: [],
+        pagination: { total: 0, page: 1, limit: 20, totalPages: 0 }
+      });
+    }
+
     const { page = 1, limit = 20, search = '', status = '', clientId = '' } = req.query;
     const offset = (page - 1) * limit;
     

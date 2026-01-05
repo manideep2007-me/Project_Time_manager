@@ -46,6 +46,12 @@ export async function createProject(payload: any) {
 export async function registerOrganization(payload: { 
   name: string; 
   address: string; 
+  industry?: string;
+  city?: string;
+  state_province?: string;
+  country?: string;
+  zip_code?: string;
+  logo_url?: string;
   licence_key: string; 
   licence_number: string; 
   max_employees: number; 

@@ -11,7 +11,6 @@ Welcome to Project Time Manager! This guide will help you get started with track
 ### 1. Download and Install
 - **Android**: Download from Google Play Store
 - **iOS**: Download from Apple App Store
-- **Web**: Access via web browser (future release)
 
 ### 2. Initial Login
 Use the default admin credentials to get started:

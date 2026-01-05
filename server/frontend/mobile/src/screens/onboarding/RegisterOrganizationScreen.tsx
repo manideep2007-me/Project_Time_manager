@@ -280,14 +280,15 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       Alert.alert('Validation', 'Admin phone is required');
       return;
     }
-    if (!emailVerified) {
-      Alert.alert('Validation', 'Please verify email with OTP');
-      return;
-    }
-    if (!phoneVerified) {
-      Alert.alert('Validation', 'Please verify phone with OTP');
-      return;
-    }
+    // OTP verification temporarily disabled - will re-enable later
+    // if (!emailVerified) {
+    //   Alert.alert('Validation', 'Please verify email with OTP');
+    //   return;
+    // }
+    // if (!phoneVerified) {
+    //   Alert.alert('Validation', 'Please verify phone with OTP');
+    //   return;
+    // }
     if (!adminPassword || adminPassword.length < 6) {
       Alert.alert('Validation', 'Password must be at least 6 characters');
       return;
@@ -316,6 +317,12 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       const res = await registerOrganization({ 
         name: companyName.trim(),
         address: fullAddress,
+        industry: industry.trim() || undefined,
+        city: city.trim() || undefined,
+        state_province: stateProvince.trim() || undefined,
+        country: country.trim() || undefined,
+        zip_code: zipCode.trim() || undefined,
+        logo_url: logoUri || undefined,
         licence_key,
         licence_number: licenceNumber.trim() || licence_key, // Use licence_key if licence_number is empty
         max_employees: parseInt(maxEmployees),
@@ -326,7 +333,13 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       });
       const code = res.organization.join_code;
       const uniqueId = res.organization.unique_id;
-      navigation.replace('OrganizationQRCode', { code, name: res.organization.name, uniqueId });
+      navigation.replace('OrganizationQRCode', { 
+        code, 
+        name: res.organization.name, 
+        uniqueId,
+        adminEmail: adminEmail.trim(),
+        adminPassword: adminPassword,
+      });
     } catch (err: any) {
       console.error('Register org error:', err);
       const message = err.response?.data?.error || 'Failed to register organization';
