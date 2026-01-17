@@ -69,14 +69,12 @@ export default function ProfileScreen() {
       >
         {/* Section 1: My Task */}
         <View style={styles.myTaskSection}>
-          <TouchableOpacity 
+          <View 
             style={styles.myTaskItem}
-            onPress={() => navigation.navigate('MyTasks')}
-            activeOpacity={0.6}
           >
             <Text style={styles.menuItemText}>My Task</Text>
             <Ionicons name="chevron-forward" size={20} color="#6F67CC" />
-          </TouchableOpacity>
+          </View>
         </View>
 
         {/* Section 2: Main Menu */}
@@ -92,7 +90,7 @@ export default function ProfileScreen() {
             />
             <MenuItem 
               title="Task" 
-              onPress={() => navigation.navigate('Tasks')}
+              onPress={() => {}}
             />
             <MenuItem 
               title="Employee" 
@@ -107,19 +105,19 @@ export default function ProfileScreen() {
           <View style={styles.styledSection}>
             <MenuItem 
               title="Expense & Reports" 
-              onPress={() => Alert.alert('Expense & Reports', 'Coming soon!')}
+              onPress={() => navigation.navigate('TimeEntries')}
             />
             <MenuItem 
               title="Permissions" 
-              onPress={() => Alert.alert('Permissions', 'Coming soon!')}
+              onPress={() => navigation.navigate('Permissions')}
             />
             <MenuItem 
               title="Language option" 
-              onPress={() => navigation.navigate('LanguageSettings')}
+              onPress={() => {}}
             />
             <MenuItem 
               title="Buy Pro version" 
-              onPress={() => Alert.alert('Buy Pro version', 'Coming soon!')}
+              onPress={() => {}}
               showBorder={false}
             />
           </View>

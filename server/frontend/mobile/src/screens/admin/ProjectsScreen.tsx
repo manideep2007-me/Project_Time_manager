@@ -167,7 +167,7 @@ export default function ProjectsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+          <Ionicons name="chevron-back" size={28} color="#1A1A1A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Projects</Text>
         <TouchableOpacity style={styles.headerButton}>
@@ -248,18 +248,18 @@ export default function ProjectsScreen() {
                 style={styles.searchInput}
                 placeholderTextColor="#9CA3AF"
               />
-              <VoiceToTextButton
-                onResult={text => {
-                  setSearch(text);
-                }}
-                size="small"
-                style={styles.voiceButton}
-                color="#877ED2"
-              />
               <TouchableOpacity style={styles.searchIconButton}>
                 <Ionicons name="search" size={20} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
+            <VoiceToTextButton
+              onResult={text => {
+                setSearch(text);
+              }}
+              size="small"
+              style={styles.voiceButton}
+              color="#877ED2"
+            />
           </View>
         </View>
 
@@ -289,7 +289,7 @@ export default function ProjectsScreen() {
                     </View>
                     <View style={styles.avatarContainer}>
                       <View style={styles.avatar}>
-                        <Ionicons name="person" size={16} color="#fff" />
+                        <Ionicons name="person" size={12} color="#fff" />
                       </View>
                       <View style={styles.avatarPlus}>
                         <Text style={styles.avatarPlusText}>+</Text>
@@ -368,7 +368,7 @@ export default function ProjectsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F6FA',
+    backgroundColor: '#F6F6F6',
   },
   center: {
     flex: 1,
@@ -384,8 +384,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 24,
-    paddingBottom: 12,
+    paddingTop: 32,
+    paddingHorizontal: 10,
+    paddingBottom: 4,
     backgroundColor: '#F5F5F5',
   },
   headerButton: {
@@ -395,18 +396,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    fontFamily: typography.families.semibold,
-    marginLeft: 8,
+    fontSize: 20,
+    fontWeight: '400',
+    color: '#000000',
+    fontFamily: typography.families.regular,
+    marginLeft: 2,
     flex: 1,
   },
   scrollView: {
     flex: 1,
   },
   filterContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F6F6F6',
     paddingTop: 16,
     paddingBottom: 0,
     borderBottomWidth: 1,
@@ -438,11 +439,9 @@ const styles = StyleSheet.create({
     fontFamily: typography.families.semibold,
   },
   searchContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F6F6F6',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E6EB',
   },
   searchRow: {
     flexDirection: 'row',
@@ -467,7 +466,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.families.regular,
   },
   voiceButton: {
-    marginRight: 4,
+    marginLeft: 12,
   },
   searchIconButton: {
     padding: 8,
@@ -509,42 +508,47 @@ const styles = StyleSheet.create({
     fontFamily: typography.families.semibold,
   },
   avatarContainer: {
-    width: 40,
-    height: 40,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'absolute',
-    top: 40,
-    right: 36,
+    top: 8,
+    right: 12,
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#FF9500',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'absolute',
+    top: 30,
+    right: 16,
     zIndex: 1,
   },
   avatarPlus: {
-    width: 38,
-    height: 38,
-    borderRadius: 30,
+    width: 24,
+    height: 24,
+    borderRadius: 16,
     backgroundColor: '#666666',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'absolute',
-    bottom: 0,
-    left: 26,
-    borderWidth: 2,
-    borderColor: '#fff',
+    top: 28,
+    right: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
     zIndex: 2,
   },
   avatarPlusText: {
-    fontSize: 30,
-    color: '#fff',
-    fontWeight: '200',
-    lineHeight: 18,
+    fontSize: 10,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontFamily: typography.families.bold,
+    textAlign: 'center',
+    lineHeight: 12,
   },
   locationRow: {
     paddingHorizontal: 16,

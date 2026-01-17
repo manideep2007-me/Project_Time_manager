@@ -1,12 +1,13 @@
 const express = require('express');
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, getDbPool } = require('../middleware/auth');
 
 const router = express.Router();
 
 // GET /api/states - List all active states (optionally filtered by country)
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { country_id } = req.query;
     
     let query = `
@@ -25,7 +26,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     query += ' ORDER BY s.name ASC';
     
-    const result = await pool.query(query, params);
+    const result = await db.query(query, params);
     res.json({ states: result.rows });
   } catch (error) {
     console.error('Error fetching states:', error);
@@ -36,8 +37,9 @@ router.get('/', authenticateToken, async (req, res) => {
 // GET /api/states/:id - Get specific state
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT s.state_id, s.name, s.code, s.country_id, s.is_active, s.created_at, s.updated_at,
               c.name as country_name
        FROM states s

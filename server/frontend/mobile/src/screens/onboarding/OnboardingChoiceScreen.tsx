@@ -1,65 +1,70 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
-import AppHeader from '../../components/shared/AppHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from '../../components/shared/LanguageSwitcher';
 
 // Onboarding landing screen redesigned to match the provided mock
 export default function OnboardingChoiceScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+
   return (
-    <SafeAreaWrapper>
-      <AppHeader
-        hideLogo
-        backgroundColor="#FFFFFF"
-        showLanguageSwitcher
-        renderLanguageTrigger={(open) => (
-          <TouchableOpacity onPress={open} style={styles.menuButton} activeOpacity={0.8}>
-            <Text style={styles.menuDots}>⋮</Text>
-          </TouchableOpacity>
-        )}
-      />
+    <View style={styles.screen}>
+      {/* Custom Header */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft} />
+          <LanguageSwitcher
+            renderTrigger={(open) => (
+              <TouchableOpacity onPress={open} style={styles.menuButton} activeOpacity={0.8}>
+                <Ionicons name="ellipsis-vertical" size={22} color="#000000" />
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </View>
+
       <View style={styles.container}>
         <View style={styles.headerBlock}>
-          <Text style={styles.welcome}>Welcome</Text>
-          <Text style={styles.tagline}>Plan tasks. Track time. Work better</Text>
-          <Text style={styles.lead}>
-            Get started by setting up your organization
-            {'\n'}
-            or connecting to an existing one.
-          </Text>
+          <Text style={styles.welcome}>{t('onboarding.welcome')}</Text>
+          <Text style={styles.tagline}>{t('onboarding.tagline')}</Text>
+          <Text style={styles.lead}>{t('onboarding.get_started')}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Are you an organization owner?</Text>
+          <Text style={styles.sectionLabel}>{t('onboarding.organization_owner')}</Text>
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => navigation.navigate('RegisterOrganization')}
             activeOpacity={0.9}
           >
-            <Text style={styles.primaryButtonText}>Create Organization</Text>
+            <Text style={styles.primaryButtonText}>{t('onboarding.create_organization')}</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.orText}>Or</Text>
+        <Text style={styles.orText}>{t('onboarding.or')}</Text>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Are you a team member?</Text>
+          <Text style={styles.sectionLabel}>{t('onboarding.team_member')}</Text>
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => navigation.navigate('ScanOrganization')}
             activeOpacity={0.9}
           >
-            <Text style={styles.primaryButtonText}>Scan QR to Join Your Organization</Text>
+            <Text style={styles.primaryButtonText}>{t('onboarding.scan_qr_join')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account?</Text>
+          <Text style={styles.footerText}>{t('onboarding.already_have_account')}</Text>
           <TouchableOpacity onPress={() => navigation.replace('Auth')} activeOpacity={0.8}>
-            <Text style={styles.loginLink}>Log in</Text>
+            <Text style={styles.loginLink}>{t('onboarding.log_in')}</Text>
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaWrapper>
+    </View>
   );
 }
 
@@ -68,6 +73,29 @@ const TEXT = '#333333';
 const MUTED = '#666666';
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  header: {
+    backgroundColor: '#FFFFFF',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    height: 44,
+    paddingHorizontal: 16,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   container: {
     flex: 1,
     paddingHorizontal: 24,
@@ -152,15 +180,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
-  },
-  menuButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-  menuDots: {
-    fontSize: 22,
-    color: '#111',
-    fontWeight: '700',
-    marginTop: -2,
   },
 });

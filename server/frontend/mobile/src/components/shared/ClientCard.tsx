@@ -22,6 +22,7 @@ type ClientCardProps = {
   onMore?: () => void;
   canDelete?: boolean;
   canEdit?: boolean;
+  isLast?: boolean;
 };
 
 export default function ClientCard({ 
@@ -31,7 +32,8 @@ export default function ClientCard({
   onDelete, 
   onMore,
   canDelete = false,
-  canEdit = false 
+  canEdit = false,
+  isLast = false
 }: ClientCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -42,7 +44,11 @@ export default function ClientCard({
   };
 
   return (
-    <View style={styles.cardContainer}>
+    <View style={[
+      styles.cardContainer, 
+      expanded && styles.cardContainerExpanded,
+      isLast && !expanded && styles.cardContainerLast
+    ]}>
       <TouchableOpacity 
         onPress={() => setExpanded(!expanded)} 
         style={styles.cardHeader}
@@ -134,17 +140,23 @@ export default function ClientCard({
 const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E7ED',
+  },
+  cardContainerExpanded: {
+    
+    borderRadius: 8,
+    margin: 8,
+  },
+  cardContainerLast: {
+    borderBottomWidth: 0,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 6,
   },
   headerContent: {
     flex: 1,
@@ -163,8 +175,6 @@ const styles = StyleSheet.create({
   expandedContent: {
     paddingHorizontal: 16,
     paddingBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
   },
   infoRow: {
     marginBottom: 12,

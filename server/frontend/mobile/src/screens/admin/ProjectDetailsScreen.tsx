@@ -133,6 +133,8 @@ export default function ProjectDetailsScreen() {
       let activeTasks = 0;
       let onHoldTasks = 0;
       let todoTasks = 0;
+      let overdueTasks = 0;
+      let inProgressTasks = 0;
       try {
         const taskRes = await listProjectTasks(String(id), 1, 200);
         const tasks = taskRes.tasks || [];
@@ -140,12 +142,19 @@ export default function ProjectDetailsScreen() {
         for (const t of tasks) {
           const st = t.status || '';
           if (st === 'Completed') completedTasks++;
-          else if (st === 'Active') activeTasks++;
+          else if (st === 'Active') {
+            activeTasks++;
+            inProgressTasks++;
+          }
           else if (st === 'On Hold') onHoldTasks++;
           else todoTasks++;
+          // Check if task is overdue
+          if (t.due_date && new Date(t.due_date) < new Date() && st !== 'Completed') {
+            overdueTasks++;
+          }
         }
       } catch (e) {
-        totalTasks = 0; completedTasks = 0; activeTasks = 0; onHoldTasks = 0; todoTasks = 0;
+        totalTasks = 0; completedTasks = 0; activeTasks = 0; onHoldTasks = 0; todoTasks = 0; overdueTasks = 0; inProgressTasks = 0;
       }
       const activeTotal = Math.max(0, completedTasks + activeTasks + onHoldTasks);
       let progress = 0;

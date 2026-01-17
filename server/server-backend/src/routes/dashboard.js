@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, getDbPool } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -12,40 +12,21 @@ const isOrganizationUser = (req) => req.user?.source === 'registry';
 // GET /api/dashboard/overview - Get dashboard overview and recent activity
 router.get('/overview', async (req, res) => {
   try {
-    // Real organization users see empty data (their org's database would be separate)
-    // Demo users see the dummy data in project_time_manager
-    if (isOrganizationUser(req)) {
-      return res.json({
-        overview: {
-          totalClients: 0,
-          activeClients: 0,
-          totalProjects: 0,
-          activeProjects: 0,
-          completedProjects: 0,
-          pendingProjects: 0,
-          onHoldProjects: 0,
-          cancelledProjects: 0,
-          totalActiveEmployees: 0,
-          totalTimeEntries: 0,
-          totalCost: 0,
-        },
-        recentActivity: [],
-      });
-    }
+    const db = getDbPool(req);
 
     const [clients, activeProjects, completedProjects, pendingProjects, onHoldProjects, cancelledProjects, activeEmployees, totalTimeEntries] = await Promise.all([
-      pool.query('SELECT COUNT(*) as count FROM clients'),
-      pool.query("SELECT COUNT(*) as count FROM projects WHERE status = 'active'"),
-      pool.query("SELECT COUNT(*) as count FROM projects WHERE status = 'completed'"),
-      pool.query("SELECT COUNT(*) as count FROM projects WHERE status = 'pending'"),
-      pool.query("SELECT COUNT(*) as count FROM projects WHERE status = 'on_hold'"),
-      pool.query("SELECT COUNT(*) as count FROM projects WHERE status = 'cancelled'"),
-      pool.query('SELECT COUNT(*) as count FROM users WHERE is_active = true'),
-      pool.query('SELECT COUNT(*) as count FROM time_entries'),
+      db.query('SELECT COUNT(*) as count FROM clients'),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'active'"),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'completed'"),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'pending'"),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'on_hold'"),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'cancelled'"),
+      db.query("SELECT COUNT(*) as count FROM users WHERE is_active = true AND role != 'admin'"),
+      db.query('SELECT COUNT(*) as count FROM time_entries'),
     ]);
 
     // Fetch recent activities (task_created, task_assigned, time_logged)
-    const recentActivities = await pool.query(
+    const recentActivities = await db.query(
       `SELECT id, action_type, actor_id, actor_name, employee_id, employee_name, project_id, project_name, task_id, task_title, description, created_at
        FROM activity_logs
        ORDER BY created_at DESC
@@ -78,6 +59,7 @@ router.get('/overview', async (req, res) => {
 // GET /api/dashboard/analytics - Get detailed analytics
 router.get('/analytics', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { startDate, endDate, period = '30' } = req.query;
     
     let dateFilter = '';
@@ -212,6 +194,7 @@ router.get('/analytics', async (req, res) => {
 // GET /api/dashboard/reports - Get various reports
 router.get('/reports', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { type = 'summary', startDate, endDate } = req.query;
     
     let dateFilter = '';
@@ -282,7 +265,7 @@ router.get('/reports', async (req, res) => {
         break;
         
       case 'overdue':
-        const overdueProjects = await pool.query(`
+        const overdueProjects = await db.query(`
           SELECT p.project_id as id, p.project_name as name, p.end_date, p.status,
                  COALESCE(c.first_name || ' ' || c.last_name, 'Unknown') as client_name,
                  SUM(te.duration_minutes) as total_minutes,
@@ -317,10 +300,11 @@ router.get('/reports', async (req, res) => {
 // GET /api/dashboard/activity/task/:taskId - Get activity logs for a specific task
 router.get('/activity/task/:taskId', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { taskId } = req.params;
     const { limit = 20 } = req.query;
     
-    const activities = await pool.query(
+    const activities = await db.query(
       `SELECT id, action_type, actor_id, actor_name, employee_id, employee_name, project_id, project_name, task_id, task_title, description, created_at
        FROM activity_logs
        WHERE task_id = $1

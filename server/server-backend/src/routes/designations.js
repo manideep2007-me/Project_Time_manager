@@ -1,13 +1,14 @@
 const express = require('express');
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, getDbPool } = require('../middleware/auth');
 
 const router = express.Router();
 
 // GET /api/designations - List all active designations
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(
+    const db = getDbPool(req);
+    const result = await db.query(
       `SELECT designation_id, name, description, department_id, is_active, created_at, updated_at
        FROM designations 
        WHERE is_active = true
@@ -23,8 +24,9 @@ router.get('/', authenticateToken, async (req, res) => {
 // GET /api/designations/:id - Get specific designation
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT designation_id, name, description, department_id, is_active, created_at, updated_at
        FROM designations 
        WHERE designation_id = $1`,

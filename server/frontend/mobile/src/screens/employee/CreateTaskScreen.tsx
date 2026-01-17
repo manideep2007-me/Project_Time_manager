@@ -301,7 +301,7 @@ export default function CreateTaskScreen() {
       if (makeUnassignedToo) {
         await createProjectTask(selectedProject.id, {
           title: taskTitle.trim(),
-          status: 'To Do',
+          status: 'todo',
         });
       } else {
         // Filter any empty ids just in case
@@ -310,7 +310,7 @@ export default function CreateTaskScreen() {
           validAssignees.map(empId =>
             createProjectTask(selectedProject.id, {
               title: taskTitle.trim(),
-              status: 'To Do',
+              status: 'todo',
               assignedTo: empId,
             })
           )

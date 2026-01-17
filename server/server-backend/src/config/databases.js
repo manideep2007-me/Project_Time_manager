@@ -84,8 +84,35 @@ function getPool(name = 'primary') {
   throw new Error(`Unknown database pool: ${name}. Valid options: 'primary', 'secondary'`);
 }
 
+/**
+ * Create a temporary pool connection to a specific organization's database
+ * @param {string} databaseName - The organization's database name (e.g., 'project_time_manager1')
+ * @returns {Pool} PostgreSQL connection pool for the organization's database
+ */
+function createOrgPool(databaseName) {
+  if (!databaseName) {
+    // If no database name specified, use the primary pool
+    return primary;
+  }
+  
+  const config = {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
+    database: databaseName,
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD,
+    max: 5, // Smaller pool for dynamic connections
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 2000,
+  };
+
+  const pool = new Pool(config);
+  return pool;
+}
+
 module.exports = {
   primary,
   secondary,
   getPool,
+  createOrgPool,
 };

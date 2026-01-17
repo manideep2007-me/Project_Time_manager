@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../config/database');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requireRole, getDbPool } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -14,14 +14,14 @@ const DEFAULT_PERMISSIONS = [
   { name: 'tasks.delete', description: 'Delete Task Button' },
 ];
 
-async function ensureRbacInitialized() {
+async function ensureRbacInitialized(db) {
   // Ensure types and tables exist (idempotent)
-  await pool.query(`
+  await db.query(`
     DO $$ BEGIN
       CREATE TYPE user_role AS ENUM ('admin', 'manager', 'employee');
     EXCEPTION WHEN duplicate_object THEN NULL; END $$;
   `);
-  await pool.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS roles (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       name user_role UNIQUE NOT NULL,
@@ -29,7 +29,7 @@ async function ensureRbacInitialized() {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  await pool.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS permissions (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       name VARCHAR(100) UNIQUE NOT NULL,
@@ -37,7 +37,7 @@ async function ensureRbacInitialized() {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  await pool.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS role_permissions (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       role_name user_role NOT NULL,
@@ -50,7 +50,7 @@ async function ensureRbacInitialized() {
   // Upsert roles
   const roles = ['admin', 'manager', 'employee'];
   for (const name of roles) {
-    await pool.query(
+    await db.query(
       `INSERT INTO roles (name, description)
        VALUES ($1, $2)
        ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description`,
@@ -60,14 +60,14 @@ async function ensureRbacInitialized() {
 
   // Delete old dummy permissions that are not in DEFAULT_PERMISSIONS
   const allowedNames = DEFAULT_PERMISSIONS.map(p => p.name);
-  await pool.query(
+  await db.query(
     `DELETE FROM permissions WHERE name NOT IN (${allowedNames.map((_, i) => `$${i + 1}`).join(',')})`,
     allowedNames
   );
 
   // Upsert permissions
   for (const p of DEFAULT_PERMISSIONS) {
-    await pool.query(
+    await db.query(
       `INSERT INTO permissions (name, description)
        VALUES ($1, $2)
        ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description`,
@@ -76,10 +76,10 @@ async function ensureRbacInitialized() {
   }
 
   // Ensure mappings exist
-  const { rows: perms } = await pool.query('SELECT id, name FROM permissions');
+  const { rows: perms } = await db.query('SELECT id, name FROM permissions');
   for (const perm of perms) {
     // Admin full
-    await pool.query(
+    await db.query(
       `INSERT INTO role_permissions (role_name, permission_id, has_access)
        VALUES ('admin', $1, true)
        ON CONFLICT (role_name, permission_id) DO NOTHING`,
@@ -90,7 +90,7 @@ async function ensureRbacInitialized() {
     const managerHas = [
       'clients.add', 'projects.add', 'tasks.add', 'clients.delete', 'projects.delete', 'tasks.delete'
     ].includes(perm.name);
-    await pool.query(
+    await db.query(
       `INSERT INTO role_permissions (role_name, permission_id, has_access)
        VALUES ('manager', $1, $2)
        ON CONFLICT (role_name, permission_id) DO NOTHING`,
@@ -99,7 +99,7 @@ async function ensureRbacInitialized() {
 
     // Employee has no special permissions by default
     const employeeHas = false;
-    await pool.query(
+    await db.query(
       `INSERT INTO role_permissions (role_name, permission_id, has_access)
        VALUES ('employee', $1, $2)
        ON CONFLICT (role_name, permission_id) DO NOTHING`,
@@ -112,18 +112,19 @@ async function ensureRbacInitialized() {
 router.get('/', authenticateToken, async (req, res) => {
   // Allow all authenticated users to view permissions (they can only see their role's permissions anyway)
   try {
-    await ensureRbacInitialized();
-    const { rows: permissions } = await pool.query('SELECT id, name, description FROM permissions ORDER BY name');
+    const db = getDbPool(req);
+    await ensureRbacInitialized(db);
+    const { rows: permissions } = await db.query('SELECT id, name, description FROM permissions ORDER BY name');
 
     // Build access matrix per role
     const roles = ['admin', 'manager', 'employee'];
-    const { rows: mappings } = await pool.query(
+    const { rows: mappings } = await db.query(
       'SELECT role_name, permission_id, has_access FROM role_permissions'
     );
 
     const accessByPerm = new Map();
     for (const p of permissions) {
-      accessByPerm.set(p.project_id, { admin: false, manager: false, employee: false });
+      accessByPerm.set(p.id, { admin: false, manager: false, employee: false });
     }
     for (const m of mappings) {
       if (accessByPerm.has(m.permission_id)) {
@@ -132,10 +133,10 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     const result = permissions.map(p => ({
-      id: p.project_id,
-      name: p.project_name,
+      id: p.id,
+      name: p.name,
       description: p.description,
-      access: accessByPerm.get(p.project_id)
+      access: accessByPerm.get(p.id)
     }));
 
     res.json({ roles, permissions: result });
@@ -150,7 +151,8 @@ router.post('/update', authenticateToken, requireRole(['admin']), async (req, re
   const updates = Array.isArray(req.body?.updates) ? req.body.updates : [];
   if (updates.length === 0) return res.json({ message: 'No changes' });
 
-  const client = await pool.connect();
+  const db = getDbPool(req);
+  const client = await db.connect();
   try {
     await client.query('BEGIN');
     for (const u of updates) {

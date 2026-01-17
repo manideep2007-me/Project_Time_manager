@@ -530,15 +530,11 @@ export default function AddEmployeeScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Employee</Text>
-        <View style={styles.headerRight}>
-          <View style={styles.notificationBadge}>
-            <Ionicons name="notifications-outline" size={20} color="#333" />
-            <View style={styles.badgeDot} />
-          </View>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Add Employee</Text>
         </View>
       </View>
 
@@ -892,7 +888,7 @@ export default function AddEmployeeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F0F0F0',
   },
   header: {
     flexDirection: 'row',
@@ -900,12 +896,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    backgroundColor: '#F0F0F0',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backButton: {
     padding: 4,
+    marginRight: 8,
   },
   headerTitle: {
     fontSize: 18,

@@ -25,6 +25,7 @@ interface Employee {
   last_name: string;
   name?: string;
   department: string;
+  designation?: string;
   is_active: boolean;
   photo_url?: string;
   email?: string;
@@ -32,7 +33,14 @@ interface Employee {
   salary?: number;
   overtime_rate?: number;
   location?: string;
+  address?: string;
+  country?: string;
   employment_type?: string;
+  date_of_birth?: string;
+  joining_date?: string;
+  aadhar_number?: string;
+  aadhar_image?: string;
+  pay_calculation?: string;
 }
 
 export default function EmployeesScreen() {
@@ -147,7 +155,7 @@ export default function EmployeesScreen() {
             )}
             <View style={styles.employeeInfo}>
               <Text style={styles.employeeName}>{name}</Text>
-              <Text style={styles.employeeRole}>{employee.department || 'Employee'}</Text>
+              <Text style={styles.employeeRole}>{employee.designation || employee.role || 'Employee'}</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity
@@ -188,7 +196,7 @@ export default function EmployeesScreen() {
               </View>
               <View style={styles.detailColumn}>
                 <Text style={styles.detailLabel}>Over time rate:</Text>
-                <Text style={styles.detailValue}>₹{employee.overtime_rate || '0'}</Text>
+                <Text style={styles.detailValue}>{employee.overtime_rate || '0'}</Text>
               </View>
             </View>
 
@@ -228,10 +236,10 @@ export default function EmployeesScreen() {
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.viewMoreButton}
-                onPress={() => {}}
+                onPress={() => navigation.navigate('EmployeeInfo', { id: employee.id, employeeData: employee })}
               >
                 <Ionicons name="eye-outline" size={16} color="#6F67CC" />
-                <Text style={styles.viewMoreButtonText}>View more</Text>
+                <Text style={styles.viewMoreButtonText}>More</Text>
               </TouchableOpacity>
             </View>
           </View>

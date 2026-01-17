@@ -1,13 +1,12 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { AuthContext } from '../../context/AuthContext';
+import { register as registerApi } from '../../api/endpoints';
 import Input from '../../components/shared/Input';
 import Button from '../../components/shared/Button';
 import Card from '../../components/shared/Card';
 
 export default function RegisterScreen({ navigation, route }: any) {
-  const { register } = useContext(AuthContext);
   const { t } = useTranslation();
   const organizationCode = route?.params?.organizationCode;
   const organizationName = route?.params?.organizationName;
@@ -16,6 +15,7 @@ export default function RegisterScreen({ navigation, route }: any) {
     firstName: '',
     lastName: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
   });
@@ -39,6 +39,12 @@ export default function RegisterScreen({ navigation, route }: any) {
       newErrors.email = 'Please enter a valid email';
     }
 
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+    } else if (!/^[+]?[0-9]{10,15}$/.test(formData.phone.replace(/\s/g, ''))) {
+      newErrors.phone = 'Please enter a valid phone number';
+    }
+
     if (!formData.password) {
       newErrors.password = t('auth.password') + ' ' + t('common.error').toLowerCase();
     } else if (formData.password.length < 6) {
@@ -58,15 +64,33 @@ export default function RegisterScreen({ navigation, route }: any) {
 
     setLoading(true);
     try {
-      await register({
+      await registerApi({
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         email: formData.email.trim().toLowerCase(),
+        phone: formData.phone.trim(),
         password: formData.password,
         organizationCode: organizationCode, // Pass organization code if available
         role: 'employee', // Default to employee role for QR code registrations
       });
-      Alert.alert('Success', 'Account created successfully!');
+      
+      // Show success message and navigate to login screen
+      Alert.alert(
+        'Success', 
+        'Account created successfully! Please login with your credentials.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to Login screen
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            }
+          }
+        ]
+      );
     } catch (e: any) {
       console.error('Registration error details:', e);
       const errorMessage = e.response?.data?.error || e.message || 'Registration failed. Please try again.';
@@ -130,6 +154,15 @@ export default function RegisterScreen({ navigation, route }: any) {
               keyboardType="email-address"
               autoCapitalize="none"
               error={errors.email}
+            />
+
+            <Input
+              label="Phone Number"
+              placeholder="+91 9876543210"
+              value={formData.phone}
+              onChangeText={(text) => setFormData({ ...formData, phone: text })}
+              keyboardType="phone-pad"
+              error={errors.phone}
             />
 
             <Input

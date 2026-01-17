@@ -7,7 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, getDbPool } = require('../middleware/auth');
 const advancedLocationVerification = require('../services/advancedLocationVerification');
 
 const router = express.Router();
@@ -77,6 +77,7 @@ function generateServerHash(latitude, longitude, timestamp, fileHash) {
  */
 router.post('/upload', authenticateToken, upload.single('photo'), async (req, res) => {
   try {
+    const db = getDbPool(req);
     // Step 4.1: Receive Data
     const {
       latitude,
@@ -226,7 +227,7 @@ router.post('/upload', authenticateToken, upload.single('photo'), async (req, re
     const verifiedTimestamp = new Date(parseInt(timestamp));
 
     // Step 6: Database Insert
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO proof_of_work 
        (user_id, user_role, photo_url, verified_timestamp, latitude, longitude, accuracy, integrity_hash)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -294,6 +295,7 @@ router.post('/upload', authenticateToken, upload.single('photo'), async (req, re
  */
 router.get('/history', authenticateToken, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const userId = req.user.id;
     const userRole = req.user.role;
     const { limit = 50, offset = 0 } = req.query;
@@ -314,7 +316,7 @@ router.get('/history', authenticateToken, async (req, res) => {
     console.log(`👤 User Email: ${req.user.email}`);
     console.log(`📊 Query: WHERE user_id='${userId}' AND user_role='${userRole}'`);
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT id, photo_url, verified_timestamp, latitude, longitude, accuracy, created_at, user_role
        FROM proof_of_work
        WHERE user_id = $1 AND user_role = $2
@@ -353,10 +355,11 @@ router.get('/history', authenticateToken, async (req, res) => {
  */
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const userId = req.user.id;
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT id, user_id, photo_url, verified_timestamp, latitude, longitude, accuracy, integrity_hash, created_at
        FROM proof_of_work
        WHERE id = $1 AND user_id = $2`,

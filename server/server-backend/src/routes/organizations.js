@@ -163,7 +163,7 @@ router.get('/resolve/:code', async (req, res) => {
       try {
         org = await registryPool.query(
           `SELECT id, organization_id, 
-            COALESCE(name, organization_name) as name, 
+            name, 
             admin_email, 
             admin_phone, 
             join_code,

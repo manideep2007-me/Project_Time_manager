@@ -26,6 +26,8 @@ interface AppHeaderProps {
   };
   showLanguageSwitcher?: boolean;
   hideLogo?: boolean;
+  compact?: boolean;
+  borderBottomRadius?: number;
 }
 
 export default function AppHeader({
@@ -35,73 +37,89 @@ export default function AppHeader({
   leftAction,
   showLanguageSwitcher = false,
   renderLanguageTrigger,
-  hideLogo = false
+  hideLogo = false,
+  compact = false,
+  borderBottomRadius = 0
 }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   
   return (
     <View
       style={[
-        styles.header,
+        styles.headerOuter,
         { paddingTop: insets.top },
         backgroundColor && { backgroundColor, borderBottomColor: backgroundColor },
+        borderBottomRadius > 0 && { borderBottomLeftRadius: borderBottomRadius, borderBottomRightRadius: borderBottomRadius },
       ]}
     >
-      {/* Left Section - Logo or Left Action */}
-      <View style={styles.headerLeft}>
-        {leftAction && title ? (
-          <View style={styles.headerLeftRow}>
+      <View style={[styles.headerInner, compact && { paddingVertical: 8 }]}>
+        {/* Left Section - Logo or Left Action */}
+        <View style={styles.headerLeft}>
+          {leftAction && title ? (
+            <View style={styles.headerLeftRow}>
+              <TouchableOpacity
+                style={[styles.leftActionButton, leftAction.style]}
+                onPress={leftAction.onPress}
+              >
+                <Text style={[styles.leftActionText, leftAction.iconStyle]}>{leftAction.icon}</Text>
+              </TouchableOpacity>
+              <Text style={styles.titleText}>{title}</Text>
+            </View>
+          ) : leftAction ? (
             <TouchableOpacity
               style={[styles.leftActionButton, leftAction.style]}
               onPress={leftAction.onPress}
             >
               <Text style={[styles.leftActionText, leftAction.iconStyle]}>{leftAction.icon}</Text>
             </TouchableOpacity>
+          ) : title ? (
             <Text style={styles.titleText}>{title}</Text>
-          </View>
-        ) : leftAction ? (
-          <TouchableOpacity
-            style={[styles.leftActionButton, leftAction.style]}
-            onPress={leftAction.onPress}
-          >
-            <Text style={[styles.leftActionText, leftAction.iconStyle]}>{leftAction.icon}</Text>
-          </TouchableOpacity>
-        ) : title ? (
-          <Text style={styles.titleText}>{title}</Text>
-        ) : hideLogo ? (
-          null
-        ) : (
-          <AppLogo size="medium" showText={false} variant="primary" />
-        )}
-      </View>
+          ) : hideLogo ? (
+            null
+          ) : (
+            <AppLogo size="medium" showText={false} variant="primary" />
+          )}
+        </View>
 
-      {/* Right Section - Language Switcher and/or Action */}
-      <View style={styles.headerRight}>
-        {showLanguageSwitcher && <LanguageSwitcher renderTrigger={renderLanguageTrigger} />}
-        {rightAction && (
-          <TouchableOpacity
-            style={[styles.rightActionButton, rightAction.style, showLanguageSwitcher && { marginLeft: 8 }]}
-            onPress={rightAction.onPress}
-          >
-            {rightAction.iconName ? (
-              <Ionicons
-                name={rightAction.iconName as any}
-                size={rightAction.iconSize ?? 20}
-                color={rightAction.iconColor ?? '#111'}
-              />
-            ) : (
-              <Text style={[styles.rightActionText, rightAction.textStyle]}>
-                {rightAction.title}
-              </Text>
-            )}
-          </TouchableOpacity>
-        )}
+        {/* Right Section - Language Switcher and/or Action */}
+        <View style={styles.headerRight}>
+          {showLanguageSwitcher && <LanguageSwitcher renderTrigger={renderLanguageTrigger} />}
+          {rightAction && (
+            <TouchableOpacity
+              style={[styles.rightActionButton, rightAction.style, showLanguageSwitcher && { marginLeft: 8 }]}
+              onPress={rightAction.onPress}
+            >
+              {rightAction.iconName ? (
+                <Ionicons
+                  name={rightAction.iconName as any}
+                  size={rightAction.iconSize ?? 20}
+                  color={rightAction.iconColor ?? '#111'}
+                />
+              ) : (
+                <Text style={[styles.rightActionText, rightAction.textStyle]}>
+                  {rightAction.title}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  headerOuter: {
+    backgroundColor: '#FFFFFF',
+  },
+  headerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    minHeight: 44,
+    paddingVertical: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

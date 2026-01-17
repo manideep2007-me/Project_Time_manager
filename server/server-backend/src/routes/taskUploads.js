@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, getDbPool } = require('../middleware/auth');
 const pool = require('../config/database');
 
 const router = express.Router();
@@ -43,6 +43,7 @@ const upload = multer({
 // POST /api/task-uploads/upload - Upload task completion with files
 router.post('/upload', upload.array('files', 10), async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { taskId, description } = req.body;
     const files = req.files;
     const userId = req.user.id;
@@ -63,7 +64,7 @@ router.post('/upload', upload.array('files', 10), async (req, res) => {
       LEFT JOIN users u ON t.assigned_to = u.user_id
       WHERE t.task_id = $1
     `;
-    const taskResult = await pool.query(taskQuery, [taskId]);
+    const taskResult = await db.query(taskQuery, [taskId]);
     
     if (taskResult.rows.length === 0) {
       return res.status(404).json({ error: 'Task not found' });
@@ -78,7 +79,7 @@ router.post('/upload', upload.array('files', 10), async (req, res) => {
       VALUES ($1, $2, $3, 'pending')
       RETURNING id, uploaded_at
     `;
-    const uploadResult = await pool.query(uploadQuery, [taskId, employeeId, description]);
+    const uploadResult = await db.query(uploadQuery, [taskId, employeeId, description]);
     const uploadId = uploadResult.rows[0].id;
 
     // Save file attachments
@@ -138,6 +139,7 @@ router.post('/upload', upload.array('files', 10), async (req, res) => {
 // GET /api/task-uploads/task/:taskId - Get uploads for a specific task
 router.get('/task/:taskId', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { taskId } = req.params;
     
     // Check if pool is available
@@ -164,7 +166,7 @@ router.get('/task/:taskId', async (req, res) => {
       ORDER BY a.uploaded_at DESC
     `;
 
-    const result = await pool.query(query, [taskId]);
+    const result = await db.query(query, [taskId]);
     res.json({ uploads: result.rows || [] });
 
   } catch (error) {
@@ -178,6 +180,7 @@ router.get('/task/:taskId', async (req, res) => {
 // GET /api/task-uploads/:uploadId/attachments - Get attachments for a specific upload
 router.get('/:uploadId/attachments', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { uploadId } = req.params;
 
     // Check if pool is available
@@ -202,7 +205,7 @@ router.get('/:uploadId/attachments', async (req, res) => {
       ORDER BY created_at ASC
     `;
 
-    const result = await pool.query(query, [uploadId]);
+    const result = await db.query(query, [uploadId]);
     res.json({ attachments: result.rows || [] });
 
   } catch (error) {
@@ -216,6 +219,7 @@ router.get('/:uploadId/attachments', async (req, res) => {
 // GET /api/task-uploads/employee/:employeeId - Get uploads by employee
 router.get('/employee/:employeeId', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { employeeId } = req.params;
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -263,6 +267,7 @@ router.get('/employee/:employeeId', async (req, res) => {
 // PUT /api/task-uploads/:uploadId/review - Review an upload (approve/reject)
 router.put('/:uploadId/review', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { uploadId } = req.params;
     const { status } = req.body;
 
@@ -277,7 +282,7 @@ router.put('/:uploadId/review', async (req, res) => {
       RETURNING id, status, uploaded_at
     `;
 
-    const result = await pool.query(query, [status, uploadId]);
+    const result = await db.query(query, [status, uploadId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Upload not found' });

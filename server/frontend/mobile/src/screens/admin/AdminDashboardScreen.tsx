@@ -122,14 +122,20 @@ export default function AdminDashboardScreen() {
   }
 
   // Stat Card Component matching the design
-  const StatCard = ({ title, value, iconName, buttonText, onButtonPress }: {
+  const StatCard = ({ title, value, iconName, buttonText, onButtonPress, onCardPress }: {
     title: string;
     value: number;
     iconName: string;
     buttonText: string;
     onButtonPress: () => void;
+    onCardPress?: () => void;
   }) => (
-    <View style={styles.statCard}>
+    <TouchableOpacity 
+      style={styles.statCard} 
+      onPress={onCardPress}
+      activeOpacity={onCardPress ? 0.7 : 1}
+      disabled={!onCardPress}
+    >
       <View style={styles.statCardHeader}>
         <Text style={styles.statCardTitle}>{title}</Text>
         <View style={styles.statCardIcon}>
@@ -140,7 +146,7 @@ export default function AdminDashboardScreen() {
       <TouchableOpacity style={styles.statCardButton} onPress={onButtonPress}>
         <Text style={styles.statCardButtonText}>{buttonText}</Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -164,7 +170,7 @@ export default function AdminDashboardScreen() {
               <View style={styles.headerTextContainer}>
                 <Text style={styles.greeting}>Hello {user?.name?.split(' ')[0] || 'Admin'}</Text>
                 <Text style={styles.subGreeting}>{getGreeting()}</Text>
-                <Text style={styles.roleText}>Super admin</Text>
+                <Text style={styles.roleText}>Admin</Text>
               </View>
             </View>
             <TouchableOpacity style={styles.menuButton} onPress={() => navigation.navigate('Profile')}>
@@ -183,14 +189,16 @@ export default function AdminDashboardScreen() {
                 value={overview?.totalClients || 0}
                 iconName="handshake-outline"
                 buttonText="Add New Client"
+                onCardPress={() => navigation.navigate('Clients')}
                 onButtonPress={() => navigation.navigate('AddClient')}
               />
               <StatCard
                 title="Projects"
-                value={overview?.totalActiveProjects || 0}
+                value={overview?.totalProjects || overview?.activeProjects || 0}
                 iconName="clipboard-outline"
                 buttonText="Add New Projects"
-                onButtonPress={() => navigation.navigate('AddProject')}
+                onCardPress={() => navigation.navigate('Projects')}
+                onButtonPress={() => {}}
               />
             </View>
             <View style={styles.statsRow}>
@@ -199,6 +207,7 @@ export default function AdminDashboardScreen() {
                 value={overview?.totalActiveEmployees || 0}
                 iconName="people-outline"
                 buttonText="Add New Employee"
+                onCardPress={() => navigation.navigate('Employees')}
                 onButtonPress={() => navigation.navigate('AddEmployee')}
               />
               <StatCard
@@ -206,7 +215,7 @@ export default function AdminDashboardScreen() {
                 value={0} //{overview?.totalActiveTasks || 0}
                 iconName="list-outline"
                 buttonText="Add New Task"
-                onButtonPress={() => navigation.navigate('CreateTask')}
+                onButtonPress={() => {}}
               />
             </View>
           </View>

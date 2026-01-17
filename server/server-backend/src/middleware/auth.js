@@ -1,6 +1,20 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
 const { secondary: registryPool } = require('../config/databases');
+const { getOrganizationPool } = require('../services/databaseService');
+
+// Cache for organization database pools
+const orgPoolCache = new Map();
+
+// Get or create a pool for an organization's database
+function getOrgPool(databaseName) {
+  if (!databaseName) return null;
+  
+  if (!orgPoolCache.has(databaseName)) {
+    orgPoolCache.set(databaseName, getOrganizationPool(databaseName));
+  }
+  return orgPoolCache.get(databaseName);
+}
 
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -13,7 +27,7 @@ const authenticateToken = async (req, res, next) => {
     if (decoded.source === 'registry' && registryPool) {
       try {
         const registryResult = await registryPool.query(
-          `SELECT id, employee_email as email, employee_name, role, organization_id, organization_name, is_active
+          `SELECT id, employee_email as email, employee_name, role, organization_id, organization_name, database_name, is_active
            FROM employees_registry WHERE id = $1`,
           [decoded.userId]
         );
@@ -38,8 +52,15 @@ const authenticateToken = async (req, res, next) => {
             is_active: row.is_active,
             organization_id: row.organization_id,
             organization_name: row.organization_name,
+            database_name: row.database_name,
             source: 'registry'
           };
+          
+          // Attach the organization's database pool to the request
+          if (row.database_name) {
+            req.orgPool = getOrgPool(row.database_name);
+          }
+          
           return next();
         }
       } catch (registryErr) {
@@ -53,6 +74,7 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid or inactive user' });
     }
     req.user = userResult.rows[0];
+    req.orgPool = pool; // Use default pool for non-organization users
     next();
   } catch (err) {
     return res.status(403).json({ error: 'Invalid or expired token' });
@@ -65,5 +87,8 @@ const requireRole = (roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { authenticateToken, requireRole };
+// Helper function for routes to get the appropriate database pool
+const getDbPool = (req) => req.orgPool || pool;
+
+module.exports = { authenticateToken, requireRole, getDbPool };
 

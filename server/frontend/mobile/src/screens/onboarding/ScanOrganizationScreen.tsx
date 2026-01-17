@@ -8,7 +8,7 @@ import AppHeader from '../../components/shared/AppHeader';
 import Card from '../../components/shared/Card';
 import { joinOrganization, resolveOrganizationByCode } from '../../api/endpoints';
 
-const CODE_LENGTH = 6;
+const CODE_LENGTH = 10;
 
 export default function ScanOrganizationScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -34,15 +34,15 @@ export default function ScanOrganizationScreen({ navigation }: any) {
   
   // Handle digit input change
   const handleDigitChange = (text: string, index: number) => {
-    // Only allow numbers
-    const digit = text.replace(/[^0-9]/g, '').slice(-1);
+    // Allow alphanumeric characters (uppercase)
+    const char = text.replace(/[^A-Za-z0-9]/g, '').slice(-1).toUpperCase();
     
     const newDigits = [...codeDigits];
-    newDigits[index] = digit;
+    newDigits[index] = char;
     setCodeDigits(newDigits);
     
     // Auto-focus next input
-    if (digit && index < CODE_LENGTH - 1) {
+    if (char && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -84,7 +84,7 @@ export default function ScanOrganizationScreen({ navigation }: any) {
 
   const handleVerifyCode = async () => {
     if (code.length !== CODE_LENGTH) {
-      Alert.alert('Validation', 'Please enter the complete 6-digit code');
+      Alert.alert('Validation', 'Please enter the complete 10-character code');
       return;
     }
     Keyboard.dismiss();
@@ -354,7 +354,8 @@ export default function ScanOrganizationScreen({ navigation }: any) {
                 value={digit}
                 onChangeText={(text) => handleDigitChange(text, index)}
                 onKeyPress={(e) => handleKeyPress(e, index)}
-                keyboardType="number-pad"
+                keyboardType="default"
+                autoCapitalize="characters"
                 maxLength={1}
                 selectTextOnFocus
               />
@@ -465,13 +466,13 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   digitInput: {
-    width: 48,
-    height: 56,
-    borderRadius: 12,
+    width: 32,
+    height: 44,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     backgroundColor: '#f8f8f8',
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
     color: '#333',

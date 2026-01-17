@@ -7,7 +7,6 @@ import {
   ActivityIndicator, 
   Alert, 
   TouchableOpacity,
-  Switch,
   Modal,
   FlatList,
 } from 'react-native';
@@ -39,6 +38,45 @@ interface PermissionCategory {
     delete: boolean;
   };
 }
+
+// Custom Toggle Component matching the ProjectTasksScreen design
+const CustomToggle = ({ value, onToggle }: { value: boolean; onToggle: () => void }) => (
+  <TouchableOpacity 
+    style={[toggleStyles.toggleSwitch, value && toggleStyles.toggleSwitchActive]}
+    onPress={onToggle}
+    activeOpacity={0.8}
+  >
+    <View style={[toggleStyles.toggleKnob, value && toggleStyles.toggleKnobActive]} />
+  </TouchableOpacity>
+);
+
+const toggleStyles = StyleSheet.create({
+  toggleSwitch: {
+    width: 40,
+    height: 20,
+    borderRadius: 12,
+    backgroundColor: '#E5E5EA',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleSwitchActive: {
+    backgroundColor: PRIMARY_PURPLE,
+  },
+  toggleKnob: {
+    width: 18,
+    height: 16,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleKnobActive: {
+    alignSelf: 'flex-end',
+  },
+});
 
 export default function AdminPermissionsScreen() {
   const navigation = useNavigation();
@@ -264,34 +302,30 @@ export default function AdminPermissionsScreen() {
               <View key={category.id} style={styles.permissionRow}>
                 <Text style={styles.permissionName}>{category.name}</Text>
                 <View style={styles.togglesRow}>
-                  <Switch
-                    value={category.permissions.view}
-                    onValueChange={() => togglePermission(category.id, 'view')}
-                    trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                    thumbColor="#fff"
-                    style={styles.switch}
-                  />
-                  <Switch
-                    value={category.permissions.add}
-                    onValueChange={() => togglePermission(category.id, 'add')}
-                    trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                    thumbColor="#fff"
-                    style={styles.switch}
-                  />
-                  <Switch
-                    value={category.permissions.edit}
-                    onValueChange={() => togglePermission(category.id, 'edit')}
-                    trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                    thumbColor="#fff"
-                    style={styles.switch}
-                  />
-                  <Switch
-                    value={category.permissions.delete}
-                    onValueChange={() => togglePermission(category.id, 'delete')}
-                    trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                    thumbColor="#fff"
-                    style={styles.switch}
-                  />
+                  <View style={styles.toggleWrapper}>
+                    <CustomToggle
+                      value={category.permissions.view}
+                      onToggle={() => togglePermission(category.id, 'view')}
+                    />
+                  </View>
+                  <View style={styles.toggleWrapper}>
+                    <CustomToggle
+                      value={category.permissions.add}
+                      onToggle={() => togglePermission(category.id, 'add')}
+                    />
+                  </View>
+                  <View style={styles.toggleWrapper}>
+                    <CustomToggle
+                      value={category.permissions.edit}
+                      onToggle={() => togglePermission(category.id, 'edit')}
+                    />
+                  </View>
+                  <View style={styles.toggleWrapper}>
+                    <CustomToggle
+                      value={category.permissions.delete}
+                      onToggle={() => togglePermission(category.id, 'delete')}
+                    />
+                  </View>
                 </View>
               </View>
             ))}
@@ -302,22 +336,16 @@ export default function AdminPermissionsScreen() {
             <View style={styles.expenseTogglesRow}>
               <View style={styles.expenseToggle}>
                 <Text style={styles.expenseLabel}>View</Text>
-                <Switch
+                <CustomToggle
                   value={expensePermissions.view}
-                  onValueChange={() => toggleExpensePermission('view')}
-                  trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                  thumbColor="#fff"
-                  style={styles.expenseSwitch}
+                  onToggle={() => toggleExpensePermission('view')}
                 />
               </View>
               <View style={styles.expenseToggle}>
                 <Text style={styles.expenseLabel}>Approve</Text>
-                <Switch
+                <CustomToggle
                   value={expensePermissions.approve}
-                  onValueChange={() => toggleExpensePermission('approve')}
-                  trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                  thumbColor="#fff"
-                  style={styles.expenseSwitch}
+                  onToggle={() => toggleExpensePermission('approve')}
                 />
               </View>
             </View>
@@ -329,22 +357,16 @@ export default function AdminPermissionsScreen() {
               <View style={styles.expenseTogglesRow}>
                 <View style={styles.expenseToggle}>
                   <Text style={styles.expenseLabel}>View</Text>
-                  <Switch
+                  <CustomToggle
                     value={attendancePermissions.view}
-                    onValueChange={() => toggleAttendancePermission('view')}
-                    trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                    thumbColor="#fff"
-                    style={styles.expenseSwitch}
+                    onToggle={() => toggleAttendancePermission('view')}
                   />
                 </View>
                 <View style={styles.expenseToggle}>
                   <Text style={styles.expenseLabel}>Approve</Text>
-                  <Switch
+                  <CustomToggle
                     value={attendancePermissions.approve}
-                    onValueChange={() => toggleAttendancePermission('approve')}
-                    trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                    thumbColor="#fff"
-                    style={styles.expenseSwitch}
+                    onToggle={() => toggleAttendancePermission('approve')}
                   />
                 </View>
               </View>
@@ -353,24 +375,18 @@ export default function AdminPermissionsScreen() {
             {/* Set task priority */}
             <View style={styles.singlePermissionRow}>
               <Text style={styles.permissionName}>Set task priority</Text>
-              <Switch
+              <CustomToggle
                 value={otherPermissions.setTaskPriority}
-                onValueChange={() => toggleOtherPermission('setTaskPriority')}
-                trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                thumbColor="#fff"
-                style={styles.switch}
+                onToggle={() => toggleOtherPermission('setTaskPriority')}
               />
             </View>
 
             {/* Approve attendance */}
             <View style={styles.singlePermissionRowLast}>
               <Text style={styles.permissionName}>Approve attendance</Text>
-              <Switch
+              <CustomToggle
                 value={otherPermissions.approveAttendance}
-                onValueChange={() => toggleOtherPermission('approveAttendance')}
-                trackColor={{ false: '#E0E0E0', true: PRIMARY_PURPLE }}
-                thumbColor="#fff"
-                style={styles.switch}
+                onToggle={() => toggleOtherPermission('approveAttendance')}
               />
             </View>
           </View>
@@ -621,8 +637,13 @@ const styles = StyleSheet.create({
   togglesRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: -6,
-    paddingRight: 8,
+    marginVertical: 10,
+  },
+  toggleWrapper: {
+    width: 88,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 30,
   },
   switch: {
     width: 88,
@@ -638,6 +659,8 @@ const styles = StyleSheet.create({
   expenseToggle: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    marginVertical: 10,
   },
   expenseLabel: {
     fontSize: 12,
@@ -651,7 +674,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 1,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E8E7ED',
     paddingRight: 10,
@@ -660,7 +683,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 1,
+    paddingVertical: 12,
     paddingRight: 10,
   },
   saveButtonContainer: {

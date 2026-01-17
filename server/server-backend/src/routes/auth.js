@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const pool = require('../config/database');
-const { secondary: registryPool } = require('../config/databases');
+const { secondary: registryPool, createOrgPool } = require('../config/databases');
 const { handleValidation } = require('../middleware/validation');
 
 const router = express.Router();
@@ -13,72 +13,143 @@ router.post('/register', [
   body('password').isLength({ min: 6 }),
   body('firstName').trim().notEmpty(),
   body('lastName').trim().notEmpty(),
+  body('phone').optional().isString().trim(),
   body('organizationCode').optional().isString().trim(),
   body('role').optional().isIn(['admin', 'manager', 'employee']),
 ], handleValidation, async (req, res) => {
-  const client = await pool.connect();
   try {
-    const { email, password, firstName, lastName, organizationCode, role = 'employee' } = req.body;
+    const { email, password, firstName, lastName, phone = '', organizationCode, role = 'employee' } = req.body;
     const hash = await bcrypt.hash(password, 10);
+    const fullName = `${firstName} ${lastName}`.trim();
     
-    await client.query('BEGIN');
-    
-    // Create user
-    const userResult = await client.query(
-      'INSERT INTO users (email, password_hash, first_name, last_name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, first_name, last_name, role',
-      [email, hash, firstName, lastName, role]
-    );
-    const user = userResult.rows[0];
-    
-    // If organizationCode is provided, link user to organization
-    if (organizationCode) {
-      // Find organization by join code
-      let org = null;
-      try {
-        const orgResult = await client.query(
-          'SELECT id FROM organizations WHERE join_code = $1',
-          [organizationCode]
-        );
-        if (orgResult.rows.length > 0) {
-          org = orgResult.rows[0];
-        }
-      } catch (orgErr) {
-        console.log('Error finding organization:', orgErr.message);
+    // If organizationCode is provided, register employee in BOTH:
+    // 1. employees_registry (project_registry database) - for authentication
+    // 2. users table (organization's specific database) - for actual usage
+    if (organizationCode && registryPool) {
+      // Find organization by join code in organizations_registry
+      const orgResult = await registryPool.query(
+        'SELECT organization_id, name, database_name FROM organizations_registry WHERE join_code = $1',
+        [organizationCode]
+      );
+      
+      if (orgResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Invalid organization code or organization not found' });
       }
       
-      // If organization found, create employee and link to organization
-      if (org) {
-        // Create employee record
-        const empResult = await client.query(
-          `INSERT INTO employees (employee_id, first_name, last_name, email, salary_type, salary_amount, is_active)
-           VALUES (uuid_generate_v4()::text, $1, $2, $3, 'monthly', 0, true)
-           RETURNING id`,
-          [firstName, lastName, email]
+      const org = orgResult.rows[0];
+      const orgName = org.name;
+      const orgDatabaseName = org.database_name;
+      
+      // Check if email already exists for this organization in employees_registry
+      const existingUser = await registryPool.query(
+        'SELECT id FROM employees_registry WHERE employee_email = $1 AND organization_id = $2',
+        [email, org.organization_id]
+      );
+      
+      if (existingUser.rows.length > 0) {
+        return res.status(409).json({ error: 'Email already registered for this organization' });
+      }
+      
+      // Create a connection to the organization's specific database
+      const orgPool = createOrgPool(orgDatabaseName);
+      const orgClient = await orgPool.connect();
+      
+      try {
+        // Check if email already exists in organization's users table
+        const existingOrgUser = await orgClient.query(
+          'SELECT user_id FROM users WHERE email_id = $1',
+          [email]
         );
-        const employeeId = empResult.rows[0].id;
         
-        // Link employee to organization
-        await client.query(
-          `INSERT INTO organization_memberships (organization_id, employee_id, role)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (organization_id, employee_id) DO UPDATE SET role = EXCLUDED.role`,
-          [org.id, employeeId, role]
+        if (existingOrgUser.rows.length > 0) {
+          return res.status(409).json({ error: 'Email already exists in this organization' });
+        }
+        
+        await orgClient.query('BEGIN');
+        
+        // Step 1: Insert into the organization's users table
+        const userResult = await orgClient.query(
+          `INSERT INTO users (email_id, phone_number, password_hash, first_name, last_name, role) 
+           VALUES ($1, $2, $3, $4, $5, $6) 
+           RETURNING user_id as id, email_id as email, phone_number, first_name, last_name, role`,
+          [email, phone, hash, firstName, lastName, role]
         );
+        const localUser = userResult.rows[0];
+        
+        // Step 2: Insert into employees_registry (project_registry database)
+        const empResult = await registryPool.query(
+          `INSERT INTO employees_registry (organization_id, organization_name, employee_email, employee_phone, employee_name, password_hash, role, database_name, is_active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+           RETURNING id, employee_email as email, employee_name, role, organization_id, organization_name`,
+          [org.organization_id, orgName, email, phone, fullName, hash, role, orgDatabaseName]
+        );
+        
+        const employee = empResult.rows[0];
+        
+        await orgClient.query('COMMIT');
+        
+        // Generate JWT token with both user IDs
+        const token = jwt.sign({ 
+          userId: localUser.id,  // user_id from organization's users table for API operations
+          registryId: employee.id,  // id from employees_registry for auth
+          organizationId: employee.organization_id,
+          databaseName: orgDatabaseName,
+          role: employee.role,
+          source: 'registry'
+        }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        
+        console.log(`✅ Employee "${email}" registered to organization "${orgName}" in database "${orgDatabaseName}" (users table ID: ${localUser.id})`);
+        
+        return res.json({ 
+          message: 'Registered successfully', 
+          user: {
+            id: localUser.id,  // Return the users table ID for API compatibility
+            email: localUser.email,
+            first_name: firstName,
+            last_name: lastName,
+            role: employee.role,
+            organization_id: employee.organization_id,
+            organization_name: employee.organization_name
+          }, 
+          token 
+        });
+      } catch (orgErr) {
+        await orgClient.query('ROLLBACK');
+        throw orgErr;
+      } finally {
+        orgClient.release();
+        await orgPool.end(); // Close the dynamic pool connection
       }
     }
     
-    await client.query('COMMIT');
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ message: 'Registered', user, token });
+    // Fallback: Register in local/default users table only (for demo/development without organization)
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Create user in local users table - using email_id and user_id to match actual database schema
+      const userResult = await client.query(
+        'INSERT INTO users (email_id, password_hash, first_name, last_name, role) VALUES ($1, $2, $3, $4, $5) RETURNING user_id as id, email_id as email, first_name, last_name, role',
+        [email, hash, firstName, lastName, role]
+      );
+      const user = userResult.rows[0];
+      
+      await client.query('COMMIT');
+      const token = jwt.sign({ userId: user.id, source: 'local' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      console.log(`✅ Local user "${email}" registered (no organization)`);
+      res.json({ message: 'Registered', user, token });
+    } catch (localErr) {
+      await client.query('ROLLBACK');
+      throw localErr;
+    } finally {
+      client.release();
+    }
   } catch (err) {
-    await client.query('ROLLBACK');
     if (String(err.message || '').includes('duplicate')) {
       return res.status(409).json({ error: 'Email already exists' });
     }
     console.error('Registration error:', err);
     res.status(500).json({ error: 'Internal server error', details: err.message });
-  } finally {
-    client.release();
   }
 });
 

@@ -617,10 +617,11 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaWrapper>
+    <View style={styles.screenContainer}>
       <AppHeader
         title="Setting Up Your Company"
         backgroundColor="#877ED2"
+        borderBottomRadius={20}
         rightAction={{
           iconName: 'ellipsis-vertical',
           iconColor: '#FFFFFF',
@@ -1250,11 +1251,15 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </SafeAreaWrapper>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   container: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 16,

@@ -287,10 +287,9 @@ export default function ClientsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color="#1a1a1a" />
+          <Ionicons name="chevron-back" size={28} color="##101010" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('clients.clients')}</Text>
-        <View style={styles.headerRight} />
       </View>
       
       <View style={styles.screenContent}>
@@ -308,40 +307,44 @@ export default function ClientsScreen() {
           </View>
         </View>
 
-        <FlatList
-        data={filteredClients}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <ClientCard 
-            client={item} 
-            onPress={() => handleClientPress(item)}
-            onEdit={() => handleEditClient(item)}
-            onDelete={() => handleDeleteClient(item)}
-            canDelete={canManageClients}
-            canEdit={canManageClients}
-          />
-        )}
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.6}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>{t('clients.no_clients')}</Text>
-            <Text style={styles.emptySubtext}>
-              {canManageClients ? t('clients.add_client') : t('common.no_data')}
-            </Text>
-            {canManageClients && (
-              <View style={styles.emptyButton}>
-                <Button
-                  title={t('clients.add_client')}
-                  onPress={() => navigation.navigate('AddClient')}
-                />
-              </View>
+        {/* Big Card Container */}
+        <View style={styles.bigCard}>
+          <FlatList
+            data={filteredClients}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={({ item, index }) => (
+              <ClientCard 
+                client={item} 
+                onPress={() => handleClientPress(item)}
+                onEdit={() => handleEditClient(item)}
+                onDelete={() => handleDeleteClient(item)}
+                canDelete={canManageClients}
+                canEdit={canManageClients}
+                isLast={index === filteredClients.length - 1}
+              />
             )}
-          </View>
-        }
-        contentContainerStyle={styles.listContent}
-        />
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.6}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>{t('clients.no_clients')}</Text>
+                <Text style={styles.emptySubtext}>
+                  {canManageClients ? t('clients.add_client') : t('common.no_data')}
+                </Text>
+                {canManageClients && (
+                  <View style={styles.emptyButton}>
+                    <Button
+                      title={t('clients.add_client')}
+                      onPress={() => navigation.navigate('AddClient')}
+                    />
+                  </View>
+                )}
+              </View>
+            }
+            contentContainerStyle={styles.listContent}
+          />
+        </View>
 
         {/* Floating Add Button */}
         {canManageClients && (
@@ -360,28 +363,25 @@ export default function ClientsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '##F6F6F6',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
+    paddingHorizontal: 10,
+    paddingTop: 30,
+    paddingBottom: 16,
+    backgroundColor: '#F0F0F0',
   },
   backButton: {
     padding: 4,
+    marginRight: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  headerRight: {
-    width: 32,
+    fontSize: 20,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#000000',
   },
   screenContent: {
     flex: 1,
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: '#F0F0F0',
   },
   searchBar: {
     flexDirection: 'row',
@@ -419,8 +419,18 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   listContent: {
-    padding: 16,
     paddingBottom: 80,
+  },
+  bigCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    overflow: 'hidden',
+    paddingHorizontal: 6,
   },
   emptyState: {
     alignItems: 'center',

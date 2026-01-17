@@ -507,7 +507,7 @@ export default function AddProjectScreen() {
               />
             </View>
 
-            {/* Description */}}
+            {/* Description */}
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>{t('projects.project_description')}</Text>

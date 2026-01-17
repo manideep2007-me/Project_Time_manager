@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../config/database');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requireRole, getDbPool } = require('../middleware/auth');
 const { validateSalaryData } = require('../middleware/validation');
 
 const router = express.Router();
@@ -15,6 +15,7 @@ function isOrganizationUser(req) {
 // GET /api/salaries - Get all salaries with pagination and filters
 router.get('/', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { 
       page = 1, 
       limit = 50, 
@@ -67,7 +68,7 @@ router.get('/', async (req, res) => {
     
     if (search) {
       params.push(`%${search.toLowerCase()}%`);
-      where += ` AND (LOWER(e.first_name) LIKE $${params.length} OR LOWER(e.last_name) LIKE $${params.length} OR LOWER(u.user_id) LIKE $${params.length})`;
+      where += ` AND (LOWER(u.first_name) LIKE $${params.length} OR LOWER(u.last_name) LIKE $${params.length} OR LOWER(u.user_id) LIKE $${params.length})`;
     }
     
     const salariesQuery = `
@@ -83,14 +84,14 @@ router.get('/', async (req, res) => {
         s.notes,
         s.created_at,
         s.updated_at,
-        e.first_name,
-        e.last_name,
+        u.first_name,
+        u.last_name,
         u.user_id as emp_id,
         u.department_id
       FROM salaries s
       JOIN users u ON s.employee_id = u.user_id
       ${where}
-      ORDER BY s.effective_date DESC, e.first_name ASC
+      ORDER BY s.effective_date DESC, u.first_name ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
     
@@ -122,6 +123,7 @@ router.get('/', async (req, res) => {
 // GET /api/salaries/employee/:employeeId - Get salary history for specific employee
 router.get('/employee/:employeeId', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { employeeId } = req.params;
     const { include_inactive = 'false' } = req.query;
     
@@ -143,8 +145,8 @@ router.get('/employee/:employeeId', async (req, res) => {
         s.is_current,
         s.notes,
         s.created_at,
-        e.first_name,
-        e.last_name,
+        u.first_name,
+        u.last_name,
         u.user_id as emp_id,
         u.department_id
       FROM salaries s
@@ -153,7 +155,7 @@ router.get('/employee/:employeeId', async (req, res) => {
       ORDER BY s.effective_date DESC
     `;
     
-    const result = await pool.query(query, params);
+    const result = await db.query(query, params);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No salary records found for this employee' });
@@ -164,7 +166,7 @@ router.get('/employee/:employeeId', async (req, res) => {
         id: employeeId,
         name: `${result.rows[0].first_name} ${result.rows[0].last_name}`,
         employee_id: result.rows[0].emp_id,
-        department: result.rows[0].department
+        department: result.rows[0].department_id
       },
       salaries: result.rows
     });
@@ -178,6 +180,7 @@ router.get('/employee/:employeeId', async (req, res) => {
 // GET /api/salaries/current - Get current salaries for all employees
 router.get('/current', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const query = `
       SELECT 
         s.id,
@@ -187,17 +190,17 @@ router.get('/current', async (req, res) => {
         s.hourly_rate,
         s.effective_date,
         s.notes,
-        e.first_name,
-        e.last_name,
+        u.first_name,
+        u.last_name,
         u.user_id as emp_id,
         u.department_id
       FROM salaries s
       JOIN users u ON s.employee_id = u.user_id
       WHERE s.is_current = true
-      ORDER BY e.first_name ASC
+      ORDER BY u.first_name ASC
     `;
     
-    const result = await pool.query(query);
+    const result = await db.query(query);
     
     res.json({
       current_salaries: result.rows,
@@ -213,6 +216,7 @@ router.get('/current', async (req, res) => {
 // POST /api/salaries - Create new salary record
 router.post('/', validateSalaryData, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const {
       employee_id,
       salary_type,
@@ -224,7 +228,7 @@ router.post('/', validateSalaryData, async (req, res) => {
     } = req.body;
     
     // Check if user exists
-    const userCheck = await pool.query(
+    const userCheck = await db.query(
       'SELECT user_id, first_name, last_name FROM users WHERE user_id = $1',
       [employee_id]
     );
@@ -235,7 +239,7 @@ router.post('/', validateSalaryData, async (req, res) => {
     
     // If this is a new current salary, mark previous current salary as inactive
     if (!end_date) {
-      await pool.query(
+      await db.query(
         'UPDATE salaries SET is_current = false WHERE employee_id = $1 AND is_current = true',
         [employee_id]
       );
@@ -261,7 +265,7 @@ router.post('/', validateSalaryData, async (req, res) => {
       notes || null
     ];
     
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
     
     res.status(201).json({
       message: 'Salary record created successfully',
@@ -277,6 +281,7 @@ router.post('/', validateSalaryData, async (req, res) => {
 // PUT /api/salaries/:id - Update salary record
 router.put('/:id', validateSalaryData, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const {
       salary_type,
@@ -289,7 +294,7 @@ router.put('/:id', validateSalaryData, async (req, res) => {
     } = req.body;
     
     // Check if salary record exists
-    const existingSalary = await pool.query(
+    const existingSalary = await db.query(
       'SELECT * FROM salaries WHERE id = $1',
       [id]
     );
@@ -300,7 +305,7 @@ router.put('/:id', validateSalaryData, async (req, res) => {
     
     // If making this current, mark others as inactive
     if (is_current) {
-      await pool.query(
+      await db.query(
         'UPDATE salaries SET is_current = false WHERE employee_id = $1 AND id != $2',
         [existingSalary.rows[0].employee_id, id]
       );
@@ -332,7 +337,7 @@ router.put('/:id', validateSalaryData, async (req, res) => {
       id
     ];
     
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
     
     res.json({
       message: 'Salary record updated successfully',
@@ -348,9 +353,10 @@ router.put('/:id', validateSalaryData, async (req, res) => {
 // DELETE /api/salaries/:id - Delete salary record
 router.delete('/:id', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     
-    const result = await pool.query(
+    const result = await db.query(
       'DELETE FROM salaries WHERE id = $1 RETURNING *',
       [id]
     );
@@ -373,6 +379,7 @@ router.delete('/:id', async (req, res) => {
 // GET /api/salaries/stats - Get salary statistics
 router.get('/stats', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const statsQuery = `
       SELECT 
         COUNT(*) as total_salaries,

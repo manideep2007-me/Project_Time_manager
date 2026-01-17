@@ -252,5 +252,17 @@
     "speak_now": "Speak now...",
     "no_speech": "No speech detected. Please try again.",
     "permission_denied": "Microphone permission denied. Please enable in settings."
+  },
+  "onboarding": {
+    "welcome": "Welcome",
+    "tagline": "Plan tasks. Track time. Work better",
+    "get_started": "Get started by setting up your organization or connecting to an existing one.",
+    "organization_owner": "Are you an organization owner?",
+    "create_organization": "Create Organization",
+    "or": "Or",
+    "team_member": "Are you a team member?",
+    "scan_qr_join": "Scan QR to Join Your Organization",
+    "already_have_account": "Already have an account?",
+    "log_in": "Log in"
   }
 }

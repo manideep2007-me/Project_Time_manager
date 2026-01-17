@@ -38,6 +38,7 @@ import AdminTimeTrackingScreen from '../screens/admin/AdminTimeTrackingScreen';
 import AdminProjectsScreen from '../screens/admin/ProjectsScreen';
 import AdminProjectDetailsScreen from '../screens/admin/AdminProjectDetailsScreen';
 import AdminPermissionsScreen from '../screens/admin/AdminPermissionsScreen';
+import AdminEmployeeInfoScreen from '../screens/admin/EmployeeInfoScreen';
 
 // Manager screens
 import ManagerDashboardScreen from '../screens/manager/ManagerDashboardScreen';
@@ -98,18 +99,13 @@ function AdminEmployeesTabNavigator() {
       }}
     >
       <EmployeesTab.Screen
-        name="Dashboard"
+        name="EmployeeList"
         component={AdminEmployeesScreen}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-          },
-        }}
         options={{
-          tabBarLabel: 'Dashboard',
+          tabBarLabel: 'Employee',
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons
-              name={focused ? 'people' : 'people-outline'}
+              name={focused ? 'list' : 'list-outline'}
               size={size || 24}
               color={color}
             />
@@ -123,7 +119,7 @@ function AdminEmployeesTabNavigator() {
           tabBarLabel: 'Add',
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons
-              name={focused ? 'person-add' : 'person-add-outline'}
+              name={focused ? 'add-circle' : 'add-circle-outline'}
               size={size || 24}
               color={color}
             />
@@ -236,6 +232,129 @@ function AppTabs() {
     height: 60,
   };
 
+  // Admin role - bottom tabs only visible on Dashboard
+  if (isAdmin) {
+    return (
+      <Tab.Navigator
+        screenOptions={{
+          tabBarActiveTintColor: '#877ED2',
+          tabBarInactiveTintColor: '#666',
+          tabBarLabelStyle: {
+            fontSize: 10,
+            fontWeight: '400',
+            marginTop: 2,
+          },
+          tabBarItemStyle: {
+            flex: 1,
+          },
+          tabBarStyle: {
+            backgroundColor: '#fff',
+            borderTopWidth: 1,
+            borderTopColor: '#e1e5e9',
+            paddingBottom: 8,
+            paddingTop: 8,
+            height: 60,
+            justifyContent: 'space-around',
+          },
+          headerShown: false,
+        }}
+      >
+        <Tab.Screen 
+          name="Home" 
+          component={AdminDashboardScreen}
+          options={{
+            tabBarLabel: 'Dashboard',
+            tabBarIcon: ({ color, focused, size }) => (
+              <Ionicons 
+                name={focused ? 'grid' : 'grid-outline'} 
+                size={size || 24} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Tasks" 
+          component={AdminDashboardScreen}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+            },
+          }}
+          options={{
+            tabBarLabel: 'Task',
+            tabBarIcon: ({ color, focused, size }) => (
+              <Ionicons 
+                name={focused ? 'clipboard' : 'clipboard-outline'} 
+                size={size || 24} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="AdminProjects" 
+          component={AdminProjectsScreen}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              navigation.navigate('Projects');
+            },
+          })}
+          options={{
+            tabBarLabel: 'Projects',
+            tabBarIcon: ({ color, focused, size }) => (
+              <Ionicons 
+                name={focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} 
+                size={size || 24} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="AdminTimeEntries" 
+          component={AdminTimeTrackingScreen}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              navigation.navigate('TimeEntries');
+            },
+          })}
+          options={{
+            tabBarLabel: 'Expense',
+            tabBarIcon: ({ color, focused, size }) => (
+              <Ionicons 
+                name={focused ? 'stats-chart' : 'stats-chart-outline'} 
+                size={size || 24} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Notifications" 
+          component={AdminDashboardScreen}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+            },
+          }}
+          options={{
+            tabBarLabel: 'Notifications',
+            tabBarIcon: ({ color, focused, size }) => (
+              <Ionicons 
+                name={focused ? 'notifications' : 'notifications-outline'} 
+                size={size || 24} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+    );
+  }
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -261,7 +380,7 @@ function AppTabs() {
     >
       <Tab.Screen 
         name="Home" 
-        component={isEmployee ? EmployeeDashboardScreen : (isAdmin ? AdminDashboardScreen : ManagerDashboardScreen)}
+        component={isEmployee ? EmployeeDashboardScreen : ManagerDashboardScreen}
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, focused, size }) => {
@@ -286,7 +405,7 @@ function AppTabs() {
       />
       <Tab.Screen 
         name="Projects" 
-        component={isEmployee ? EmployeeAllTasksScreen : (isAdmin ? AdminProjectsScreen : ManagerProjectsScreen)}
+        component={isEmployee ? EmployeeAllTasksScreen : ManagerProjectsScreen}
         options={{
           tabBarLabel: isEmployee ? 'Task' : 'Projects',
           tabBarIcon: ({ color, focused, size }) => {
@@ -311,7 +430,7 @@ function AppTabs() {
       />
       <Tab.Screen 
         name="TimeEntries" 
-        component={isEmployee ? EmployeeTimeTrackingScreen : (isAdmin ? AdminTimeTrackingScreen : ManagerTimeTrackingScreen)} 
+        component={isEmployee ? EmployeeTimeTrackingScreen : ManagerTimeTrackingScreen} 
         options={{ 
           title: 'Reports',
           tabBarLabel: 'Reports',
@@ -335,12 +454,12 @@ function AppTabs() {
           },
         }} 
       />
-      {/* Manager and Admin tabs - only show for managers and admins */}
-      {(isManager || isAdmin) && (
+      {/* Manager tabs - only show for managers */}
+      {isManager && (
         <>
           <Tab.Screen 
             name="Employees" 
-            component={isAdmin ? AdminEmployeesTabNavigator : ManagerEmployeesScreen}
+            component={ManagerEmployeesScreen}
             options={{
               tabBarIcon: ({ color, focused, size }) => (
                 <Ionicons 
@@ -349,27 +468,11 @@ function AppTabs() {
                   color={color} 
                 />
               ),
-              tabBarStyle: isAdmin ? { display: 'none' } : undefined,
             }}
           />
-          {isAdmin && (
-            <Tab.Screen 
-              name="Permissions" 
-              component={AdminPermissionsScreen}
-              options={{
-                tabBarIcon: ({ color, focused, size }) => (
-                  <Ionicons 
-                    name={focused ? 'shield' : 'shield-outline'} 
-                    size={size || 24} 
-                    color={color} 
-                  />
-                ),
-              }}
-            />
-          )}
           <Tab.Screen 
             name="Clients" 
-            component={isAdmin ? AdminClientsScreen : ManagerClientsScreen}
+            component={ManagerClientsScreen}
             options={{
               tabBarIcon: ({ color, focused, size }) => (
                 <Ionicons 
@@ -384,7 +487,7 @@ function AppTabs() {
       )}
       <Tab.Screen 
         name="Profile" 
-        component={isEmployee ? EmployeeProfileScreen : (isAdmin ? AdminProfileScreen : ManagerProfileScreen)}
+        component={isEmployee ? EmployeeProfileScreen : ManagerProfileScreen}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, focused, size }) => {
@@ -479,47 +582,60 @@ function AuthStack() {
 export default function RootNavigator() {
   const { token, loading } = useContext(AuthContext);
 
+  // While loading auth state, don't render any screen to prevent flash
+  if (loading) {
+    return null;
+  }
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {loading ? (
-          <Stack.Screen name="Boot" component={NewLoginScreen} />
-        ) : token ? (
-          <Stack.Screen name="App" component={AppTabs} />
+        {token ? (
+          <>
+            <Stack.Screen name="App" component={AppTabs} />
+            <Stack.Screen name="ProjectDetails" component={ProjectDetailsScreenWrapper} options={{ headerShown: false }} />
+            <Stack.Screen name="EmployeeProjectDetails" component={EmployeeProjectDetailsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="EmployeeProjects" component={EmployeeProjectsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="EmployeeProjectTime" component={EmployeeProjectTimeScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ClientProjects" component={ClientProjectsScreenWrapper} options={{ headerShown: true, title: 'Client Projects' }} />
+            <Stack.Screen name="EmployeeDetail" component={EmployeeDetailScreenWrapper} options={{ headerShown: true, title: 'Employee Details' }} />
+            <Stack.Screen name="TimeEntry" component={TimeEntryScreen} options={{ headerShown: true, title: 'Manual Time Entry' }} />
+            <Stack.Screen name="Timesheet" component={TimeEntriesScreen} options={{ headerShown: true, title: 'Timesheet' }} />
+            <Stack.Screen name="TaskUpload" component={TaskUploadScreen} options={{ headerShown: true, title: 'Upload Completed Task' }} />
+            <Stack.Screen name="CreateTask" component={CreateTaskScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="MyUploads" component={MyUploadsScreen} options={{ headerShown: true, title: 'My Uploads' }} />
+            <Stack.Screen name="TaskDetails" component={TaskDetailsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="AllAttachmentsScreen" component={AllAttachmentsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="EmployeeAllTasks" component={EmployeeAllTasksScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="OverdueTasks" component={OverdueTasksScreen} options={{ headerShown: true, title: 'Overdue Tasks' }} />
+            <Stack.Screen name="AllTasks" component={AllTasksScreen} options={{ headerShown: true, title: 'All Tasks' }} />
+            <Stack.Screen name="ProjectTasks" component={ProjectTasksScreenWrapper} options={{ headerShown: true, title: 'Project Tasks' }} />
+            <Stack.Screen name="TaskView" component={TaskViewScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="AddClient" component={AddClientScreen} options={{ headerShown: true, title: 'Add Client' }} />
+            <Stack.Screen name="AddProject" component={AddProjectScreen} options={{ headerShown: true, title: 'Create Project' }} />
+            <Stack.Screen name="AddEmployee" component={AddEmployeeScreen} options={{ headerShown: false }} />
+            {/* Admin screens without bottom tabs */}
+            <Stack.Screen name="Clients" component={AdminClientsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Projects" component={AdminProjectsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="TimeEntries" component={AdminTimeTrackingScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Employees" component={AdminEmployeesTabNavigator} options={{ headerShown: false }} />
+            <Stack.Screen name="EmployeeInfo" component={AdminEmployeeInfoScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Permissions" component={AdminPermissionsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Profile" component={AdminProfileScreen} options={{ headerShown: false }} />
+            {/* Proof of Work */}
+            <Stack.Screen name="ProofOfWorkCapture" component={ProofOfWorkCaptureScreen} options={{ headerShown: true, title: 'Proof of Work' }} />
+          </>
         ) : (
           // Show onboarding first, then login
           <>
             <Stack.Screen name="Onboarding" component={OnboardingChoiceScreen} />
             <Stack.Screen name="Auth" component={AuthStack} />
+            {/* Onboarding routes */}
+            <Stack.Screen name="RegisterOrganization" component={RegisterOrganizationScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="OrganizationQRCode" component={OrganizationQRCodeScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ScanOrganization" component={ScanOrganizationScreen} options={{ headerShown: false }} />
           </>
         )}
-        <Stack.Screen name="ProjectDetails" component={ProjectDetailsScreenWrapper} options={{ headerShown: false }} />
-        <Stack.Screen name="EmployeeProjectDetails" component={EmployeeProjectDetailsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="EmployeeProjects" component={EmployeeProjectsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="EmployeeProjectTime" component={EmployeeProjectTimeScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ClientProjects" component={ClientProjectsScreenWrapper} options={{ headerShown: true, title: 'Client Projects' }} />
-        <Stack.Screen name="EmployeeDetail" component={EmployeeDetailScreenWrapper} options={{ headerShown: true, title: 'Employee Details' }} />
-        <Stack.Screen name="TimeEntry" component={TimeEntryScreen} options={{ headerShown: true, title: 'Manual Time Entry' }} />
-        <Stack.Screen name="Timesheet" component={TimeEntriesScreen} options={{ headerShown: true, title: 'Timesheet' }} />
-        <Stack.Screen name="TaskUpload" component={TaskUploadScreen} options={{ headerShown: true, title: 'Upload Completed Task' }} />
-        <Stack.Screen name="CreateTask" component={CreateTaskScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="MyUploads" component={MyUploadsScreen} options={{ headerShown: true, title: 'My Uploads' }} />
-        <Stack.Screen name="TaskDetails" component={TaskDetailsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AllAttachmentsScreen" component={AllAttachmentsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="EmployeeAllTasks" component={EmployeeAllTasksScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="OverdueTasks" component={OverdueTasksScreen} options={{ headerShown: true, title: 'Overdue Tasks' }} />
-        <Stack.Screen name="AllTasks" component={AllTasksScreen} options={{ headerShown: true, title: 'All Tasks' }} />
-        <Stack.Screen name="ProjectTasks" component={ProjectTasksScreenWrapper} options={{ headerShown: true, title: 'Project Tasks' }} />
-        <Stack.Screen name="TaskView" component={TaskViewScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AddClient" component={AddClientScreen} options={{ headerShown: true, title: 'Add Client' }} />
-        <Stack.Screen name="AddProject" component={AddProjectScreen} options={{ headerShown: true, title: 'Create Project' }} />
-        <Stack.Screen name="AddEmployee" component={AddEmployeeScreen} options={{ headerShown: false }} />
-        {/* Onboarding routes */}
-        <Stack.Screen name="RegisterOrganization" component={RegisterOrganizationScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="OrganizationQRCode" component={OrganizationQRCodeScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ScanOrganization" component={ScanOrganizationScreen} options={{ headerShown: false }} />
-        {/* Proof of Work */}
-        <Stack.Screen name="ProofOfWorkCapture" component={ProofOfWorkCaptureScreen} options={{ headerShown: true, title: 'Proof of Work' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

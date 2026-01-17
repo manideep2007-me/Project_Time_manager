@@ -119,6 +119,91 @@ async function initializeSchema(databaseName) {
 }
 
 /**
+ * Seed reference data (countries, states, departments, designations) from project_time_manager
+ * @param {string} databaseName - Name of the new database to seed
+ * @returns {Promise<boolean>} True if successful
+ */
+async function seedReferenceData(databaseName) {
+  // Connect to source (project_time_manager)
+  const sourcePool = new Pool({
+    ...masterConfig,
+    database: 'project_time_manager',
+  });
+  
+  // Connect to target (new org database)
+  const targetPool = new Pool({
+    ...masterConfig,
+    database: databaseName,
+  });
+  
+  try {
+    console.log(`📋 Seeding reference data to ${databaseName}...`);
+    
+    // Copy countries
+    const { rows: countries } = await sourcePool.query(
+      'SELECT country_id, name, code, is_active FROM countries'
+    );
+    for (const c of countries) {
+      await targetPool.query(
+        `INSERT INTO countries (country_id, name, code, is_active) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (country_id) DO NOTHING`,
+        [c.country_id, c.name, c.code, c.is_active]
+      );
+    }
+    console.log(`   ✅ Copied ${countries.length} countries`);
+    
+    // Copy states
+    const { rows: states } = await sourcePool.query(
+      'SELECT state_id, name, code, country_id, is_active FROM states'
+    );
+    for (const s of states) {
+      await targetPool.query(
+        `INSERT INTO states (state_id, name, code, country_id, is_active) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (state_id) DO NOTHING`,
+        [s.state_id, s.name, s.code, s.country_id, s.is_active]
+      );
+    }
+    console.log(`   ✅ Copied ${states.length} states`);
+    
+    // Copy departments
+    const { rows: departments } = await sourcePool.query(
+      'SELECT department_id, name, description, is_active FROM departments'
+    );
+    for (const d of departments) {
+      await targetPool.query(
+        `INSERT INTO departments (department_id, name, description, is_active) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (department_id) DO NOTHING`,
+        [d.department_id, d.name, d.description, d.is_active]
+      );
+    }
+    console.log(`   ✅ Copied ${departments.length} departments`);
+    
+    // Copy designations
+    const { rows: designations } = await sourcePool.query(
+      'SELECT designation_id, name, description, department_id, is_active FROM designations'
+    );
+    for (const d of designations) {
+      await targetPool.query(
+        `INSERT INTO designations (designation_id, name, description, department_id, is_active) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (designation_id) DO NOTHING`,
+        [d.designation_id, d.name, d.description, d.department_id, d.is_active]
+      );
+    }
+    console.log(`   ✅ Copied ${designations.length} designations`);
+    
+    console.log(`✅ Reference data seeding complete for ${databaseName}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Failed to seed reference data for ${databaseName}:`, error.message);
+    // Don't throw - this is non-critical, org can still function
+    return false;
+  } finally {
+    await sourcePool.end();
+    await targetPool.end();
+  }
+}
+
+/**
  * Create an admin user in the organization's database
  * @param {string} databaseName - Name of the organization's database
  * @param {object} adminData - Admin user data
@@ -133,20 +218,12 @@ async function createAdminInOrgDatabase(databaseName, adminData) {
   try {
     const { email, passwordHash, firstName, lastName, phone } = adminData;
     
-    // Create admin user in users table
+    // Create admin user in users table (using correct column names from schema)
     const userResult = await dbPool.query(
-      `INSERT INTO users (email, password_hash, first_name, last_name, role, is_active)
-       VALUES ($1, $2, $3, $4, 'admin', true)
-       RETURNING id, email, first_name, last_name, role`,
-      [email, passwordHash, firstName, lastName]
-    );
-    
-    // Also create an employee record for the admin
-    const employeeId = `EMP-ADMIN-${Date.now()}`;
-    await dbPool.query(
-      `INSERT INTO employees (employee_id, first_name, last_name, email, phone, salary_type, salary_amount, is_active)
-       VALUES ($1, $2, $3, $4, $5, 'monthly', 0, true)`,
-      [employeeId, firstName, lastName, email, phone || null]
+      `INSERT INTO users (email_id, password_hash, first_name, last_name, phone_number, role, is_active)
+       VALUES ($1, $2, $3, $4, $5, 'admin', true)
+       RETURNING user_id, email_id, first_name, last_name, role`,
+      [email, passwordHash, firstName, lastName, phone || null]
     );
     
     console.log(`✅ Admin user created in database: ${databaseName}`);
@@ -187,7 +264,10 @@ async function createOrganizationDatabase(orgData) {
     // Step 2: Initialize schema
     await initializeSchema(databaseName);
     
-    // Step 3: Create admin user in the new database
+    // Step 3: Seed reference data (countries, states, departments, designations)
+    await seedReferenceData(databaseName);
+    
+    // Step 4: Create admin user in the new database
     const emailParts = orgData.adminEmail.split('@')[0].split(/[._-]/);
     const firstName = emailParts[0] ? emailParts[0].charAt(0).toUpperCase() + emailParts[0].slice(1) : 'Admin';
     const lastName = emailParts[1] ? emailParts[1].charAt(0).toUpperCase() + emailParts[1].slice(1) : orgData.name.split(' ')[0];

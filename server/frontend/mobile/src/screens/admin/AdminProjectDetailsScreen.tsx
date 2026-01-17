@@ -542,11 +542,11 @@ export default function AdminProjectDetailsScreen() {
   return (
     <SafeAreaWrapper backgroundColor="#F5F6FA">
       <View style={styles.container}>
-        {/* Purple Header */}
-        <View style={styles.header}>
+        {/* Fixed Header */}
+        <View style={styles.fixedHeader}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
             </TouchableOpacity>
             <Text style={styles.headerTitle} numberOfLines={1}>
               {project.name || 'Project'}
@@ -565,8 +565,14 @@ export default function AdminProjectDetailsScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             showsVerticalScrollIndicator={false}
           >
+            {/* Purple Background Section (scrolls with content) */}
+            <View style={styles.purpleBackgroundSection} />
+
             {/* Project Information Card */}
             <View style={[styles.contentCard, styles.overlappingCard]}>
+              {/* Client Info */}
+              <Text style={styles.clientInfo}>{project.client_name || 'Client'}</Text>
+              
               {/* Project Title */}
               <Text style={styles.projectTitle}>{project.name || 'Project'}</Text>
 
@@ -1150,15 +1156,12 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '600',
   },
-  header: {
+  fixedHeader: {
     backgroundColor: '#877ED2',
     paddingTop: 12,
-    paddingBottom: 140,
+    paddingBottom: 12,
     paddingHorizontal: 16,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    position: 'relative',
-    zIndex: 1,
+    zIndex: 100,
   },
   headerContent: {
     flexDirection: 'row',
@@ -1179,13 +1182,7 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   cardContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 10,
-    pointerEvents: 'box-none',
+    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -1193,34 +1190,48 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingTop: 168,
+    paddingTop: 10,
     paddingBottom: 20,
+  },
+  purpleBackgroundSection: {
+    backgroundColor: '#877ED2',
+    height: 140,
+    marginTop: -16,
+    marginHorizontal: -16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    marginBottom: -40,
   },
   contentCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 20,
-    zIndex: 10,
+    elevation: 4,
+    zIndex: 4,
     marginBottom: 16,
   },
   overlappingCard: {
     marginTop: -80,
   },
+  clientInfo: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
   projectTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#000000',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   description: {
     fontSize: 12,
-    color: '#000000',
-    lineHeight: 24,
+    color: '#666',
+    lineHeight: 20,
     marginBottom: 20,
     fontWeight: '400',
   },
@@ -1261,7 +1272,7 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 20,
     marginBottom: 16,
     shadowColor: '#000',

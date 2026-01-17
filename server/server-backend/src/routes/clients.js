@@ -7,22 +7,13 @@ const { handleValidation } = require('../middleware/validation');
 const router = express.Router();
 router.use(authenticateToken);
 
-// Helper: Check if user is from a real organization (not demo user)
-const isOrganizationUser = (req) => req.user?.source === 'registry';
+// Helper: Get the appropriate database pool for the user
+const getPool = (req) => req.orgPool || pool;
 
 // GET /api/clients - List all clients with pagination and search
 router.get('/', async (req, res) => {
   try {
-    // Real organization users see empty data
-    if (isOrganizationUser(req)) {
-      return res.json({
-        clients: [],
-        total: 0,
-        page: 1,
-        limit: 50
-      });
-    }
-
+    const db = getPool(req);
     const { page = 1, limit = 50, search = '' } = req.query;
     const offset = (page - 1) * limit;
     let where = 'WHERE 1=1';
@@ -31,14 +22,14 @@ router.get('/', async (req, res) => {
       params.push(`%${search.toLowerCase()}%`); 
       where += ` AND (LOWER(first_name || ' ' || last_name) LIKE $${params.length} OR LOWER(email) LIKE $${params.length})`; 
     }
-    const list = await pool.query(
+    const list = await db.query(
       `SELECT client_id as id, first_name || ' ' || last_name as name, first_name, last_name, email, phone_number as phone, address, salutation, gst_number, onboard_date, created_at, updated_at 
        FROM clients ${where} 
        ORDER BY created_at DESC 
        LIMIT ${limit} OFFSET ${offset}`,
       params
     );
-    const count = await pool.query(`SELECT COUNT(*) as count FROM clients ${where}`, params);
+    const count = await db.query(`SELECT COUNT(*) as count FROM clients ${where}`, params);
     res.json({ 
       clients: list.rows, 
       total: parseInt(count.rows[0].count), 
@@ -54,8 +45,9 @@ router.get('/', async (req, res) => {
 // GET /api/clients/:id - Get specific client
 router.get('/:id', async (req, res) => {
   try {
+    const db = getPool(req);
     const { id } = req.params;
-    const result = await pool.query(
+    const result = await db.query(
       'SELECT client_id as id, first_name || \' \' || last_name as name, first_name, last_name, email, phone_number as phone, address, salutation, gst_number, onboard_date, created_at, updated_at FROM clients WHERE client_id = $1',
       [id]
     );
@@ -71,12 +63,13 @@ router.get('/:id', async (req, res) => {
 // GET /api/clients/:id/projects - List projects for a specific client
 router.get('/:id/projects', async (req, res) => {
   try {
+    const db = getPool(req);
     const { id } = req.params;
     const { page = 1, limit = 100, status = '' } = req.query;
     const offset = (page - 1) * limit;
 
     // Verify client exists
-    const client = await pool.query('SELECT client_id as id, first_name || \' \' || last_name as name FROM clients WHERE client_id = $1', [id]);
+    const client = await db.query('SELECT client_id as id, first_name || \' \' || last_name as name FROM clients WHERE client_id = $1', [id]);
     if (client.rows.length === 0) {
       return res.status(404).json({ error: 'Client not found' });
     }
@@ -89,7 +82,7 @@ router.get('/:id/projects', async (req, res) => {
       where += ` AND LOWER(p.status) = $${params.length}`;
     }
 
-    const list = await pool.query(
+    const list = await db.query(
       `SELECT p.project_id as id, p.project_name as name, p.description, p.status, p.start_date, p.end_date, p.estimated_value as budget,
               p.project_location as location, p.created_at, p.updated_at,
               c.first_name || ' ' || c.last_name as client_name, c.client_id as client_id
@@ -102,7 +95,7 @@ router.get('/:id/projects', async (req, res) => {
     );
     console.log(`[GET /api/clients/${id}/projects] Found ${list.rows.length} projects`);
 
-    const count = await pool.query(
+    const count = await db.query(
       `SELECT COUNT(*) as count FROM projects p ${where}`,
       params
     );
@@ -141,13 +134,14 @@ router.post('/', [
     }),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getPool(req);
     const { firstName, lastName, email, phone, address, salutation, gstNumber } = req.body;
     
     // Combine first and last name for logging
     const fullName = `${firstName} ${lastName}`.trim();
     
     // Auto-set onboard_date to current date
-    const result = await pool.query(
+    const result = await db.query(
       'INSERT INTO clients (first_name, last_name, email, phone_number, address, salutation, gst_number, onboard_date) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_DATE) RETURNING client_id as id, first_name, last_name, email, phone_number as phone, address, salutation, gst_number, onboard_date, created_at, updated_at',
       [firstName, lastName, email, phone, address, salutation || null, gstNumber || null]
     );
@@ -155,7 +149,7 @@ router.post('/', [
     try {
       const actorId = req.user?.id || null;
       const actorName = req.user?.first_name ? `${req.user.first_name} ${req.user.last_name}` : null;
-      await pool.query(
+      await db.query(
         `INSERT INTO activity_logs (action_type, actor_id, actor_name, description, created_at)
          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
         ['client_created', actorId, actorName, `Client created: ${fullName}`]
@@ -184,16 +178,17 @@ router.put('/:id', [
   body('onboardDate').optional().isString(),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getPool(req);
     const { id } = req.params;
     const { firstName, lastName, email, phone, address, salutation, gstNumber, onboardDate } = req.body;
     
     // Check if client exists
-    const exists = await pool.query('SELECT client_id FROM clients WHERE client_id = $1', [id]);
+    const exists = await db.query('SELECT client_id FROM clients WHERE client_id = $1', [id]);
     if (exists.rows.length === 0) {
       return res.status(404).json({ error: 'Client not found' });
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE clients SET 
         first_name = COALESCE($1, first_name), 
         last_name = COALESCE($2, last_name), 
@@ -220,22 +215,23 @@ router.put('/:id', [
 // DELETE /api/clients/:id - Delete client (cascade deletes projects)
 router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
   try {
+    const db = getPool(req);
     const { id } = req.params;
     console.log('[DELETE /api/clients/:id] Request to delete client:', id);
     
     // Check how many projects will be deleted
-    const projects = await pool.query('SELECT COUNT(*) as count FROM projects WHERE client_id = $1', [id]);
+    const projects = await db.query('SELECT COUNT(*) as count FROM projects WHERE client_id = $1', [id]);
     const projectCount = parseInt(projects.rows[0].count);
     console.log('[DELETE /api/clients/:id] Client has', projectCount, 'project(s) that will also be deleted');
     
     // Delete projects first (cascade will handle related records)
     if (projectCount > 0) {
-      await pool.query('DELETE FROM projects WHERE client_id = $1', [id]);
+      await db.query('DELETE FROM projects WHERE client_id = $1', [id]);
       console.log('[DELETE /api/clients/:id] ✅ Deleted', projectCount, 'project(s)');
     }
 
     // Now delete the client
-    const result = await pool.query('DELETE FROM clients WHERE client_id = $1 RETURNING client_id as id, first_name, last_name', [id]);
+    const result = await db.query('DELETE FROM clients WHERE client_id = $1 RETURNING client_id as id, first_name, last_name', [id]);
     if (result.rows.length === 0) {
       console.log('[DELETE /api/clients/:id] ❌ Client not found');
       return res.status(404).json({ error: 'Client not found' });

@@ -57,15 +57,8 @@ export default function TaskDetailsScreen() {
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [showLiveTimePicker, setShowLiveTimePicker] = useState(false);
   const [selectedTimeType, setSelectedTimeType] = useState<'start' | 'end'>('start');
-  // Additional state declarations for UI and editing
+  // Additional state declarations for UI
   const [isListView, setIsListView] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
-  const [editStartTime, setEditStartTime] = useState<string>('');
-  const [editEndTime, setEditEndTime] = useState<string>('');
-  const [editStartTimeDate, setEditStartTimeDate] = useState<Date>(new Date());
-  const [editEndTimeDate, setEditEndTimeDate] = useState<Date>(new Date());
-  const [currentPickerTime, setCurrentPickerTime] = useState<Date>(new Date());
-  const [showEditModal, setShowEditModal] = useState(false);
   const { user } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
   const route = useRoute<any>();
@@ -92,6 +85,8 @@ export default function TaskDetailsScreen() {
   const [showTimerTimePicker, setShowTimerTimePicker] = useState(false);
   const [timerTimePickerMode, setTimerTimePickerMode] = useState<'start' | 'end'>('start');
   const [timerTimePickerListView, setTimerTimePickerListView] = useState(false);
+  const [manualStartTimeSet, setManualStartTimeSet] = useState(false);
+  const [manualEndTimeSet, setManualEndTimeSet] = useState(false);
   
   // Productivity section state
   const [productivityView, setProductivityView] = useState<'week' | 'month'>('week');
@@ -235,11 +230,12 @@ interface Photo {
 }
 
 // Remove duplicate export and function implementation. Only keep the first export default function TaskDetailsScreen.
-  const [showEditTimePicker, setShowEditTimePicker] = useState(false);
-  const [editTimeType, setEditTimeType] = useState<'start' | 'end'>('start');
   
   // Attachments popup state
   const [showAttachmentsModal, setShowAttachmentsModal] = useState(false);
+  const [showAttachmentViewer, setShowAttachmentViewer] = useState(false);
+  const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   
   // Photo management state
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -254,7 +250,17 @@ interface Photo {
   const [showStatusRecordModal, setShowStatusRecordModal] = useState(false);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   
-  // Refs
+  // Edit time entry state
+  const [showEditTimeModal, setShowEditTimeModal] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [editStartTime, setEditStartTime] = useState<string>('');
+  const [editEndTime, setEditEndTime] = useState<string>('');
+  const [editStartDate, setEditStartDate] = useState<Date>(new Date());
+  const [editEndDate, setEditEndDate] = useState<Date>(new Date());
+  const [showEditTimePicker, setShowEditTimePicker] = useState(false);
+  const [editTimePickerType, setEditTimePickerType] = useState<'start' | 'end'>('start');
+  const [editPickerTime, setEditPickerTime] = useState<Date>(new Date());
+    // Refs
   const scrollViewRef = useRef<ScrollView>(null);
   
   // Background timer and notifications
@@ -269,7 +275,49 @@ interface Photo {
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   // Attachments data
-  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<any[]>([
+    // Dummy attachments for testing
+    {
+      id: '1',
+      file_name: 'Wardrobe drawing and measurement.pdf',
+      file_extension: '.pdf',
+      file_url: 'https://example.com/wardrobe-drawing.pdf',
+      mime_type: 'application/pdf',
+      created_at: '2025-11-02T10:00:00Z',
+    },
+    {
+      id: '2',
+      file_name: 'Laminate code.pdf',
+      file_extension: '.pdf',
+      file_url: 'https://example.com/laminate-code.pdf',
+      mime_type: 'application/pdf',
+      created_at: '2025-11-02T11:00:00Z',
+    },
+    {
+      id: '3',
+      file_name: 'Sample_1.jpg',
+      file_extension: '.jpg',
+      file_url: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400',
+      mime_type: 'image/jpeg',
+      created_at: '2025-11-03T09:00:00Z',
+    },
+    {
+      id: '4',
+      file_name: 'simple-wardrobe-design-08.jpg',
+      file_extension: '.jpg',
+      file_url: 'https://images.unsplash.com/photo-1558997519-83ea9252edf8?w=400',
+      mime_type: 'image/jpeg',
+      created_at: '2025-11-03T10:00:00Z',
+    },
+    {
+      id: '5',
+      file_name: 'Sample_1.mp4',
+      file_extension: '.mp4',
+      file_url: 'https://example.com/sample-video.mp4',
+      mime_type: 'video/mp4',
+      created_at: '2025-11-04T14:00:00Z',
+    },
+  ]);
 
   // Task description expanded state
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(true);
@@ -638,9 +686,13 @@ interface Photo {
         // Fetch task attachments
         try {
           const taskAttachments = await dashboardApi.getTaskAttachments(taskId);
-          setAttachments(taskAttachments);
+          // Only update if we got attachments from API, otherwise keep dummy data for testing
+          if (taskAttachments && taskAttachments.length > 0) {
+            setAttachments(taskAttachments);
+          }
         } catch (error) {
           console.error('Error fetching task attachments:', error);
+          // Keep dummy data on error
         }
         
         setLoading(false);
@@ -1114,289 +1166,6 @@ interface Photo {
     );
   };
 
-  const handleEditTimeEntry = (entry: TimeEntry) => {
-    if (entry.canEdit) {
-      setSelectedEntry(entry);
-      setEditStartTime(entry.startTime);
-      setEditEndTime(entry.endTime);
-      setShowEditModal(true);
-    } else {
-      Alert.alert('Cannot Edit', 'This entry has been revised by admin and cannot be edited.');
-    }
-  };
-
-  const handleSaveEdit = async () => {
-    if (!selectedEntry) return;
-    
-    try {
-      setLoading(true);
-      
-      // Get work date from selected entry
-      const workDate = selectedEntry.workDate || selectedEntry.date;
-      let workDateObj: Date;
-      
-      // Parse work date - could be in various formats
-      if (workDate) {
-        // Try to parse different date formats
-        const dateMatch = workDate.match(/(\d{4})-(\d{2})-(\d{2})/);
-        if (dateMatch) {
-          workDateObj = new Date(dateMatch[0] + 'T00:00:00');
-        } else {
-          // Try DD-MM-YYYY format
-          const dateMatch2 = workDate.match(/(\d{2})-(\d{2})-(\d{4})/);
-          if (dateMatch2) {
-            workDateObj = new Date(`${dateMatch2[3]}-${dateMatch2[2]}-${dateMatch2[1]}T00:00:00`);
-          } else {
-            // Use today's date as fallback
-            workDateObj = new Date();
-            workDateObj.setHours(0, 0, 0, 0);
-          }
-        }
-      } else {
-        workDateObj = new Date();
-        workDateObj.setHours(0, 0, 0, 0);
-      }
-      
-      // Combine work date with selected times
-      const startDate = new Date(workDateObj);
-      startDate.setHours(editStartTimeDate.getHours(), editStartTimeDate.getMinutes(), 0, 0);
-      
-      const endDate = new Date(workDateObj);
-      endDate.setHours(editEndTimeDate.getHours(), editEndTimeDate.getMinutes(), 0, 0);
-      
-      // Ensure end time is after start time (if end is before start, assume next day)
-      if (endDate <= startDate) {
-        endDate.setDate(endDate.getDate() + 1);
-      }
-      
-      const startTimeISO = startDate.toISOString();
-      const endTimeISO = endDate.toISOString();
-      
-      // Store original times before updating
-      const originalStartTimeStr = selectedEntry.startTime;
-      const originalEndTimeStr = selectedEntry.endTime;
-      const editingEntryId = selectedEntry.id;
-      
-      // Update via API
-      await dashboardApi.updateTimeEntry(selectedEntry.id, {
-        startTime: startTimeISO,
-        endTime: endTimeISO,
-      });
-      
-      // Reload time entries
-      if (taskId) {
-        const timeEntriesData = await dashboardApi.getTaskTimeEntries(taskId);
-        const formattedEntries = timeEntriesData.map((entry: any) => {
-          const workDate = new Date(entry.work_date);
-          const startTime = new Date(entry.start_time);
-          const endTime = new Date(entry.end_time);
-          
-          const durationMinutes = entry.duration_minutes || 0;
-          const hours = Math.floor(durationMinutes / 60);
-          const minutes = durationMinutes % 60;
-          const durationStr = hours > 0 
-            ? `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}` 
-            : `${minutes}m`;
-          
-          const formattedStartTime = startTime.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit',
-            hour12: true 
-          });
-          const formattedEndTime = endTime.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit',
-            hour12: true 
-          });
-          
-          // Check if entry was edited (has original times in API or updatedAt !== createdAt)
-          const isEdited = entry.updated_at && entry.created_at && entry.updated_at !== entry.created_at;
-          
-          // If this is the entry we just edited, use the stored original times
-          let originalStartTime: string | undefined;
-          let originalEndTime: string | undefined;
-          
-          if (entry.id.toString() === editingEntryId && originalStartTimeStr && originalEndTimeStr) {
-            originalStartTime = originalStartTimeStr;
-            originalEndTime = originalEndTimeStr;
-          } else if (entry.original_start_time) {
-            originalStartTime = new Date(entry.original_start_time).toLocaleTimeString('en-US', { 
-              hour: 'numeric', 
-              minute: '2-digit',
-              hour12: true 
-            });
-          }
-          
-          if (entry.id.toString() === editingEntryId && originalStartTimeStr && originalEndTimeStr) {
-            originalEndTime = originalEndTimeStr;
-          } else if (entry.original_end_time) {
-            originalEndTime = new Date(entry.original_end_time).toLocaleTimeString('en-US', { 
-              hour: 'numeric', 
-              minute: '2-digit',
-              hour12: true 
-            });
-          }
-          
-          return {
-            id: entry.id.toString(),
-            date: workDate.toLocaleDateString('en-GB', { 
-              day: '2-digit', 
-              month: '2-digit', 
-              year: 'numeric',
-              weekday: 'short'
-            }).replace(/\//g, '-'),
-            workDate: entry.work_date,
-            startTime: formattedStartTime,
-            endTime: formattedEndTime,
-            originalStartTime: originalStartTime,
-            originalEndTime: originalEndTime,
-            duration: durationStr,
-            durationSeconds: durationMinutes * 60,
-            project: entry.project_name || taskDetails?.projectName || '',
-            category: entry.category || timerCategory || 'Development',
-            canEdit: true, // Always allow employees to edit
-            notes: entry.description || '',
-            createdAt: entry.created_at,
-            updatedAt: entry.updated_at,
-          };
-        });
-        setTimeEntries(formattedEntries);
-      }
-      
-      setShowEditModal(false);
-      setSelectedEntry(null);
-      setEditStartTime('');
-      setEditEndTime('');
-      
-      Alert.alert('Success', 'Time entry updated successfully');
-    } catch (error: any) {
-      console.error('Error updating time entry:', error);
-      
-      let errorMessage = 'Failed to update time entry';
-      
-      // Show the actual error message from the backend
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.status === 403) {
-        errorMessage = 'You do not have permission to edit this time entry.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setShowEditModal(false);
-    setSelectedEntry(null);
-    setEditStartTime('');
-    setEditEndTime('');
-    setEditStartTimeDate(new Date());
-    setEditEndTimeDate(new Date());
-  };
-
-  const calculateDuration = (startDate: Date, endDate: Date) => {
-    // Get UTC hours and minutes to avoid timezone issues
-    const startHours = startDate.getUTCHours();
-    const startMinutes = startDate.getUTCMinutes();
-    const endHours = endDate.getUTCHours();
-    const endMinutes = endDate.getUTCMinutes();
-    
-    // Calculate total minutes from midnight
-    let totalStartMinutes = startHours * 60 + startMinutes;
-    let totalEndMinutes = endHours * 60 + endMinutes;
-    
-    // If end time is before or equal to start time, assume end time is next day (add 24 hours)
-    if (totalEndMinutes <= totalStartMinutes) {
-      totalEndMinutes += 24 * 60; // Add 24 hours in minutes
-    }
-    
-    const diffMinutes = totalEndMinutes - totalStartMinutes;
-    const diffHours = Math.floor(diffMinutes / 60);
-    const remainingMinutes = diffMinutes % 60;
-    
-    // Ensure non-negative values
-    if (diffHours < 0 || remainingMinutes < 0) {
-      return '0h 0m';
-    }
-    
-    return `${diffHours}h ${remainingMinutes}m`;
-  };
-
-  const handleEditTimePress = (timeType: 'start' | 'end') => {
-    setEditTimeType(timeType);
-    // Set initial picker value based on current edit time
-    if (timeType === 'start') {
-      setCurrentPickerTime(editStartTimeDate);
-    } else {
-      setCurrentPickerTime(editEndTimeDate);
-    }
-    setShowEditTimePicker(true);
-  };
-
-  const handleEditTimeChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      if (event.type === 'set' && selectedDate) {
-        // Convert to UTC date with same time
-        const utcDate = new Date(Date.UTC(2000, 0, 1, selectedDate.getHours(), selectedDate.getMinutes(), 0, 0));
-        
-        if (editTimeType === 'start') {
-          setEditStartTimeDate(utcDate);
-          setEditStartTime(selectedDate.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit',
-            hour12: true 
-          }));
-        } else {
-          setEditEndTimeDate(utcDate);
-          setEditEndTime(selectedDate.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit',
-            hour12: true 
-          }));
-        }
-        setShowEditTimePicker(false);
-      } else {
-        setShowEditTimePicker(false);
-      }
-    } else {
-      // iOS - update current picker time as user scrolls
-      if (selectedDate) {
-        // Convert to UTC date with same time
-        const utcDate = new Date(Date.UTC(2000, 0, 1, selectedDate.getHours(), selectedDate.getMinutes(), 0, 0));
-        setCurrentPickerTime(utcDate);
-      }
-    }
-  };
-
-  const handleConfirmEditTime = () => {
-    // Use currentPickerTime which has the latest value from the picker
-    // Convert to UTC date with same time
-    const utcDate = new Date(Date.UTC(2000, 0, 1, currentPickerTime.getHours(), currentPickerTime.getMinutes(), 0, 0));
-    
-    if (editTimeType === 'start') {
-      setEditStartTimeDate(utcDate);
-      setEditStartTime(currentPickerTime.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      }));
-    } else {
-      setEditEndTimeDate(utcDate);
-      setEditEndTime(currentPickerTime.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      }));
-    }
-    setShowEditTimePicker(false);
-  };
-
   // Live Timer functions - Cumulative tracking system
   const handleLiveTimerToggle = () => {
     if (isTimerRunning) {
@@ -1418,6 +1187,9 @@ interface Photo {
     setElapsedTime(0);
     setActualEndTime(null); // Clear end time when starting new session
     setEditableEndTime(null); // Clear editable end time when starting new session
+    // Reset manual time states when starting timer
+    setManualStartTimeSet(false);
+    setManualEndTimeSet(false);
   };
 
   const stopTimer = async () => {
@@ -1596,6 +1368,115 @@ interface Photo {
     setTimerNotes('');
   };
 
+  // Save manually selected time entry (when both start and end times are manually set)
+  const saveManualTimeEntry = async () => {
+    if (!editableStartTime || !editableEndTime) {
+      Alert.alert('Error', 'Please select both start time and end time');
+      return;
+    }
+
+    // Calculate duration
+    const duration = Math.floor((editableEndTime.getTime() - editableStartTime.getTime()) / 1000);
+    
+    // Validate duration
+    if (duration < 60) {
+      Alert.alert('Minimum Duration', 'Please record at least 1 minute of work time.');
+      return;
+    }
+    
+    if (duration <= 0) {
+      Alert.alert('Invalid Time', 'End time must be after start time.');
+      return;
+    }
+
+    try {
+      if (!taskId) {
+        Alert.alert('Error', 'Task ID is missing');
+        return;
+      }
+
+      // Format dates for API
+      const workDate = liveDate.toISOString().split('T')[0];
+      const startTimeISO = editableStartTime.toISOString();
+      const endTimeISO = editableEndTime.toISOString();
+
+      // Save to database
+      await dashboardApi.createTimeEntry({
+        taskId: taskId,
+        workDate: workDate,
+        startTime: startTimeISO,
+        endTime: endTimeISO,
+        description: timerNotes || '',
+      });
+
+      // Reload time entries from database
+      const timeEntriesData = await dashboardApi.getTaskTimeEntries(taskId);
+      
+      // Format time entries
+      const formattedEntries = timeEntriesData.map((entry: any) => {
+        const entryWorkDate = new Date(entry.work_date);
+        const startTime = new Date(entry.start_time);
+        const endTime = new Date(entry.end_time);
+        
+        const durationMinutes = entry.duration_minutes || 0;
+        const hours = Math.floor(durationMinutes / 60);
+        const minutes = durationMinutes % 60;
+        const durationStr = hours > 0 
+          ? `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}` 
+          : `${minutes}m`;
+
+        return {
+          id: entry.id.toString(),
+          date: entryWorkDate.toLocaleDateString('en-GB', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric',
+            weekday: 'short'
+          }).replace(/\//g, '-'),
+          workDate: entry.work_date,
+          startTime: startTime.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+          }),
+          endTime: endTime.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+          }),
+          originalStartTime: entry.original_start_time 
+            ? new Date(entry.original_start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+            : undefined,
+          originalEndTime: entry.original_end_time
+            ? new Date(entry.original_end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+            : undefined,
+          duration: durationStr,
+          durationSeconds: durationMinutes * 60,
+          project: entry.task_title || taskDetails?.title,
+          category: 'Work',
+          notes: entry.description || '',
+          canEdit: true,
+          createdAt: entry.created_at,
+          updatedAt: entry.updated_at,
+        };
+      });
+      
+      setTimeEntries(formattedEntries);
+      
+      // Reset manual time states
+      setManualStartTimeSet(false);
+      setManualEndTimeSet(false);
+      setEditableEndTime(null);
+      setTimerNotes('');
+      
+      Alert.alert('Success', 'Time entry saved successfully');
+    } catch (error: any) {
+      console.error('Error saving manual time entry:', error);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to save time entry. Please try again.';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
   // Live clock updater (shows current time before timer starts)
   useEffect(() => {
     if (!actualStartTime) {
@@ -1624,8 +1505,190 @@ interface Photo {
     return `${h}:${m}:${s}`;
   };
 
-  const handleTimeEntryPress = (entry: TimeEntry) => {
-    handleEditTimeEntry(entry);
+  // Edit time entry functions
+  const handleEditTimeEntry = (entry: TimeEntry) => {
+    setEditingEntry(entry);
+    setEditStartTime(entry.startTime);
+    setEditEndTime(entry.endTime);
+    
+    // Parse time strings to Date objects
+    const parseTimeToDate = (timeStr: string) => {
+      const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+      if (match) {
+        let hours = parseInt(match[1]);
+        const minutes = parseInt(match[2]);
+        const period = match[3];
+        
+        if (period) {
+          if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+          if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+        }
+        
+        const date = new Date();
+        date.setHours(hours, minutes, 0, 0);
+        return date;
+      }
+      return new Date();
+    };
+    
+    setEditStartDate(parseTimeToDate(entry.startTime));
+    setEditEndDate(parseTimeToDate(entry.endTime));
+    setShowEditTimeModal(true);
+  };
+
+  const handleEditTimePickerOpen = (type: 'start' | 'end') => {
+    setEditTimePickerType(type);
+    setEditPickerTime(type === 'start' ? editStartDate : editEndDate);
+    setShowEditTimePicker(true);
+  };
+
+  const handleEditTimePickerChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowEditTimePicker(false);
+      if (event.type === 'set' && selectedDate) {
+        updateEditTime(selectedDate);
+      }
+    } else if (selectedDate) {
+      setEditPickerTime(selectedDate);
+    }
+  };
+
+  const handleEditTimePickerConfirm = () => {
+    updateEditTime(editPickerTime);
+    setShowEditTimePicker(false);
+  };
+
+  const updateEditTime = (selectedDate: Date) => {
+    const timeStr = selectedDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    
+    if (editTimePickerType === 'start') {
+      setEditStartDate(selectedDate);
+      setEditStartTime(timeStr);
+    } else {
+      setEditEndDate(selectedDate);
+      setEditEndTime(timeStr);
+    }
+  };
+
+  const calculateEditDuration = () => {
+    const startMs = editStartDate.getHours() * 60 + editStartDate.getMinutes();
+    let endMs = editEndDate.getHours() * 60 + editEndDate.getMinutes();
+    
+    // If end is before start, assume next day
+    if (endMs <= startMs) {
+      endMs += 24 * 60;
+    }
+    
+    const diffMinutes = endMs - startMs;
+    const hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+    
+    return `${String(hours).padStart(2, '0')}hr ${String(minutes).padStart(2, '0')}min`;
+  };
+
+  const handleSaveEditTimeEntry = async () => {
+    if (!editingEntry) return;
+    
+    try {
+      setLoading(true);
+      
+      // Get work date from entry
+      const workDate = editingEntry.workDate || editingEntry.date;
+      let workDateObj: Date;
+      
+      if (workDate) {
+        const dateMatch = workDate.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (dateMatch) {
+          workDateObj = new Date(dateMatch[0] + 'T00:00:00');
+        } else {
+          const dateMatch2 = workDate.match(/(\d{2})-(\d{2})-(\d{4})/);
+          if (dateMatch2) {
+            workDateObj = new Date(`${dateMatch2[3]}-${dateMatch2[2]}-${dateMatch2[1]}T00:00:00`);
+          } else {
+            workDateObj = new Date();
+            workDateObj.setHours(0, 0, 0, 0);
+          }
+        }
+      } else {
+        workDateObj = new Date();
+        workDateObj.setHours(0, 0, 0, 0);
+      }
+      
+      // Combine work date with times
+      const startDate = new Date(workDateObj);
+      startDate.setHours(editStartDate.getHours(), editStartDate.getMinutes(), 0, 0);
+      
+      const endDate = new Date(workDateObj);
+      endDate.setHours(editEndDate.getHours(), editEndDate.getMinutes(), 0, 0);
+      
+      if (endDate <= startDate) {
+        endDate.setDate(endDate.getDate() + 1);
+      }
+      
+      // Update via API
+      await dashboardApi.updateTimeEntry(editingEntry.id, {
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      });
+      
+      // Reload time entries
+      if (taskId) {
+        const timeEntriesData = await dashboardApi.getTaskTimeEntries(taskId);
+        const formattedEntries = timeEntriesData.map((entry: any) => {
+          const entryWorkDate = new Date(entry.work_date);
+          const startTime = new Date(entry.start_time);
+          const endTime = new Date(entry.end_time);
+          
+          const durationMinutes = entry.duration_minutes || 0;
+          const hours = Math.floor(durationMinutes / 60);
+          const minutes = durationMinutes % 60;
+          const durationStr = hours > 0 
+            ? `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}` 
+            : `${minutes}m`;
+          
+          return {
+            id: entry.id.toString(),
+            date: entryWorkDate.toLocaleDateString('en-GB', { 
+              day: '2-digit', 
+              month: '2-digit', 
+              year: 'numeric',
+              weekday: 'short'
+            }).replace(/\//g, '-'),
+            workDate: entry.work_date,
+            startTime: startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+            endTime: endTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+            originalStartTime: entry.original_start_time 
+              ? new Date(entry.original_start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+              : undefined,
+            originalEndTime: entry.original_end_time
+              ? new Date(entry.original_end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+              : undefined,
+            duration: durationStr,
+            durationSeconds: durationMinutes * 60,
+            project: entry.project_name || taskDetails?.projectName || '',
+            category: entry.category || timerCategory || 'Development',
+            canEdit: true,
+            notes: entry.description || '',
+            createdAt: entry.created_at,
+            updatedAt: entry.updated_at,
+          };
+        });
+        setTimeEntries(formattedEntries);
+      }
+      
+      setShowEditTimeModal(false);
+      setEditingEntry(null);
+      Alert.alert('Success', 'Time entry updated successfully');
+    } catch (error: any) {
+      console.error('Error updating time entry:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to update time entry');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -1863,14 +1926,18 @@ interface Photo {
   const monthlyWeeklyData = productivityView === 'month' ? getMonthlyWeeklyData() : [];
   const maxHours = Math.max(...productivityData.map(d => d.hours), 1);
 
-  // Format elapsed time for display (HH:MM format)
-  const formatElapsedTime = (seconds: number) => {
+  // Format time for display (HH:MM format)
+  const formatTimeDisplay = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
   
-  const displayElapsedTime = formatElapsedTime(elapsedTime);
+  // Calculate total recorded time on this task (sum of all time entries)
+  const totalTaskTime = timeEntries.reduce((sum, entry) => sum + (entry.durationSeconds || 0), 0);
+  
+  // Add current running timer time to total if timer is running
+  const displayTotalTime = formatTimeDisplay(totalTaskTime + (isTimerRunning ? elapsedTime : 0));
 
   // Get start and end times for timer display
   const timerStartTimeStr = editableStartTime
@@ -1900,11 +1967,15 @@ interface Photo {
           setLiveStartTime(selectedDate);
           if (!isTimerRunning) {
             setTimerStartTime(selectedDate);
+            setManualStartTimeSet(true);
           }
         } else {
           setEditableEndTime(selectedDate);
           setLiveEndTime(selectedDate);
           setActualEndTime(selectedDate);
+          if (!isTimerRunning) {
+            setManualEndTimeSet(true);
+          }
         }
         setShowTimerTimePicker(false);
       } else if (event.type === 'dismissed') {
@@ -1918,11 +1989,15 @@ interface Photo {
           setLiveStartTime(selectedDate);
           if (!isTimerRunning) {
             setTimerStartTime(selectedDate);
+            setManualStartTimeSet(true);
           }
         } else {
           setEditableEndTime(selectedDate);
           setLiveEndTime(selectedDate);
           setActualEndTime(selectedDate);
+          if (!isTimerRunning) {
+            setManualEndTimeSet(true);
+          }
         }
       }
     }
@@ -2040,7 +2115,7 @@ interface Photo {
             </View>
             <View style={styles.timerHeaderRight}>
               <Text style={styles.elapsedLabel}>Elapsed</Text>
-              <Text style={styles.elapsedTime}>{displayElapsedTime}</Text>
+              <Text style={styles.elapsedTime}>{displayTotalTime}</Text>
             </View>
           </View>
           
@@ -2048,15 +2123,28 @@ interface Photo {
             <View style={styles.timerTimeColumn}>
               <Text style={styles.timerTimeLabel}>Start time</Text>
               <TouchableOpacity onPress={() => handleTimerTimeClick('start')}>
-                <Text style={styles.timerTimeValue}>{timerStartTimeStr}</Text>
+                <Text style={[styles.timerTimeValue, manualStartTimeSet && !isTimerRunning && styles.timerTimeValueSelected]}>
+                  {timerStartTimeStr}
+                </Text>
               </TouchableOpacity>
             </View>
             <View style={styles.timerTimeColumn}>
               <Text style={styles.timerTimeLabel}>End Time</Text>
               <TouchableOpacity onPress={() => handleTimerTimeClick('end')}>
-                <Text style={styles.timerTimeValue}>{timerEndTimeStr}</Text>
+                <Text style={[styles.timerTimeValue, manualEndTimeSet && !isTimerRunning && styles.timerTimeValueSelected]}>
+                  {timerEndTimeStr}
+                </Text>
               </TouchableOpacity>
             </View>
+            {/* Show tick button when both times are manually set and timer is NOT running */}
+            {manualStartTimeSet && manualEndTimeSet && !isTimerRunning && editableEndTime && (
+              <TouchableOpacity 
+                style={styles.manualSaveButton}
+                onPress={saveManualTimeEntry}
+              >
+                <Ionicons name="checkmark-circle" size={28} color="#34C759" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity 
               style={styles.stopTimerButton}
               onPress={handleLiveTimerToggle}
@@ -2172,7 +2260,86 @@ interface Photo {
 
         <TouchableOpacity 
           style={styles.bottomNavItem}
-          onPress={() => {
+          onPress={async () => {
+            // Refresh time entries before showing modal
+            try {
+              console.log('Fetching time entries for taskId:', taskId);
+              const timeEntriesData = await dashboardApi.getTaskTimeEntries(taskId);
+              console.log('Refreshed time entries count:', timeEntriesData?.length);
+              
+              if (!timeEntriesData || timeEntriesData.length === 0) {
+                console.log('No time entries returned from API');
+                setShowStatusRecordModal(true);
+                return;
+              }
+              
+              const formattedEntries = timeEntriesData.map((entry: any) => {
+                const workDate = new Date(entry.work_date);
+                const startTime = new Date(entry.start_time);
+                const endTime = new Date(entry.end_time);
+                
+                const durationMinutes = entry.duration_minutes || 0;
+                const hours = Math.floor(durationMinutes / 60);
+                const minutes = durationMinutes % 60;
+                const durationStr = hours > 0 
+                  ? `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}` 
+                  : `${minutes}m`;
+
+                const formattedStartTime = startTime.toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: '2-digit',
+                  hour12: true 
+                });
+                const formattedEndTime = endTime.toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: '2-digit',
+                  hour12: true 
+                });
+                
+                const isEdited = entry.updated_at && entry.created_at && entry.updated_at !== entry.created_at;
+                const originalStartTime = entry.original_start_time 
+                  ? new Date(entry.original_start_time).toLocaleTimeString('en-US', { 
+                      hour: 'numeric', 
+                      minute: '2-digit',
+                      hour12: true 
+                    })
+                  : undefined;
+                const originalEndTime = entry.original_end_time
+                  ? new Date(entry.original_end_time).toLocaleTimeString('en-US', { 
+                      hour: 'numeric', 
+                      minute: '2-digit',
+                      hour12: true 
+                    })
+                  : undefined;
+                
+                return {
+                  id: entry.id.toString(),
+                  date: workDate.toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    year: 'numeric',
+                    weekday: 'short'
+                  }).replace(/\//g, '-'),
+                  workDate: entry.work_date,
+                  startTime: formattedStartTime,
+                  endTime: formattedEndTime,
+                  originalStartTime: originalStartTime,
+                  originalEndTime: originalEndTime,
+                  duration: durationStr,
+                  durationSeconds: durationMinutes * 60,
+                  project: entry.task_title || taskDetails.title,
+                  category: 'Work',
+                  notes: entry.description || '',
+                  canEdit: true,
+                  createdAt: entry.created_at,
+                  updatedAt: entry.updated_at,
+                };
+              });
+              
+              setTimeEntries(formattedEntries);
+            } catch (error) {
+              console.error('Error refreshing time entries:', error);
+            }
             setShowStatusRecordModal(true);
           }}
         >
@@ -2333,7 +2500,7 @@ interface Photo {
                 style={styles.attachmentsModalBackButton}
                 onPress={() => setShowAttachmentsModal(false)}
               >
-                <Ionicons name="arrow-back" size={24} color="#000000" />
+                <Ionicons name="chevron-back" size={28} color="#000000" />
               </TouchableOpacity>
               <Text style={styles.attachmentsModalTitle}>Attachments</Text>
               <TouchableOpacity style={styles.attachmentsModalMoreButton}>
@@ -2470,8 +2637,11 @@ interface Photo {
                           key={attachment.id || index}
                           style={styles.attachmentGridItem}
                           onPress={() => {
-                            // Open attachment
-                            if (attachment.file_url) {
+                            // Open full screen viewer for photos/videos, link for documents
+                            if (isPhoto || isVideo) {
+                              setSelectedAttachment(attachment);
+                              setShowAttachmentViewer(true);
+                            } else if (attachment.file_url) {
                               Linking.openURL(attachment.file_url);
                             }
                           }}
@@ -2517,6 +2687,110 @@ interface Photo {
         </SafeAreaWrapper>
       </Modal>
 
+      {/* Attachment Full Screen Viewer Modal */}
+      <Modal
+        visible={showAttachmentViewer}
+        animationType="fade"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowAttachmentViewer(false)}
+      >
+        <View style={styles.attachmentViewerContainer}>
+          {/* Header */}
+          <View style={styles.attachmentViewerHeader}>
+            <View style={styles.attachmentViewerHeaderLeft}>
+              <TouchableOpacity 
+                style={styles.attachmentViewerBackButton}
+                onPress={() => setShowAttachmentViewer(false)}
+              >
+                <Ionicons name="chevron-back" size={28} color="#000000" />
+              </TouchableOpacity>
+              <Text style={styles.attachmentViewerTitle}>Attachments</Text>
+            </View>
+            <View>
+              <TouchableOpacity 
+                style={styles.attachmentViewerMoreButton}
+                onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
+              >
+                <Ionicons name="ellipsis-vertical" size={24} color="#000000" />
+              </TouchableOpacity>
+              {showAttachmentMenu && (
+                <View style={styles.attachmentMenuDropdown}>
+                  <TouchableOpacity 
+                    style={styles.attachmentMenuItem}
+                    onPress={() => {
+                      setShowAttachmentMenu(false);
+                      // Handle save
+                    }}
+                  >
+                    <Text style={styles.attachmentMenuItemText}>Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.attachmentMenuItem}
+                    onPress={() => {
+                      setShowAttachmentMenu(false);
+                      // Handle share
+                    }}
+                  >
+                    <Text style={styles.attachmentMenuItemText}>Share</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.attachmentMenuItem}
+                    onPress={() => {
+                      setShowAttachmentMenu(false);
+                      // Handle delete
+                    }}
+                  >
+                    <Text style={styles.attachmentMenuItemText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Full Screen Image/Video */}
+          <View style={styles.attachmentViewerContent}>
+            {selectedAttachment && (
+              <>
+                {(selectedAttachment.file_extension === '.mp4' || 
+                  selectedAttachment.file_extension === '.mov' || 
+                  selectedAttachment.mime_type?.includes('video')) ? (
+                  <View style={styles.attachmentViewerVideoContainer}>
+                    <Image
+                      source={{ uri: selectedAttachment.file_url }}
+                      style={styles.attachmentViewerImage}
+                      resizeMode="contain"
+                    />
+                    <TouchableOpacity 
+                      style={styles.attachmentViewerPlayButton}
+                      onPress={() => {
+                        if (selectedAttachment.file_url) {
+                          Linking.openURL(selectedAttachment.file_url);
+                        }
+                      }}
+                    >
+                      <Ionicons name="play-circle" size={64} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: selectedAttachment.file_url }}
+                    style={styles.attachmentViewerImage}
+                    resizeMode="contain"
+                  />
+                )}
+              </>
+            )}
+          </View>
+
+          {/* File Name at Bottom */}
+          <View style={styles.attachmentViewerFooter}>
+            <Text style={styles.attachmentViewerFileName}>
+              {selectedAttachment?.original_name || selectedAttachment?.file_name || 'Untitled'}
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
       {/* Status Record Modal */}
       <Modal
         visible={showStatusRecordModal}
@@ -2532,7 +2806,7 @@ interface Photo {
                 style={styles.statusRecordBackButton}
                 onPress={() => setShowStatusRecordModal(false)}
               >
-                <Ionicons name="arrow-back" size={24} color="#000000" />
+                <Ionicons name="chevron-back" size={28} color="#000000" />
               </TouchableOpacity>
               <Text style={styles.statusRecordTitle}>Status Record</Text>
               <TouchableOpacity style={styles.statusRecordMoreButton}>
@@ -2541,31 +2815,51 @@ interface Photo {
             </View>
 
             {/* Content */}
-            <ScrollView style={styles.statusRecordContent}>
+            <ScrollView style={styles.statusRecordContent} showsVerticalScrollIndicator={false}>
               {(() => {
+                console.log('Status Modal - timeEntries:', timeEntries);
+                console.log('Status Modal - timeEntries count:', timeEntries.length);
+                
+                // Show empty state if no time entries
+                if (timeEntries.length === 0) {
+                  return (
+                    <View style={styles.srEmptyState}>
+                      <Ionicons name="time-outline" size={48} color="#8E8E93" />
+                      <Text style={styles.srEmptyStateText}>No time entries recorded</Text>
+                      <Text style={styles.srEmptyStateSubtext}>Start the timer to record your work</Text>
+                    </View>
+                  );
+                }
+                
                 // Group time entries by date
                 const entriesByDate: { [key: string]: TimeEntry[] } = {};
                 timeEntries.forEach(entry => {
-                  // Use workDate (YYYY-MM-DD format) if available, otherwise parse from date string
-                  let dateKey = entry.workDate;
-                  if (!dateKey) {
-                    // Try to extract date from formatted date string (e.g., "02-11-2025, Mon")
+                  let dateKey = '';
+                  
+                  // First try to get date from workDate (ISO format like "2026-01-14T18:30:00.000Z")
+                  if (entry.workDate) {
+                    if (entry.workDate.includes('T')) {
+                      // Extract just the date part from ISO datetime
+                      dateKey = entry.workDate.split('T')[0];
+                    } else if (entry.workDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                      // Already in YYYY-MM-DD format
+                      dateKey = entry.workDate;
+                    }
+                  }
+                  
+                  // Fallback: try to parse from date string (format: "15-01-2026, Wed")
+                  if (!dateKey && entry.date) {
                     const datePart = entry.date.split(',')[0].trim();
                     if (datePart) {
-                      // Parse DD-MM-YYYY format
                       const parts = datePart.split('-');
                       if (parts.length === 3) {
                         // Convert DD-MM-YYYY to YYYY-MM-DD
                         dateKey = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                      } else {
-                        // Try parsing as-is
-                        const parsedDate = new Date(datePart);
-                        if (!isNaN(parsedDate.getTime())) {
-                          dateKey = parsedDate.toISOString().split('T')[0];
-                        }
                       }
                     }
                   }
+                  
+                  console.log('Entry:', entry.id, 'workDate:', entry.workDate, '-> dateKey:', dateKey);
                   
                   if (dateKey) {
                     if (!entriesByDate[dateKey]) {
@@ -2575,258 +2869,165 @@ interface Photo {
                   }
                 });
 
-                // Sort dates descending (newest first)
-                const sortedDates = Object.keys(entriesByDate).sort((a, b) => {
-                  return new Date(b).getTime() - new Date(a).getTime();
-                });
+                const sortedDates = Object.keys(entriesByDate).sort((a, b) => 
+                  new Date(b).getTime() - new Date(a).getTime()
+                );
+                
+                console.log('Sorted dates:', sortedDates);
 
-                return sortedDates
-                  .map((dateKey) => {
-                    const dateEntries = entriesByDate[dateKey];
-                    
-                    // Parse date - dateKey should be in YYYY-MM-DD format
-                    let date: Date;
-                    if (dateKey.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                      // YYYY-MM-DD format
-                      date = new Date(dateKey + 'T00:00:00');
-                    } else {
-                      // Try parsing as-is
-                      date = new Date(dateKey);
-                    }
-                    
-                    // Validate date
-                    if (isNaN(date.getTime())) {
-                      console.error('Invalid date:', dateKey);
-                      return null;
-                    }
-                    
-                    const dateStr = date.toLocaleDateString('en-GB', { 
-                      day: '2-digit', 
-                      month: 'short', 
-                      year: 'numeric' 
-                    });
-                    
-                    // Double-check date string is valid
-                    if (!dateStr || dateStr === 'Invalid Date' || dateStr.includes('Invalid')) {
-                      console.error('Invalid date string:', dateStr, 'from dateKey:', dateKey);
-                      return null;
-                    }
-                    
-                    // Calculate total duration for this date
-                    const totalSeconds = dateEntries.reduce((sum, entry) => {
-                      return sum + (entry.durationSeconds || 0);
-                    }, 0);
-                    const totalHours = Math.floor(totalSeconds / 3600);
-                    const totalMinutes = Math.floor((totalSeconds % 3600) / 60);
-                    const totalDurationStr = `${totalHours}hr ${totalMinutes}min`;
+                return sortedDates.map((dateKey) => {
+                  const dateEntries = entriesByDate[dateKey];
+                  const date = new Date(dateKey + 'T00:00:00');
+                  if (isNaN(date.getTime())) return null;
 
-                    // Check if any entry was edited
-                    const hasEdited = dateEntries.some(entry => entry.updatedAt && entry.createdAt && entry.updatedAt !== entry.createdAt);
-                    const isExpanded = expandedDates.has(dateKey);
+                  const dateStr = date.toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric' 
+                  });
 
-                    // Get photos for this date (filter photos by date if available)
-                    const datePhotos = photos.filter(photo => {
-                      try {
-                        const photoDate = new Date(photo.timestamp);
-                        const photoDateStr = photoDate.toISOString().split('T')[0];
-                        return photoDateStr === dateKey;
-                      } catch {
-                        return false;
-                      }
-                    });
-                    
-                    // Also include photo attachments from backend for this date
-                    const photoAttachments = attachments.filter(attachment => {
-                      // Check if it's a photo
-                      const isPhoto = attachment.is_image || 
-                        attachment.file_extension === '.jpg' || 
-                        attachment.file_extension === '.jpeg' || 
-                        attachment.file_extension === '.png' || 
-                        attachment.file_extension === '.gif' ||
-                        attachment.mime_type?.startsWith('image/');
-                      
-                      if (!isPhoto || !attachment.file_url) return false;
-                      
-                      // Try to match by date (use created_at, uploaded_at, or upload_date)
-                      try {
-                        const attachmentDate = attachment.created_at || 
-                          attachment.uploaded_at || 
-                          attachment.upload_date ||
-                          attachment.createdAt;
-                        if (attachmentDate) {
-                          const attachDate = new Date(attachmentDate);
-                          const attachDateStr = attachDate.toISOString().split('T')[0];
-                          return attachDateStr === dateKey;
-                        }
-                      } catch {
-                        // If date parsing fails, skip this attachment
-                      }
-                      return false;
-                    }).map(attachment => ({
-                      id: attachment.id || attachment.attachment_id || `attach_${attachment.file_url}`,
-                      uri: attachment.file_url,
-                      timestamp: attachment.created_at || attachment.uploaded_at || attachment.upload_date || new Date().toISOString(),
-                      caption: attachment.original_name || attachment.file_name || 'Photo',
-                      location: undefined,
-                      metadata: {
-                        taskTitle: taskDetails.title,
-                        projectName: taskDetails.projectName,
-                        taskId: taskId,
-                      },
-                    }));
-                    
-                    // Combine local photos and attachment photos
-                    const allDatePhotos = [...datePhotos, ...photoAttachments];
+                  // Calculate total duration
+                  const totalSeconds = dateEntries.reduce((sum, entry) => 
+                    sum + (entry.durationSeconds || 0), 0
+                  );
+                  const totalHours = Math.floor(totalSeconds / 3600);
+                  const totalMinutes = Math.floor((totalSeconds % 3600) / 60);
 
-                    return (
-                    <View key={dateKey} style={styles.statusRecordDateSection}>
-                      {/* Date Header */}
+                  const hasEdited = dateEntries.some(entry => 
+                    entry.updatedAt && entry.createdAt && entry.updatedAt !== entry.createdAt
+                  );
+                  const isExpanded = expandedDates.has(dateKey);
+
+                  // Get photos for this date
+                  const datePhotos = photos.filter(photo => {
+                    try {
+                      const photoDateStr = new Date(photo.timestamp).toISOString().split('T')[0];
+                      return photoDateStr === dateKey;
+                    } catch { return false; }
+                  });
+
+                  return (
+                    <View key={dateKey} style={styles.srDateSection}>
+                      {/* Date Header Row */}
                       <TouchableOpacity
-                        style={styles.statusRecordDateHeader}
+                        style={styles.srDateHeader}
                         onPress={() => {
                           const newExpanded = new Set(expandedDates);
-                          if (isExpanded) {
-                            newExpanded.delete(dateKey);
-                          } else {
-                            newExpanded.add(dateKey);
-                          }
+                          isExpanded ? newExpanded.delete(dateKey) : newExpanded.add(dateKey);
                           setExpandedDates(newExpanded);
                         }}
                       >
-                        <Text style={styles.statusRecordDateText}>{dateStr}</Text>
-                        <View style={styles.statusRecordDateMiddle}>
-                          <Text style={styles.statusRecordDateDuration}>{totalDurationStr}</Text>
+                        <Text style={styles.srDateText}>{dateStr}</Text>
+                        <View style={styles.srDateDuration}>
+                          <Text style={styles.srDurationNum}>{String(totalHours).padStart(2, '0')}</Text>
+                          <Text style={styles.srDurationUnit}>hr </Text>
+                          <Text style={styles.srDurationNum}>{String(totalMinutes).padStart(2, '0')}</Text>
+                          <Text style={styles.srDurationUnit}>min</Text>
                         </View>
-                        <View style={styles.statusRecordDateHeaderRight}>
-                          {hasEdited && (
-                            <Text style={styles.statusRecordEdited}>edited</Text>
-                          )}
-                          <Ionicons 
-                            name={isExpanded ? "chevron-up" : "chevron-down"} 
-                            size={20} 
-                            color="#8E8E93" 
-                          />
-                        </View>
+                        {hasEdited && <Text style={styles.srEditedLabel}>edited</Text>}
+                        <Ionicons 
+                          name={isExpanded ? "chevron-up" : "chevron-down"} 
+                          size={20} 
+                          color="#8E8E93" 
+                        />
                       </TouchableOpacity>
 
                       {/* Expanded Content */}
                       {isExpanded && (
-                        <View style={styles.statusRecordDateContent}>
+                        <View style={styles.srExpandedContent}>
                           {/* Time Entries */}
                           {dateEntries.map((entry, index) => {
                             const isEdited = entry.updatedAt && entry.createdAt && entry.updatedAt !== entry.createdAt;
                             
-                            // Parse duration to separate numbers and units
-                            const parseDuration = (durationStr: string) => {
-                              // Match patterns like "4m", "3h 15m", "2h", etc.
-                              const parts = durationStr.match(/(\d+)([hm])/g) || [];
-                              return parts.map(part => {
-                                const match = part.match(/(\d+)([hm])/);
-                                if (match) {
-                                  return { number: match[1], unit: match[2] };
-                                }
-                                return null;
-                              }).filter(Boolean);
+                            // Parse duration for current times
+                            const durationSec = entry.durationSeconds || 0;
+                            const hrs = Math.floor(durationSec / 3600);
+                            const mins = Math.floor((durationSec % 3600) / 60);
+
+                            // Parse time to get just HH:MM
+                            const parseTime = (timeStr: string) => {
+                              const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+                              return match ? `${match[1].padStart(2, '0')}:${match[2]}` : timeStr;
                             };
-                            
-                            const durationParts = parseDuration(entry.duration);
-                            
+
+                            // Calculate original duration if edited
+                            let originalHrs = 0;
+                            let originalMins = 0;
+                            if (isEdited && entry.originalStartTime && entry.originalEndTime) {
+                              const parseTimeToMinutes = (timeStr: string) => {
+                                const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+                                if (match) {
+                                  let hours = parseInt(match[1]);
+                                  const minutes = parseInt(match[2]);
+                                  const period = match[3];
+                                  if (period) {
+                                    if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+                                    if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+                                  }
+                                  return hours * 60 + minutes;
+                                }
+                                return 0;
+                              };
+                              const origStartMins = parseTimeToMinutes(entry.originalStartTime);
+                              let origEndMins = parseTimeToMinutes(entry.originalEndTime);
+                              if (origEndMins <= origStartMins) origEndMins += 24 * 60;
+                              const origDiffMins = origEndMins - origStartMins;
+                              originalHrs = Math.floor(origDiffMins / 60);
+                              originalMins = origDiffMins % 60;
+                            }
+
                             return (
-                              <View key={entry.id || index} style={styles.statusRecordTimeEntry}>
-                                <View style={styles.statusRecordTimeRangeContainer}>
-                                  {isEdited && entry.originalStartTime && entry.originalEndTime ? (
-                                    <View>
-                                      <Text style={styles.statusRecordTimeRangeOriginal}>
-                                        <Text style={styles.statusRecordTimeStrikethrough}>
-                                          {entry.originalStartTime} to {entry.originalEndTime}
-                                        </Text>
-                                      </Text>
-                                      <Text style={[styles.statusRecordTimeRange, styles.statusRecordTimeRangeEdited]}>
-                                        {entry.startTime} to {entry.endTime}
-                                      </Text>
-                                    </View>
+                              <View key={entry.id || index} style={styles.srTimeEntry}>
+                                {/* Current times row */}
+                                <View style={styles.srTimeRow}>
+                                  <Text style={styles.srTimeText}>{parseTime(entry.startTime)}</Text>
+                                  <Text style={styles.srTimeText}>{parseTime(entry.endTime)}</Text>
+                                  <View style={styles.srEntryDuration}>
+                                    <Text style={styles.srDurationNum}>{String(hrs).padStart(2, '0')}</Text>
+                                    <Text style={styles.srDurationUnit}>hr </Text>
+                                    <Text style={styles.srDurationNum}>{String(mins).padStart(2, '0')}</Text>
+                                    <Text style={styles.srDurationUnit}>min</Text>
+                                  </View>
+                                  {isEdited ? (
+                                    <Ionicons name="checkmark" size={20} color="#877ED2" />
                                   ) : (
-                                    <Text style={styles.statusRecordTimeRange}>
-                                      {entry.startTime} to {entry.endTime}
-                                    </Text>
+                                    <TouchableOpacity 
+                                      onPress={() => handleEditTimeEntry(entry)}
+                                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                      <Ionicons name="create-outline" size={20} color="#877ED2" />
+                                    </TouchableOpacity>
                                   )}
                                 </View>
-                                <View style={styles.statusRecordTimeEntryRight}>
-                                  <View style={styles.statusRecordTimeEntryDurationRow}>
-                                    {durationParts.length > 0 ? (
-                                      durationParts.map((part, idx) => (
-                                        <View key={idx} style={styles.statusRecordDurationPart}>
-                                          <Text style={[styles.statusRecordDurationNumber, isEdited && styles.statusRecordTimeEntryDurationEdited]}>
-                                            {part?.number}
-                                          </Text>
-                                          <Text style={[styles.statusRecordDurationUnit, isEdited && styles.statusRecordTimeEntryDurationEdited]}>
-                                            {part?.unit}
-                                          </Text>
-                                          {idx < durationParts.length - 1 && <Text style={styles.statusRecordDurationSpace}> </Text>}
-                                        </View>
-                                      ))
-                                    ) : (
-                                      <Text style={[styles.statusRecordTimeEntryDuration, isEdited && styles.statusRecordTimeEntryDurationEdited]}>
-                                        {entry.duration}
+                                {/* Original times (if edited) - shown below in purple */}
+                                {isEdited && entry.originalStartTime && entry.originalEndTime && (
+                                  <View style={styles.srTimeRowEdited}>
+                                    <Text style={styles.srTimeOriginal}>{parseTime(entry.originalStartTime)}</Text>
+                                    <Text style={styles.srTimeOriginal}>{parseTime(entry.originalEndTime)}</Text>
+                                    <View style={styles.srEntryDuration}>
+                                      <Text style={[styles.srDurationNum, styles.srDurationEdited]}>
+                                        {String(originalHrs).padStart(2, '0')}
                                       </Text>
-                                    )}
-                                    {isEdited && (
-                                      <Text style={styles.statusRecordTimeEntryEdited}>edited</Text>
-                                    )}
+                                      <Text style={[styles.srDurationUnit, styles.srDurationEdited]}>hr </Text>
+                                      <Text style={[styles.srDurationNum, styles.srDurationEdited]}>
+                                        {String(originalMins).padStart(2, '0')}
+                                      </Text>
+                                      <Text style={[styles.srDurationUnit, styles.srDurationEdited]}>min</Text>
+                                    </View>
+                                    <Text style={styles.srEditedLabel}>edited</Text>
                                   </View>
-                                  <TouchableOpacity
-                                    style={styles.statusRecordEditButton}
-                                    onPress={() => {
-                                      // Parse time strings to Date objects
-                                      const parseTimeString = (timeStr: string) => {
-                                        // Parse time string like "08:03 AM" or "11:54 AM"
-                                        const [time, period] = timeStr.split(' ');
-                                        const [hours, minutes] = time.split(':');
-                                        let hour24 = parseInt(hours);
-                                        const min = parseInt(minutes);
-                                        
-                                        if (period === 'PM' && hour24 !== 12) {
-                                          hour24 += 12;
-                                        } else if (period === 'AM' && hour24 === 12) {
-                                          hour24 = 0;
-                                        }
-                                        
-                                        // Use UTC to avoid timezone issues
-                                        const baseDate = new Date(Date.UTC(2000, 0, 1, hour24, min, 0, 0));
-                                        return baseDate;
-                                      };
-                                      
-                                      // Open edit modal for this entry
-                                      setSelectedEntry(entry);
-                                      setEditStartTime(entry.startTime);
-                                      setEditEndTime(entry.endTime);
-                                      setEditStartTimeDate(parseTimeString(entry.startTime));
-                                      setEditEndTimeDate(parseTimeString(entry.endTime));
-                                      setShowEditModal(true);
-                                    }}
-                                  >
-                                    {isEdited ? (
-                                      <Ionicons name="checkmark-circle" size={20} color="#877ED2" />
-                                    ) : (
-                                      <Ionicons name="create-outline" size={20} color="#8E8E93" />
-                                    )}
-                                  </TouchableOpacity>
-                                </View>
+                                )}
                               </View>
                             );
                           })}
 
-                          {/* Photos */}
-                          {allDatePhotos.length > 0 && (
-                            <View style={styles.statusRecordPhotosSection}>
-                              <Text style={styles.statusRecordPhotosTitle}>
-                                Photos ({allDatePhotos.length})
-                              </Text>
-                              <View style={styles.statusRecordPhotosGrid}>
-                                {allDatePhotos.map((photo, index) => (
+                          {/* Photos Section */}
+                          {datePhotos.length > 0 && (
+                            <View style={styles.srPhotosSection}>
+                              <View style={styles.srPhotosRow}>
+                                {datePhotos.slice(0, 4).map((photo, idx) => (
                                   <TouchableOpacity
-                                    key={photo.id || index}
-                                    style={styles.statusRecordPhotoItem}
+                                    key={photo.id || idx}
                                     onPress={() => {
                                       setSelectedPhoto(photo);
                                       setShowPhotoModal(true);
@@ -2834,7 +3035,7 @@ interface Photo {
                                   >
                                     <Image
                                       source={{ uri: photo.uri }}
-                                      style={styles.statusRecordPhotoThumbnail}
+                                      style={styles.srPhotoThumb}
                                       resizeMode="cover"
                                     />
                                   </TouchableOpacity>
@@ -2843,34 +3044,35 @@ interface Photo {
                             </View>
                           )}
 
-                          {/* Messages/Notes */}
+                          {/* Notes/Messages Section */}
                           {dateEntries.some(e => e.notes) && (
-                            <View style={styles.statusRecordMessages}>
-                              {dateEntries
-                                .filter(e => e.notes)
-                                .map((entry, index) => {
-                                  const noteDate = new Date(entry.createdAt || new Date());
-                                  const noteTime = noteDate.toLocaleTimeString('en-US', { 
-                                    hour: 'numeric', 
+                            <View style={styles.srMessagesSection}>
+                              {dateEntries.filter(e => e.notes).map((entry, idx) => {
+                                const noteTime = new Date(entry.createdAt || new Date())
+                                  .toLocaleTimeString('en-US', { 
+                                    hour: '2-digit', 
                                     minute: '2-digit',
-                                    hour12: true 
+                                    hour12: false 
                                   });
-                                  return (
-                                    <View key={index} style={styles.statusRecordMessage}>
-                                      <Text style={styles.statusRecordMessageTime}>{noteTime}</Text>
-                                      <Text style={styles.statusRecordMessageText}>{entry.notes}</Text>
+                                return (
+                                  <View key={idx}>
+                                    {/* User's note (left aligned) */}
+                                    <View style={styles.srMessageLeft}>
+                                      <Text style={styles.srMessageTime}>{noteTime}</Text>
+                                      <Text style={styles.srMessageText}>{entry.notes}</Text>
                                     </View>
-                                  );
-                                })}
+                                  </View>
+                                );
+                              })}
                             </View>
                           )}
                         </View>
                       )}
                     </View>
                   );
-                  })
-                  .filter(Boolean); // Remove null entries
+                }).filter(Boolean);
               })()}
+              <View style={{ height: 32 }} />
             </ScrollView>
           </View>
         </SafeAreaWrapper>
@@ -2878,28 +3080,30 @@ interface Photo {
 
       {/* Edit Time Entry Modal */}
       <Modal
-        visible={showEditModal}
+        visible={showEditTimeModal}
         transparent={true}
         animationType="slide"
-        onRequestClose={handleCancelEdit}
+        onRequestClose={() => setShowEditTimeModal(false)}
       >
-        <View style={styles.editModalOverlay}>
-          <View style={styles.editModalContent}>
-            <View style={styles.editModalHeader}>
-              <TouchableOpacity onPress={handleCancelEdit}>
+        <View style={styles.editTimeModalOverlay}>
+          <View style={styles.editTimeModalContent}>
+            {/* Header */}
+            <View style={styles.editTimeModalHeader}>
+              <TouchableOpacity onPress={() => setShowEditTimeModal(false)}>
                 <Ionicons name="close" size={24} color="#000000" />
               </TouchableOpacity>
-              <Text style={styles.editModalTitle}>Edit Time Entry</Text>
+              <Text style={styles.editTimeModalTitle}>Edit Time Entry</Text>
               <View style={{ width: 24 }} />
             </View>
 
-            <View style={styles.editModalBody}>
+            {/* Body */}
+            <View style={styles.editTimeModalBody}>
               {/* Start Time */}
               <View style={styles.editTimeRow}>
                 <Text style={styles.editTimeLabel}>Start Time</Text>
                 <TouchableOpacity
                   style={styles.editTimeButton}
-                  onPress={() => handleEditTimePress('start')}
+                  onPress={() => handleEditTimePickerOpen('start')}
                 >
                   <Text style={styles.editTimeValue}>{editStartTime || 'Select time'}</Text>
                   <Ionicons name="time-outline" size={20} color="#877ED2" />
@@ -2911,7 +3115,7 @@ interface Photo {
                 <Text style={styles.editTimeLabel}>End Time</Text>
                 <TouchableOpacity
                   style={styles.editTimeButton}
-                  onPress={() => handleEditTimePress('end')}
+                  onPress={() => handleEditTimePickerOpen('end')}
                 >
                   <Text style={styles.editTimeValue}>{editEndTime || 'Select time'}</Text>
                   <Ionicons name="time-outline" size={20} color="#877ED2" />
@@ -2920,31 +3124,30 @@ interface Photo {
 
               {/* Duration Preview */}
               {editStartTime && editEndTime && (
-                <View style={styles.editDurationPreview}>
-                  <Text style={styles.editDurationLabel}>Duration:</Text>
-                  <Text style={styles.editDurationValue}>
-                    {calculateDuration(editStartTimeDate, editEndTimeDate)}
-                  </Text>
+                <View style={styles.editTimeDurationPreview}>
+                  <Text style={styles.editTimeDurationLabel}>Duration:</Text>
+                  <Text style={styles.editTimeDurationValue}>{calculateEditDuration()}</Text>
                 </View>
               )}
             </View>
 
-            <View style={styles.editModalFooter}>
+            {/* Footer */}
+            <View style={styles.editTimeModalFooter}>
               <TouchableOpacity
-                style={styles.editCancelButton}
-                onPress={handleCancelEdit}
+                style={styles.editTimeCancelButton}
+                onPress={() => setShowEditTimeModal(false)}
               >
-                <Text style={styles.editCancelButtonText}>Cancel</Text>
+                <Text style={styles.editTimeCancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.editSaveButton, (!editStartTime || !editEndTime) && styles.editSaveButtonDisabled]}
-                onPress={handleSaveEdit}
+                style={[styles.editTimeSaveButton, (!editStartTime || !editEndTime) && styles.editTimeSaveButtonDisabled]}
+                onPress={handleSaveEditTimeEntry}
                 disabled={!editStartTime || !editEndTime || loading}
               >
                 {loading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.editSaveButtonText}>Save</Text>
+                  <Text style={styles.editTimeSaveButtonText}>Save</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -2959,40 +3162,40 @@ interface Photo {
         animationType="slide"
         onRequestClose={() => setShowEditTimePicker(false)}
       >
-        <View style={styles.timePickerModalOverlay}>
-          <View style={styles.timePickerModalContent}>
-            <View style={styles.timePickerModalHeader}>
-              <Text style={styles.timePickerModalTitle}>
-                Select {editTimeType === 'start' ? 'Start' : 'End'} Time
+        <View style={styles.editTimePickerOverlay}>
+          <View style={styles.editTimePickerContent}>
+            <View style={styles.editTimePickerHeader}>
+              <Text style={styles.editTimePickerTitle}>
+                Select {editTimePickerType === 'start' ? 'Start' : 'End'} Time
               </Text>
             </View>
 
-            <View style={styles.timePickerClockContainer}>
+            <View style={styles.editTimePickerBody}>
               <DateTimePicker
-                value={currentPickerTime}
+                value={editPickerTime}
                 mode="time"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={handleEditTimeChange}
-                style={styles.timePicker}
+                onChange={handleEditTimePickerChange}
+                style={{ width: '100%' }}
               />
-              {Platform.OS === 'ios' && (
-                <TouchableOpacity
-                  style={styles.timePickerConfirmButton}
-                  onPress={handleConfirmEditTime}
-                >
-                  <Text style={styles.timePickerConfirmButtonText}>Confirm</Text>
-                </TouchableOpacity>
-              )}
             </View>
 
-            <View style={styles.timePickerModalFooter}>
-              <TouchableOpacity
-                style={styles.timePickerCancelButton}
-                onPress={() => setShowEditTimePicker(false)}
-              >
-                <Text style={styles.timePickerCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
+            {Platform.OS === 'ios' && (
+              <View style={styles.editTimePickerFooter}>
+                <TouchableOpacity
+                  style={styles.editTimePickerCancelBtn}
+                  onPress={() => setShowEditTimePicker(false)}
+                >
+                  <Text style={styles.editTimePickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.editTimePickerConfirmBtn}
+                  onPress={handleEditTimePickerConfirm}
+                >
+                  <Text style={styles.editTimePickerConfirmText}>Confirm</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -3607,7 +3810,7 @@ const styles = StyleSheet.create({
   elapsedLabel: {
     fontSize: 10,
     color: '#727272',
-    marginTop: 12,
+    marginTop: 8,
     fontFamily: typography.families.regular,
     fontWeight: '400',
   },
@@ -3637,6 +3840,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#404040',
     fontFamily: typography.families.medium,
+  },
+  timerTimeValueSelected: {
+    color: '#877ED2',
+    fontWeight: '600',
+  },
+  manualSaveButton: {
+    marginRight: 8,
+    alignSelf: 'flex-end',
+    marginBottom: 2,
   },
   stopTimerButton: {
     flexDirection: 'row',
@@ -4406,16 +4618,14 @@ const styles = StyleSheet.create({
   // Attachments Modal Styles
   attachmentsModalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F6F6F6',
   },
   attachmentsModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E1E5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 2,
   },
   attachmentsModalBackButton: {
     width: 40,
@@ -4424,11 +4634,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   attachmentsModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
     color: '#000000',
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 2,
   },
   attachmentsModalMoreButton: {
     width: 40,
@@ -4438,14 +4649,14 @@ const styles = StyleSheet.create({
   },
   attachmentsTabs: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E1E5E9',
+    borderBottomColor: '#DDDCE6',
   },
   attachmentsTabsScroll: {
     maxHeight: 50,
   },
   attachmentsTabsContent: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 8,
   },
   attachmentsTab: {
     marginRight: 24,
@@ -4482,22 +4693,22 @@ const styles = StyleSheet.create({
   attachmentsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: 12,
   },
   attachmentGridItem: {
-    width: '48%',
-    marginBottom: 16,
+    width: '30%',
+    marginBottom: 8,
   },
   attachmentThumbnail: {
     width: '100%',
-    height: 150,
+    height: 100,
     borderRadius: 8,
     backgroundColor: '#F5F6FA',
   },
   attachmentVideoContainer: {
     position: 'relative',
     width: '100%',
-    height: 150,
+    height: 100,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#F5F6FA',
@@ -4514,13 +4725,11 @@ const styles = StyleSheet.create({
   },
   attachmentDocumentContainer: {
     width: '100%',
-    height: 150,
+    height: 100,
     borderRadius: 8,
-    backgroundColor: '#F5F6FA',
+    backgroundColor: '#FDF5F5',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E1E5E9',
   },
   attachmentPDFLabel: {
     fontSize: 12,
@@ -4533,7 +4742,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#000000',
     marginTop: 8,
-    textAlign: 'left',
+    textAlign: 'center',
   },
   attachmentsEmpty: {
     flex: 1,
@@ -4545,19 +4754,104 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8E8E93',
   },
-  // Status Record Modal Styles
-  statusRecordContainer: {
+  // Attachment Full Screen Viewer Styles
+  attachmentViewerContainer: {
     flex: 1,
     backgroundColor: '#F5F6FA',
   },
-  statusRecordHeader: {
+  attachmentViewerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E1E5E9',
+    backgroundColor: '#F5F6FA',
+    paddingTop: 50,
+  },
+  attachmentViewerHeaderLeft: {
+    flexDirection: 'row',
+    textAlign: 'left',
+  },
+  attachmentViewerBackButton: {
+    paddingLeft: 4,
+  },
+  attachmentViewerTitle: {
+    fontSize: 20,
+    fontWeight: '400',
+    fontFamily: typography.families.regular,
+    color: '#000000',
+    marginLeft: 8,
+  },
+  attachmentViewerMoreButton: {
+    padding: 4,
+  },
+  attachmentMenuDropdown: {
+    position: 'absolute',
+    top: 40,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 8,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  attachmentMenuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  attachmentMenuItemText: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#000000',
+  },
+  attachmentViewerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F6FA',
+  },
+  attachmentViewerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  attachmentViewerVideoContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  attachmentViewerPlayButton: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  attachmentViewerFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    backgroundColor: '#F5F6FA',
+    alignItems: 'center',
+  },
+  attachmentViewerFileName: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#666',
+  },
+  // Status Record Modal Styles
+  statusRecordContainer: {
+    flex: 1,
+    backgroundColor: '#F6F6F6',
+  },
+  statusRecordHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    backgroundColor: '#F6F6F6',
   },
   statusRecordBackButton: {
     width: 40,
@@ -4567,10 +4861,11 @@ const styles = StyleSheet.create({
   },
   statusRecordTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '400',
     color: '#000000',
+    fontFamily: typography.families.regular,
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 4,
   },
   statusRecordMoreButton: {
     width: 40,
@@ -4759,121 +5054,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#000000',
     lineHeight: 20,
-  },
-  editModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    width: '90%',
-    maxWidth: 400,
-    padding: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  editModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  editModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000000',
-  },
-  editModalBody: {
-    padding: 20,
-  },
-  editTimeRow: {
-    marginBottom: 20,
-  },
-  editTimeLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#8E8E93',
-    marginBottom: 8,
-  },
-  editTimeButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F5F6FA',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E1E5E9',
-  },
-  editTimeValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
-  },
-  editDurationPreview: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F0F0F5',
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  editDurationLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#8E8E93',
-  },
-  editDurationValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#877ED2',
-  },
-  editModalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
-    gap: 12,
-  },
-  editCancelButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#F5F6FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editCancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#8E8E93',
-  },
-  editSaveButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#877ED2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editSaveButtonDisabled: {
-    backgroundColor: '#D1D1D6',
-    opacity: 0.6,
-  },
-  editSaveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
   },
   productivityReportContainer: {
     flex: 1,
@@ -5089,5 +5269,329 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#000000',
+  },
+  // New Status Record Styles
+  srDateSection: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  srDateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  srDateText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#000000',
+    width: 100,
+  },
+  srDateDuration: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  srDurationNum: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  srDurationUnit: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#727272',
+  },
+  srEditedLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#8E8E93',
+    marginRight: 8,
+  },
+  srExpandedContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  srTimeEntry: {
+    paddingVertical: 8,
+  },
+  srTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  srTimeText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#000000',
+    width: 50,
+    marginRight: 16,
+  },
+  srTimeOriginal: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#877ED2',
+    width: 50,
+    marginRight: 16,
+  },
+  srTimeEdited: {
+    color: '#877ED2',
+    fontWeight: '500',
+  },
+  srEntryDuration: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  srDurationEdited: {
+    color: '#877ED2',
+  },
+  srPhotosSection: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingTop: 16,
+  },
+  srPhotosRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  srPhotoThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+  },
+  srMessagesSection: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingTop: 16,
+  },
+  srMessageLeft: {
+    marginBottom: 12,
+  },
+  srMessageRight: {
+    marginBottom: 12,
+    alignItems: 'flex-end',
+  },
+  srMessageTime: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#877ED2',
+    marginBottom: 4,
+  },
+  srMessageText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#000000',
+    lineHeight: 20,
+  },
+  srMessageSender: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  srTimeRowEdited: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    marginTop: 2,
+  },
+  srEmptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+  },
+  srEmptyStateText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000000',
+    marginTop: 16,
+  },
+  srEmptyStateSubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#8E8E93',
+    marginTop: 8,
+  },
+  // Edit Time Modal Styles
+  editTimeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editTimeModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  editTimeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  editTimeModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  editTimeModalBody: {
+    padding: 20,
+  },
+  editTimeRow: {
+    marginBottom: 20,
+  },
+  editTimeLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#8E8E93',
+    marginBottom: 8,
+  },
+  editTimeButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F5F6FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E1E5E9',
+  },
+  editTimeValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000000',
+  },
+  editTimeDurationPreview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F0F0F5',
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  editTimeDurationLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  editTimeDurationValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#877ED2',
+  },
+  editTimeModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+    gap: 12,
+  },
+  editTimeCancelButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#F5F6FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editTimeCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  editTimeSaveButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#877ED2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editTimeSaveButtonDisabled: {
+    backgroundColor: '#D1D1D6',
+    opacity: 0.6,
+  },
+  editTimeSaveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Edit Time Picker Styles
+  editTimePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  editTimePickerContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+  },
+  editTimePickerHeader: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  editTimePickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  editTimePickerBody: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  editTimePickerFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  editTimePickerCancelBtn: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#F5F6FA',
+    alignItems: 'center',
+  },
+  editTimePickerCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  editTimePickerConfirmBtn: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#877ED2',
+    alignItems: 'center',
+  },
+  editTimePickerConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

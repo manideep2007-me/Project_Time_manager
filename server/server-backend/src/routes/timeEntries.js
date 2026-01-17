@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const pool = require('../config/database');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requireRole, getDbPool } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validation');
 
 const router = express.Router();
@@ -15,19 +15,10 @@ function isOrganizationUser(req) {
 // GET /api/time-entries - List all time entries with filters
 router.get('/', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { taskId, employeeId, projectId, startDate, endDate, page = 1, limit = 100 } = req.query;
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 100;
-    
-    // Real organization users see empty time entries list (no dummy data)
-    if (isOrganizationUser(req)) {
-      return res.json({
-        timeEntries: [],
-        total: 0,
-        page: pageNum,
-        limit: limitNum
-      });
-    }
     
     const offset = (pageNum - 1) * limitNum;
     let where = 'WHERE 1=1';
@@ -58,8 +49,9 @@ router.get('/', async (req, res) => {
     const limitParam = params.length + 1;
     const offsetParam = params.length + 2;
     
-    const list = await pool.query(
+    const list = await db.query(
       `SELECT te.id, te.task_id, te.employee_id, te.work_date, te.start_time, te.end_time, te.duration_minutes, te.created_at, te.updated_at,
+              te.original_start_time, te.original_end_time,
               t.task_name as task_title, t.status as task_status,
               p.project_name as project_name, p.status as project_status,
               u.first_name, u.last_name, u.user_id as emp_id
@@ -74,7 +66,7 @@ router.get('/', async (req, res) => {
     );
     
     // Build count query - always use same WHERE conditions and JOINs as main query
-    const count = await pool.query(
+    const count = await db.query(
       `SELECT COUNT(*) as count 
        FROM time_entries te
        JOIN tasks t ON te.task_id = t.task_id
@@ -108,9 +100,11 @@ router.get('/', async (req, res) => {
 // GET /api/time-entries/:id - Get specific time entry
 router.get('/:id', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT te.id, te.task_id, te.employee_id, te.work_date, te.start_time, te.end_time, te.duration_minutes, te.created_at, te.updated_at,
+              te.original_start_time, te.original_end_time,
               t.task_name as task_title, t.status as task_status,
               p.project_name as project_name, p.status as project_status,
               u.first_name, u.last_name, u.user_id as emp_id
@@ -150,6 +144,7 @@ router.post('/', [
   body('endTime').isISO8601().withMessage('Valid end time is required'),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { taskId, employeeId, workDate, startTime, endTime } = req.body;
     const userRole = req.user?.role;
     const userEmail = req.user?.email;
@@ -160,7 +155,7 @@ router.post('/', [
     }
     
     // Verify task exists
-    const taskExists = await pool.query('SELECT task_id as id FROM tasks WHERE task_id = $1', [taskId]);
+    const taskExists = await db.query('SELECT task_id as id FROM tasks WHERE task_id = $1', [taskId]);
     if (taskExists.rows.length === 0) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -172,7 +167,7 @@ router.post('/', [
     if (userRole === 'employee') {
       // Find user by email
       if (userEmail) {
-        const userByEmail = await pool.query('SELECT user_id FROM users WHERE email_id = $1 AND is_active = true', [userEmail]);
+        const userByEmail = await db.query('SELECT user_id FROM users WHERE email_id = $1 AND is_active = true', [userEmail]);
         if (userByEmail.rows.length > 0) {
           finalEmployeeId = userByEmail.rows[0].user_id;
           // If employeeId was provided, verify it matches the logged-in user
@@ -200,14 +195,11 @@ router.post('/', [
       return res.status(400).json({ error: 'Employee ID could not be determined' });
     }
     
-    // Verify user exists and get hourly rate
-    const userExists = await pool.query('SELECT user_id, hourly_rate FROM users WHERE user_id = $1 AND is_active = true', [finalEmployeeId]);
+    // Verify user exists
+    const userExists = await db.query('SELECT user_id FROM users WHERE user_id = $1 AND is_active = true', [finalEmployeeId]);
     if (userExists.rows.length === 0) {
       return res.status(404).json({ error: 'User not found or inactive' });
     }
-    
-    const employee = userExists.rows[0];
-    const hourlyRate = parseFloat(employee.hourly_rate) || 0;
     
     // Calculate duration
     const start = new Date(startTime);
@@ -223,13 +215,6 @@ router.post('/', [
     if (durationMinutes < 1) {
       return res.status(400).json({ error: 'Time entry must be at least 1 minute long' });
     }
-    
-    // Calculate billed minutes: minimum 30 minutes, otherwise use actual duration
-    const billedMinutes = durationMinutes < 30 ? 30 : durationMinutes;
-    
-    // Calculate cost based on hourly rate
-    // Cost = (billed_minutes / 60) * hourly_rate
-    const cost = (billedMinutes / 60) * hourlyRate;
     
     // Validate all required fields are present
     if (!taskId || !finalEmployeeId || !workDate || !startTime || !endTime) {
@@ -257,7 +242,7 @@ router.post('/', [
     // Insert time entry - PostgreSQL will automatically convert the string formats to the correct types
     let result;
     try {
-      result = await pool.query(
+      result = await db.query(
         `INSERT INTO time_entries (task_id, employee_id, work_date, start_time, end_time, duration_minutes)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *`,
@@ -275,14 +260,14 @@ router.post('/', [
     
     // Create activity log
     try {
-      const taskInfo = await pool.query(
+      const taskInfo = await db.query(
         `SELECT t.task_name, t.project_id, p.project_name as project_name
          FROM tasks t
          JOIN projects p ON t.project_id = p.project_id
          WHERE t.task_id = $1`,
         [taskId]
       );
-      const employeeInfo = await pool.query(
+      const employeeInfo = await db.query(
         `SELECT first_name, last_name FROM users WHERE user_id = $1`,
         [finalEmployeeId]
       );
@@ -295,7 +280,7 @@ router.post('/', [
         const actorId = req.user?.id || null;
         const actorName = req.user?.first_name ? `${req.user.first_name} ${req.user.last_name}` : null;
         
-        await pool.query(
+        await db.query(
           `INSERT INTO activity_logs (action_type, actor_id, actor_name, employee_id, employee_name, project_id, project_name, task_id, task_title, description)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
@@ -350,13 +335,14 @@ router.put('/:id', [
   body('endTime').optional().isISO8601().withMessage('Valid end time required'),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { projectId, employeeId, startTime, endTime } = req.body;
     const userRole = req.user?.role;
     const userEmail = req.user?.email;
     
     // Check if time entry exists
-    const exists = await pool.query('SELECT * FROM time_entries WHERE id = $1', [id]);
+    const exists = await db.query('SELECT * FROM time_entries WHERE id = $1', [id]);
     if (exists.rows.length === 0) {
       return res.status(404).json({ error: 'Time entry not found' });
     }
@@ -367,7 +353,7 @@ router.put('/:id', [
     if (userRole === 'employee') {
       // Find user by email
       if (userEmail) {
-        const userByEmail = await pool.query('SELECT user_id FROM users WHERE email_id = $1 AND is_active = true', [userEmail]);
+        const userByEmail = await db.query('SELECT user_id FROM users WHERE email_id = $1 AND is_active = true', [userEmail]);
         if (userByEmail.rows.length === 0) {
           return res.status(403).json({ error: 'User record not found for your account' });
         }
@@ -391,7 +377,7 @@ router.put('/:id', [
     
     // Verify project exists if being updated
     if (projectId) {
-      const projectExists = await pool.query('SELECT project_id as id FROM projects WHERE project_id = $1', [projectId]);
+      const projectExists = await db.query('SELECT project_id as id FROM projects WHERE project_id = $1', [projectId]);
       if (projectExists.rows.length === 0) {
         return res.status(404).json({ error: 'Project not found' });
       }
@@ -399,7 +385,7 @@ router.put('/:id', [
     
     // Verify user exists if being updated (only for admins/managers)
     if (employeeId && userRole !== 'employee') {
-      const userExists = await pool.query('SELECT user_id, hourly_rate FROM users WHERE user_id = $1 AND is_active = true', [employeeId]);
+      const userExists = await db.query('SELECT user_id FROM users WHERE user_id = $1 AND is_active = true', [employeeId]);
       if (userExists.rows.length === 0) {
         return res.status(404).json({ error: 'User not found or inactive' });
       }
@@ -413,7 +399,7 @@ router.put('/:id', [
     // For employees, always use their own user_id
     let finalEmployeeId;
     if (userRole === 'employee') {
-      const userByEmail = await pool.query('SELECT user_id FROM users WHERE email_id = $1 AND is_active = true', [userEmail]);
+      const userByEmail = await db.query('SELECT user_id FROM users WHERE email_id = $1 AND is_active = true', [userEmail]);
       finalEmployeeId = userByEmail.rows[0].user_id;
     } else {
       finalEmployeeId = employeeId || currentEntry.employee_id;
@@ -428,9 +414,28 @@ router.put('/:id', [
       return res.status(400).json({ error: 'End time must be after start time' });
     }
     
-    const result = await pool.query(
-      'UPDATE time_entries SET employee_id = COALESCE($1, employee_id), start_time = COALESCE($2, start_time), end_time = COALESCE($3, end_time), duration_minutes = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
-      [employeeId, startTime, endTime, durationMinutes, id]
+    // Store original times if this is the first edit (original times not yet set)
+    let originalStartTime = currentEntry.original_start_time;
+    let originalEndTime = currentEntry.original_end_time;
+    
+    if (!originalStartTime && !originalEndTime && (startTime || endTime)) {
+      // First time editing - save the original times
+      originalStartTime = currentEntry.start_time;
+      originalEndTime = currentEntry.end_time;
+    }
+    
+    const result = await db.query(
+      `UPDATE time_entries 
+       SET employee_id = COALESCE($1, employee_id), 
+           start_time = COALESCE($2, start_time), 
+           end_time = COALESCE($3, end_time), 
+           duration_minutes = $4, 
+           original_start_time = COALESCE($5, original_start_time),
+           original_end_time = COALESCE($6, original_end_time),
+           updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $7 
+       RETURNING *`,
+      [employeeId, startTime, endTime, durationMinutes, originalStartTime, originalEndTime, id]
     );
     res.json({ timeEntry: result.rows[0] });
   } catch (err) {
@@ -441,9 +446,10 @@ router.put('/:id', [
 // DELETE /api/time-entries/:id - Delete time entry
 router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     
-    const result = await pool.query('DELETE FROM time_entries WHERE id = $1 RETURNING id', [id]);
+    const result = await db.query('DELETE FROM time_entries WHERE id = $1 RETURNING id', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Time entry not found' });
     }
@@ -456,6 +462,7 @@ router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
 // GET /api/time-entries/summary - Get time tracking summary
 router.get('/summary/overview', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { startDate, endDate, projectId, employeeId } = req.query;
     
     let where = 'WHERE 1=1';

@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, getDbPool } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validation');
 
 const router = express.Router();
@@ -15,6 +15,7 @@ function isOrganizationUser(req) {
 // GET /api/tasks - Get all tasks with employee and project information
 router.get('/', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { page = 1, limit = 100, status = '', projectId = '', assignedTo = '' } = req.query;
     const offset = (page - 1) * limit;
 
@@ -46,7 +47,7 @@ router.get('/', async (req, res) => {
       where += ` AND t.assigned_to @> to_jsonb($${params.length}::uuid)`;
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT t.task_id, t.project_id, t.task_name, t.status, t.assigned_to, t.start_date, t.end_date, t.created_at, t.updated_at,
               t.approved, t.approved_at, t.approval_notes,
               p.project_name as project_name, p.status as project_status,
@@ -72,7 +73,7 @@ router.get('/', async (req, res) => {
       [...params, parseInt(limit), parseInt(offset)]
     );
 
-    const count = await pool.query(`SELECT COUNT(*) as count FROM tasks t ${where}`, params);
+    const count = await db.query(`SELECT COUNT(*) as count FROM tasks t ${where}`, params);
 
     res.json({
       tasks: result.rows,
@@ -107,6 +108,7 @@ router.post('/', [
   body('location').optional().isString(),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { 
       project_id, 
       title, 
@@ -120,7 +122,7 @@ router.post('/', [
     } = req.body;
     
     // Get project with team members
-    const project = await pool.query('SELECT project_id as id, team_member_ids FROM projects WHERE project_id = $1', [project_id]);
+    const project = await db.query('SELECT project_id as id, team_member_ids FROM projects WHERE project_id = $1', [project_id]);
     if (project.rows.length === 0) return res.status(404).json({ error: 'Project not found' });
     
     // Handle assigned_to - can be single UUID or array
@@ -172,7 +174,7 @@ router.post('/', [
     };
     const dbStatus = statusMap[status] || 'To Do';
     
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO tasks (project_id, task_name, status, assigned_to, description, start_date, end_date, high_priority, location)
        VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9) 
        RETURNING task_id as id, project_id, task_name as title, status, assigned_to, start_date, end_date as due_date, high_priority, location, created_at, updated_at`,
@@ -189,12 +191,13 @@ router.post('/', [
 // GET /api/projects/:id/tasks - list tasks for a project
 router.get('/project/:id', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { page = 1, limit = 100 } = req.query;
     const offset = (page - 1) * limit;
-    const project = await pool.query('SELECT project_id FROM projects WHERE project_id = $1', [id]);
+    const project = await db.query('SELECT project_id FROM projects WHERE project_id = $1', [id]);
     if (project.rows.length === 0) return res.status(404).json({ error: 'Project not found' });
-    const list = await pool.query(
+    const list = await db.query(
       `SELECT t.task_id as id, t.project_id, t.task_name as title, t.status, t.assigned_to, 
               t.end_date as due_date, t.created_at, t.updated_at,
               COALESCE(
@@ -218,7 +221,7 @@ router.get('/project/:id', async (req, res) => {
        LIMIT ${limit} OFFSET ${offset}`,
       [id]
     );
-    const count = await pool.query('SELECT COUNT(*) as count FROM tasks WHERE project_id = $1', [id]);
+    const count = await db.query('SELECT COUNT(*) as count FROM tasks WHERE project_id = $1', [id]);
     res.json({ tasks: list.rows, total: parseInt(count.rows[0].count), page: Number(page), limit: Number(limit) });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -234,11 +237,12 @@ router.post('/project/:id', [
   body('dueDate').optional().isISO8601(),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { title, status = 'todo', assignedTo = [], dueDate = null } = req.body;
     
     // Get project with team members
-    const project = await pool.query('SELECT project_id as id, team_member_ids FROM projects WHERE project_id = $1', [id]);
+    const project = await db.query('SELECT project_id as id, team_member_ids FROM projects WHERE project_id = $1', [id]);
     if (project.rows.length === 0) return res.status(404).json({ error: 'Project not found' });
     
     // Validate assignees are part of project team
@@ -255,7 +259,7 @@ router.post('/project/:id', [
       }
     }
     
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO tasks (project_id, task_name, status, assigned_to, end_date)
        VALUES ($1, $2, $3, $4::jsonb, $5) RETURNING task_id, project_id, task_name, status, assigned_to, end_date, created_at, updated_at`,
       [id, title, status, JSON.stringify(assignedToArray), dueDate]
@@ -266,19 +270,19 @@ router.post('/project/:id', [
       const actorName = req.user?.first_name ? `${req.user.first_name} ${req.user.last_name}` : null;
       
       // Fetch project name
-      const projectInfo = await pool.query('SELECT project_name FROM projects WHERE project_id = $1', [id]);
+      const projectInfo = await db.query('SELECT project_name FROM projects WHERE project_id = $1', [id]);
       const projectName = projectInfo.rows[0]?.project_name || null;
       
       // Fetch employee name for first assignee
       let employeeName = null;
       if (assignedTo[0]) {
-        const empInfo = await pool.query('SELECT first_name, last_name FROM users WHERE user_id = $1', [assignedTo[0]]);
+        const empInfo = await db.query('SELECT first_name, last_name FROM users WHERE user_id = $1', [assignedTo[0]]);
         if (empInfo.rows[0]) {
           employeeName = `${empInfo.rows[0].first_name} ${empInfo.rows[0].last_name}`;
         }
       }
       
-      await pool.query(
+      await db.query(
         `INSERT INTO activity_logs (action_type, actor_id, actor_name, employee_id, employee_name, project_id, project_name, task_id, task_title, description)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
@@ -304,18 +308,19 @@ router.post('/project/:id', [
 // GET /api/tasks/employee/:employeeId - get tasks assigned to an employee
 router.get('/employee/:employeeId', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { employeeId } = req.params;
     const { page = 1, limit = 100, status = '' } = req.query;
     const offset = (page - 1) * limit;
     
     // Find user by ID or by email
     let finalEmployeeId = employeeId;
-    const userCheck = await pool.query('SELECT user_id FROM users WHERE user_id = $1', [employeeId]);
+    const userCheck = await db.query('SELECT user_id FROM users WHERE user_id = $1', [employeeId]);
     
     if (userCheck.rows.length === 0) {
       // If not found by ID, try to find by email using the logged-in user's email
       if (req.user && req.user.email) {
-        const userByEmail = await pool.query('SELECT user_id FROM users WHERE email_id = $1', [req.user.email]);
+        const userByEmail = await db.query('SELECT user_id FROM users WHERE email_id = $1', [req.user.email]);
         if (userByEmail.rows.length > 0) {
           finalEmployeeId = userByEmail.rows[0].user_id;
           console.log(`✅ Found user by email for tasks: ${req.user.email} -> ${finalEmployeeId}`);
@@ -338,7 +343,7 @@ router.get('/employee/:employeeId', async (req, res) => {
     }
 
     // Get tasks assigned to this user using tasks.assigned_to array column
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT t.task_id as id, t.task_id, t.project_id, t.task_name as title, t.task_name, t.status, 
               t.start_date, t.end_date as due_date, t.created_at, t.updated_at,
               p.project_name as project_name, p.status as project_status, p.project_location,
@@ -364,7 +369,7 @@ router.get('/employee/:employeeId', async (req, res) => {
       [...params, parseInt(limit), parseInt(offset)]
     );
 
-    const count = await pool.query(
+    const count = await db.query(
       `SELECT COUNT(*) as count FROM tasks t ${where}`, 
       params
     );
@@ -392,17 +397,18 @@ router.patch('/:taskId', [
   body('dueDate').optional().isISO8601(),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { taskId } = req.params;
     const { title, status, assignedTo, dueDate } = req.body;
     
     // Get task with its project
-    const taskData = await pool.query('SELECT task_id as id, project_id FROM tasks WHERE task_id = $1', [taskId]);
+    const taskData = await db.query('SELECT task_id as id, project_id FROM tasks WHERE task_id = $1', [taskId]);
     if (taskData.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
     
     // If assignedTo is provided, validate against project team
     let assignedToArray = null;
     if (assignedTo !== undefined) {
-      const project = await pool.query('SELECT team_member_ids FROM projects WHERE project_id = $1', [taskData.rows[0].project_id]);
+      const project = await db.query('SELECT team_member_ids FROM projects WHERE project_id = $1', [taskData.rows[0].project_id]);
       const teamMemberIds = project.rows[0]?.team_member_ids || [];
       assignedToArray = Array.isArray(assignedTo) ? assignedTo : (assignedTo ? [assignedTo] : []);
       
@@ -417,7 +423,7 @@ router.patch('/:taskId', [
       }
     }
     
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE tasks
        SET task_name = COALESCE($1, task_name),
            status = COALESCE($2, status),
@@ -435,19 +441,19 @@ router.patch('/:taskId', [
         const actorName = req.user?.first_name ? `${req.user.first_name} ${req.user.last_name}` : null;
         
         // Fetch project name
-        const projectInfo = await pool.query('SELECT project_name FROM projects WHERE project_id = $1', [result.rows[0].project_id]);
+        const projectInfo = await db.query('SELECT project_name FROM projects WHERE project_id = $1', [result.rows[0].project_id]);
         const projectName = projectInfo.rows[0]?.project_name || null;
         
         // Fetch employee name for first assignee
         let employeeName = null;
         if (assignedToArray[0]) {
-          const empInfo = await pool.query('SELECT first_name, last_name FROM users WHERE user_id = $1', [assignedToArray[0]]);
+          const empInfo = await db.query('SELECT first_name, last_name FROM users WHERE user_id = $1', [assignedToArray[0]]);
           if (empInfo.rows[0]) {
             employeeName = `${empInfo.rows[0].first_name} ${empInfo.rows[0].last_name}`;
           }
         }
         
-        await pool.query(
+        await db.query(
           `INSERT INTO activity_logs (action_type, actor_id, actor_name, employee_id, employee_name, project_id, project_name, task_id, task_title, description)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
@@ -477,11 +483,12 @@ router.patch('/:id/assign', [
   body('assignedTo.*').isUUID().withMessage('Each assignee must be a valid UUID'),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { assignedTo } = req.body;
     
     // Check if task exists and get project_id
-    const taskExists = await pool.query('SELECT task_id as id, project_id FROM tasks WHERE task_id = $1', [id]);
+    const taskExists = await db.query('SELECT task_id as id, project_id FROM tasks WHERE task_id = $1', [id]);
     if (taskExists.rows.length === 0) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -489,7 +496,7 @@ router.patch('/:id/assign', [
     const projectId = taskExists.rows[0].project_id;
     
     // Get project team members
-    const project = await pool.query('SELECT team_member_ids FROM projects WHERE project_id = $1', [projectId]);
+    const project = await db.query('SELECT team_member_ids FROM projects WHERE project_id = $1', [projectId]);
     const teamMemberIds = project.rows[0]?.team_member_ids || [];
     
     // Validate all assignees are part of the project team
@@ -503,7 +510,7 @@ router.patch('/:id/assign', [
     }
     
     // Check if all users exist
-    const usersCheck = await pool.query('SELECT user_id, first_name, last_name FROM users WHERE user_id = ANY($1::uuid[])', [assignedTo]);
+    const usersCheck = await db.query('SELECT user_id, first_name, last_name FROM users WHERE user_id = ANY($1::uuid[])', [assignedTo]);
     if (usersCheck.rows.length !== assignedTo.length) {
       const foundIds = usersCheck.rows.map(u => u.user_id);
       const notFoundIds = assignedTo.filter(id => !foundIds.includes(id));
@@ -511,7 +518,7 @@ router.patch('/:id/assign', [
     }
 
     // Update the task assignment
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE tasks SET assigned_to = $1::jsonb, updated_at = NOW() 
        WHERE task_id = $2 
        RETURNING task_id, project_id, task_name, status, assigned_to, end_date as due_date, created_at, updated_at`,
@@ -542,6 +549,7 @@ router.put('/:taskId/approve', [
   body('approvalNotes').optional().isString().trim(),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { taskId } = req.params;
     const { approved, approvalNotes } = req.body;
     const approverId = req.user.id;
@@ -556,7 +564,7 @@ router.put('/:taskId/approve', [
       JOIN projects p ON t.project_id = p.project_id
       WHERE t.task_id = $1
     `;
-    const taskResult = await pool.query(taskQuery, [taskId]);
+    const taskResult = await db.query(taskQuery, [taskId]);
     
     if (taskResult.rows.length === 0) {
       return res.status(404).json({ error: 'Task not found' });
@@ -583,7 +591,7 @@ router.put('/:taskId/approve', [
       RETURNING task_id, task_name, status, approved, approved_at, approval_notes, updated_at
     `;
 
-    const result = await pool.query(updateQuery, [
+    const result = await db.query(updateQuery, [
       approved, 
       approvalNotes, 
       taskId
@@ -604,6 +612,7 @@ router.put('/:taskId/approve', [
 // GET /api/tasks/pending-approval - Get tasks pending approval
 router.get('/pending-approval', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
@@ -647,6 +656,7 @@ router.get('/pending-approval', async (req, res) => {
 // GET /api/tasks/approved - Get approved tasks
 router.get('/approved', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
@@ -690,10 +700,11 @@ router.get('/approved', async (req, res) => {
 // GET /api/tasks/:id - Get a specific task by ID (must be last due to wildcard)
 router.get('/:id', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     
     // Get task details with multiple assignees
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT t.task_id, t.project_id, t.task_name, t.status, t.assigned_to, t.start_date, 
               t.end_date as due_date, t.created_at, t.updated_at, t.approved, t.approved_at, t.approval_notes,
               p.project_name as project_name, p.status as project_status, p.project_location,
@@ -724,7 +735,7 @@ router.get('/:id', async (req, res) => {
     }
     
     // Get total time from time entries
-    const timeStats = await pool.query(
+    const timeStats = await db.query(
       `SELECT 
          COALESCE(SUM(te.duration_minutes), 0) as total_time_minutes
        FROM time_entries te

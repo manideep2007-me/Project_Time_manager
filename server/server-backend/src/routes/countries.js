@@ -1,13 +1,14 @@
 const express = require('express');
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, getDbPool } = require('../middleware/auth');
 
 const router = express.Router();
 
 // GET /api/countries - List all active countries
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(
+    const db = getDbPool(req);
+    const result = await db.query(
       `SELECT country_id, name, code, is_active, created_at, updated_at
        FROM countries 
        WHERE is_active = true
@@ -23,8 +24,9 @@ router.get('/', authenticateToken, async (req, res) => {
 // GET /api/countries/:id - Get specific country
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT country_id, name, code, is_active, created_at, updated_at
        FROM countries 
        WHERE country_id = $1`,
@@ -45,15 +47,16 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // GET /api/countries/:id/states - Get states for a specific country
 router.get('/:id/states', authenticateToken, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     
     // First verify country exists
-    const country = await pool.query('SELECT country_id FROM countries WHERE country_id = $1', [id]);
+    const country = await db.query('SELECT country_id FROM countries WHERE country_id = $1', [id]);
     if (country.rows.length === 0) {
       return res.status(404).json({ error: 'Country not found' });
     }
     
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT state_id, name, code, country_id, is_active, created_at, updated_at
        FROM states 
        WHERE country_id = $1 AND is_active = true

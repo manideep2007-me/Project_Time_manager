@@ -1,26 +1,16 @@
 const express = require('express');
 const { body } = require('express-validator');
 const pool = require('../config/database');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requireRole, getDbPool } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validation');
 
 const router = express.Router();
 router.use(authenticateToken);
 
-// Helper: Check if user is from a real organization (not demo user)
-const isOrganizationUser = (req) => req.user?.source === 'registry';
-
 // GET /api/projects - List all projects with pagination and filters
 router.get('/', async (req, res) => {
   try {
-    // Real organization users see empty data
-    if (isOrganizationUser(req)) {
-      return res.json({
-        projects: [],
-        pagination: { total: 0, page: 1, limit: 20, totalPages: 0 }
-      });
-    }
-
+    const db = getDbPool(req);
     const { page = 1, limit = 20, search = '', status = '', clientId = '' } = req.query;
     const offset = (page - 1) * limit;
     
@@ -46,7 +36,7 @@ router.get('/', async (req, res) => {
       where += ` AND p.client_id = $${params.length}`;
     }
 
-    const list = await pool.query(
+    const list = await db.query(
       `SELECT p.project_id as id, p.project_name as name, p.description, p.status, p.start_date, p.end_date, p.estimated_value as budget, 
               p.project_location as location, NULL as priority, NULL as team_size, NULL as progress, NULL as estimated_hours,
               p.created_at, p.updated_at, COALESCE(c.first_name || ' ' || c.last_name, 'Unknown Client') as client_name, p.client_id as client_id
@@ -58,7 +48,7 @@ router.get('/', async (req, res) => {
       params
     );
 
-    const count = await pool.query(`SELECT COUNT(*) as count FROM projects p ${where}`, params);
+    const count = await db.query(`SELECT COUNT(*) as count FROM projects p ${where}`, params);
     if (clientId) {
       console.log(`[GET /api/projects] clientId=${clientId} -> ${list.rows.length} projects`);
     }
@@ -79,6 +69,7 @@ router.get('/', async (req, res) => {
 // IMPORTANT: This MUST come BEFORE /:id route to avoid route matching issues
 router.get('/assigned', authenticateToken, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const userId = req.user.id;
     const userEmail = req.user.email;
     
@@ -86,10 +77,10 @@ router.get('/assigned', authenticateToken, async (req, res) => {
     
     // Find employee by email (since users table ID != employees table ID)
     let employeeId = userId;
-    const empCheck = await pool.query('SELECT user_id as id FROM users WHERE user_id = $1', [userId]);
+    const empCheck = await db.query('SELECT user_id as id FROM users WHERE user_id = $1', [userId]);
     
     if (empCheck.rows.length === 0 && userEmail) {
-      const empByEmail = await pool.query('SELECT user_id as id FROM users WHERE email_id = $1', [userEmail]);
+      const empByEmail = await db.query('SELECT user_id as id FROM users WHERE email_id = $1', [userEmail]);
       if (empByEmail.rows.length > 0) {
         employeeId = empByEmail.rows[0].id;
         console.log(`✅ Found employee by email: ${userEmail} -> ${employeeId}`);
@@ -100,7 +91,7 @@ router.get('/assigned', authenticateToken, async (req, res) => {
     }
     
     // Get distinct projects where employee has tasks assigned OR is a team member
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT DISTINCT p.project_id as id, p.project_name as name, p.description, p.status, p.start_date, p.end_date, p.estimated_value as budget,
               p.project_location as location, NULL as priority, NULL as team_size, NULL as progress, NULL as estimated_hours,
               p.created_at, p.updated_at, COALESCE(c.first_name || ' ' || c.last_name, 'Unknown Client') as client_name, p.client_id as client_id
@@ -127,8 +118,9 @@ router.get('/assigned', authenticateToken, async (req, res) => {
 // GET /api/projects/:id - Get specific project
 router.get('/:id', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT p.project_id as id, p.project_name as name, p.description, p.status, p.start_date, p.end_date, p.estimated_value as budget, 
               p.project_location as location, NULL as priority, NULL as team_size, NULL as progress, NULL as estimated_hours,
               p.created_at, p.updated_at, COALESCE(c.first_name || ' ' || c.last_name, 'Unknown Client') as client_name, p.client_id as client_id
@@ -159,17 +151,18 @@ router.post('/', [
   body('coordinates').optional().isString(),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { name, clientId, description, status = 'To Do', startDate, endDate, budget, location, coordinates } = req.body;
     console.log('[POST /api/projects] Payload:', { name, clientId, status, startDate, endDate, budget, location, coordinates });
     
     // Verify client exists
-    const clientExists = await pool.query('SELECT client_id as id, first_name || \' \' || last_name as name FROM clients WHERE client_id = $1', [clientId]);
+    const clientExists = await db.query('SELECT client_id as id, first_name || \' \' || last_name as name FROM clients WHERE client_id = $1', [clientId]);
     if (clientExists.rows.length === 0) {
       return res.status(404).json({ error: 'Client not found' });
     }
 
     // Insert with correct column names: project_name, project_location, estimated_value, coordinates
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO projects (project_name, client_id, description, status, start_date, end_date, estimated_value, project_location, coordinates) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING project_id as id, project_name as name, client_id, description, status, start_date, end_date, estimated_value as budget, project_location as location, coordinates, created_at, updated_at`,
@@ -181,7 +174,7 @@ router.post('/', [
     try {
       const actorId = req.user?.id || null;
       const actorName = req.user?.first_name ? `${req.user.first_name} ${req.user.last_name}` : null;
-      await pool.query(
+      await db.query(
         `INSERT INTO activity_logs (action_type, actor_id, actor_name, project_id, project_name, description, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
         [
@@ -215,24 +208,25 @@ router.put('/:id', [
   body('location').optional().isString(),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { name, clientId, description, status, startDate, endDate, budget, location } = req.body;
     
     // Check if project exists
-    const exists = await pool.query('SELECT project_id as id FROM projects WHERE project_id = $1', [id]);
+    const exists = await db.query('SELECT project_id as id FROM projects WHERE project_id = $1', [id]);
     if (exists.rows.length === 0) {
       return res.status(404).json({ error: 'Project not found' });
     }
 
     // Verify client exists if clientId is being updated
     if (clientId) {
-      const clientExists = await pool.query('SELECT client_id as id FROM clients WHERE client_id = $1', [clientId]);
+      const clientExists = await db.query('SELECT client_id as id FROM clients WHERE client_id = $1', [clientId]);
       if (clientExists.rows.length === 0) {
         return res.status(404).json({ error: 'Client not found' });
       }
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       'UPDATE projects SET name = COALESCE($1, name), client_id = COALESCE($2, client_id), description = COALESCE($3, description), status = COALESCE($4, status), start_date = COALESCE($5, start_date), end_date = COALESCE($6, end_date), budget = COALESCE($7, budget), location = COALESCE($8, location), updated_at = CURRENT_TIMESTAMP WHERE id = $9 RETURNING *',
       [name, clientId, description, status, startDate, endDate, budget, location, id]
     );
@@ -245,15 +239,16 @@ router.put('/:id', [
 // DELETE /api/projects/:id - Delete project
 router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     
     // Check if project has time entries
-    const timeEntries = await pool.query('SELECT COUNT(*) as count FROM time_entries WHERE project_id = $1', [id]);
+    const timeEntries = await db.query('SELECT COUNT(*) as count FROM time_entries WHERE project_id = $1', [id]);
     if (parseInt(timeEntries.rows[0].count) > 0) {
       return res.status(400).json({ error: 'Cannot delete project with existing time entries' });
     }
 
-    const result = await pool.query('DELETE FROM projects WHERE id = $1 RETURNING *', [id]);
+    const result = await db.query('DELETE FROM projects WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -266,17 +261,18 @@ router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
 // GET /api/projects/:id/time-entries - Get time entries for a project
 router.get('/:id/time-entries', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { page = 1, limit = 100 } = req.query;
     const offset = (page - 1) * limit;
 
     // Verify project exists
-    const projectExists = await pool.query('SELECT project_id as id FROM projects WHERE project_id = $1', [id]);
+    const projectExists = await db.query('SELECT project_id as id FROM projects WHERE project_id = $1', [id]);
     if (projectExists.rows.length === 0) {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT te.id, te.employee_id, te.start_time, te.end_time, te.duration_minutes, te.created_at,
               e.first_name, e.last_name, e.user_id as emp_id
        FROM time_entries te
@@ -288,7 +284,7 @@ router.get('/:id/time-entries', async (req, res) => {
       [id]
     );
 
-    const count = await pool.query('SELECT COUNT(*) as count FROM time_entries te JOIN tasks t ON te.task_id = t.task_id WHERE t.project_id = $1', [id]);
+    const count = await db.query('SELECT COUNT(*) as count FROM time_entries te JOIN tasks t ON te.task_id = t.task_id WHERE t.project_id = $1', [id]);
     res.json({ 
       timeEntries: result.rows, 
       total: parseInt(count.rows[0].count), 
@@ -303,20 +299,21 @@ router.get('/:id/time-entries', async (req, res) => {
 // GET /api/projects/:id/tasks - List tasks for a project
 router.get('/:id/tasks', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { page = 1, limit = 100 } = req.query;
     const offset = (page - 1) * limit;
     
     console.log(`Fetching tasks for project ${id}, page: ${page}, limit: ${limit}`);
     
-    const projectExists = await pool.query('SELECT project_id FROM projects WHERE project_id = $1', [id]);
+    const projectExists = await db.query('SELECT project_id FROM projects WHERE project_id = $1', [id]);
     if (projectExists.rows.length === 0) {
       console.log(`Project ${id} not found`);
       return res.status(404).json({ error: 'Project not found' });
     }
     
     console.log(`Project ${id} exists, fetching tasks...`);
-    const list = await pool.query(
+    const list = await db.query(
       `SELECT t.task_id as id, t.project_id, t.task_name as title, t.status, t.assigned_to, 
               t.end_date as due_date, t.created_at, t.updated_at,
               p.project_name, p.status as project_status,
@@ -345,7 +342,7 @@ router.get('/:id/tasks', async (req, res) => {
     
     console.log(`Found ${list.rows.length} tasks for project ${id}`);
     
-    const count = await pool.query('SELECT COUNT(*) as count FROM tasks WHERE project_id = $1', [id]);
+    const count = await db.query('SELECT COUNT(*) as count FROM tasks WHERE project_id = $1', [id]);
     const total = parseInt(count.rows[0].count);
     
     console.log(`Total tasks for project ${id}: ${total}`);
@@ -362,10 +359,11 @@ router.get('/:id/tasks', async (req, res) => {
 // GET /api/projects/:id/team-members - Get team members working on a project
 router.get('/:id/team-members', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     
     // Check if project exists
-    const projectExists = await pool.query('SELECT project_id FROM projects WHERE project_id = $1', [id]);
+    const projectExists = await db.query('SELECT project_id FROM projects WHERE project_id = $1', [id]);
     if (projectExists.rows.length === 0) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -390,11 +388,12 @@ router.post('/:id/tasks', [
   body('dueDate').optional().isISO8601(),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { title, status = 'todo', assignedTo = [], dueDate = null } = req.body;
     
     // Check if project exists and get team members
-    const project = await pool.query('SELECT project_id as id, team_member_ids FROM projects WHERE project_id = $1', [id]);
+    const project = await db.query('SELECT project_id as id, team_member_ids FROM projects WHERE project_id = $1', [id]);
     if (project.rows.length === 0) return res.status(404).json({ error: 'Project not found' });
     
     // Validate assignees are part of project team
@@ -412,7 +411,7 @@ router.post('/:id/tasks', [
       }
     }
     
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO tasks (project_id, task_name, status, assigned_to, end_date)
        VALUES ($1, $2, $3, $4::jsonb, $5) 
        RETURNING task_id, project_id, task_name as title, status, assigned_to, end_date as due_date, created_at, updated_at`,
@@ -428,10 +427,11 @@ router.post('/:id/tasks', [
 // GET /api/projects/:id/stats - Get project statistics
 router.get('/:id/stats', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
 
     // Verify project exists
-    const projectExists = await pool.query('SELECT project_id as id, project_name as name FROM projects WHERE project_id = $1', [id]);
+    const projectExists = await db.query('SELECT project_id as id, project_name as name FROM projects WHERE project_id = $1', [id]);
     if (projectExists.rows.length === 0) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -537,10 +537,11 @@ router.get('/:id/stats', async (req, res) => {
 // GET /api/projects/:id/team - Get team members using team_member_ids array
 router.get('/:id/team', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     
     // Get project with team member IDs
-    const projectResult = await pool.query(
+    const projectResult = await db.query(
       'SELECT project_id as id, project_name as name, team_member_ids FROM projects WHERE project_id = $1',
       [id]
     );
@@ -570,7 +571,7 @@ router.get('/:id/team', async (req, res) => {
     let teamMembers = [];
     if (teamMemberIds.length > 0) {
       const placeholders = teamMemberIds.map((_, i) => `$${i + 1}`).join(',');
-      const result = await pool.query(
+      const result = await db.query(
         `SELECT u.user_id as id, u.user_id as employee_id, u.first_name, u.last_name, 
                 u.email_id as email, u.role
          FROM users u
@@ -597,11 +598,12 @@ router.post('/:id/team', [
   body('employeeId').isUUID().withMessage('Valid employee ID is required'),
 ], handleValidation, async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id } = req.params;
     const { employeeId } = req.body;
     
     // Check if project exists
-    const projectExists = await pool.query(
+    const projectExists = await db.query(
       'SELECT project_id as id, project_name as name, team_member_ids FROM projects WHERE project_id = $1',
       [id]
     );
@@ -610,7 +612,7 @@ router.post('/:id/team', [
     }
 
     // Check if employee exists
-    const employeeExists = await pool.query(
+    const employeeExists = await db.query(
       'SELECT user_id as id, first_name, last_name FROM users WHERE user_id = $1',
       [employeeId]
     );
@@ -620,7 +622,7 @@ router.post('/:id/team', [
 
     // Add employee to team_member_ids JSONB array (if not already present)
     // Handle NULL case: initialize with empty array if NULL, then check/append
-    await pool.query(
+    await db.query(
       `UPDATE projects 
        SET team_member_ids = 
          CASE 
@@ -646,10 +648,11 @@ router.post('/:id/team', [
 // DELETE /api/projects/:id/team/:employeeId - Remove a team member from the project
 router.delete('/:id/team/:employeeId', async (req, res) => {
   try {
+    const db = getDbPool(req);
     const { id, employeeId } = req.params;
     
     // Check if project exists and get current team members
-    const projectResult = await pool.query(
+    const projectResult = await db.query(
       'SELECT project_id as id, team_member_ids FROM projects WHERE project_id = $1', 
       [id]
     );
@@ -668,7 +671,7 @@ router.delete('/:id/team/:employeeId', async (req, res) => {
     }
 
     // Remove employee from JSONB array using PostgreSQL operation
-    await pool.query(
+    await db.query(
       `UPDATE projects 
        SET team_member_ids = team_member_ids - $1::text
        WHERE project_id = $2`,
