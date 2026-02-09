@@ -16,7 +16,7 @@ export default function ProjectDetailsScreen() {
   const { id } = route.params || {};
   const { user } = useContext(AuthContext);
   const navigation = useNavigation<any>();
-  
+
   const [project, setProject] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -35,9 +35,9 @@ export default function ProjectDetailsScreen() {
       a = ((a << 5) - a) + b.charCodeAt(0);
       return a & a;
     }, 0);
-    
+
     const seed = Math.abs(hash) % 1000;
-    
+
     return {
       dueDate: new Date(Date.now() + (seed % 90 + 30) * 24 * 60 * 60 * 1000),
       startDate: new Date(Date.now() - (seed % 30 + 10) * 24 * 60 * 60 * 1000),
@@ -65,12 +65,12 @@ export default function ProjectDetailsScreen() {
       console.log('=== LOADING PROJECT DATA FROM DATABASE (ADMIN) ===');
       console.log('Project ID:', id);
       console.log('User Role:', user?.role);
-      
+
       if (!id) {
         console.log('No project ID provided');
         return;
       }
-      
+
       // Load project data from database
       let projectData: any | null = null;
       try {
@@ -184,13 +184,13 @@ export default function ProjectDetailsScreen() {
         console.log('📡 Loading team from project_team_memberships table...');
         const teamResponse = await getProjectTeam(id as string);
         const teamData = teamResponse?.teamMembers || [];
-        
+
         console.log(`✅ Team members from database: ${teamData.length}`);
-        
+
         // Get stats for each team member to include hours logged
         const stats = await dashboardApi.getProjectStats(id as string);
         const employeeBreakdown = stats?.employeeBreakdown || [];
-        
+
         // Map team members with their hours logged
         teamMembersData = teamData.map((member: any) => {
           const statsForMember = employeeBreakdown.find((emp: any) => emp.id === member.id);
@@ -210,12 +210,12 @@ export default function ProjectDetailsScreen() {
             tasksAssigned: statsForMember?.tasksAssigned || 0,
           };
         });
-        
+
         console.log('✅ Team members with stats loaded:', teamMembersData.length);
       } catch (e: any) {
         console.log('❌ Team members query failed:', e.message);
         console.log('🔄 Falling back to stats-based team loading...');
-        
+
         // Fallback to old method if new endpoint fails
         try {
           const stats = await dashboardApi.getProjectStats(id as string);
@@ -316,7 +316,7 @@ export default function ProjectDetailsScreen() {
 
     } catch (error: any) {
       console.error('Error loading project data:', error.message);
-      
+
       if (error.message?.includes('offline mode') || error.message?.includes('No authentication token')) {
         console.log('Using fallback mock data for offline mode...');
       }
@@ -361,11 +361,11 @@ export default function ProjectDetailsScreen() {
       // Load available employees
       const response = await listEmployees({ page: 1, limit: 100 });
       const employees = response.employees || [];
-      
+
       // Filter out employees already in the team
       const teamMemberIds = teamMembers.map(m => m.id);
       const available = employees.filter((emp: any) => !teamMemberIds.includes(emp.id));
-      
+
       setAvailableEmployees(available);
       setShowAddMemberModal(true);
     } catch (error) {
@@ -376,7 +376,7 @@ export default function ProjectDetailsScreen() {
 
   const handleSelectEmployee = async () => {
     if (!selectedEmployee || !id) return;
-    
+
     try {
       await addProjectTeamMember(id as string, selectedEmployee, 'member');
       Alert.alert('Success', 'Team member added successfully');
@@ -391,7 +391,7 @@ export default function ProjectDetailsScreen() {
 
   const handleRemoveMember = async (memberId: string, memberName: string) => {
     if (!id) return;
-    
+
     Alert.alert(
       'Remove Team Member',
       `Are you sure you want to remove ${memberName} from this project team?`,
@@ -427,11 +427,11 @@ export default function ProjectDetailsScreen() {
 
   const getProjectStatus = (project: any) => {
     if (!project.due_date) return { status: 'On Track', color: '#34d399', bgColor: '#dcfce7' };
-    
+
     const now = new Date();
     const dueDate = new Date(project.due_date);
     const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (daysUntilDue < 0) return { status: 'Overdue', color: '#ef4444', bgColor: '#fef2f2' };
     if (daysUntilDue < 7) return { status: 'At Risk', color: '#f59e0b', bgColor: '#fef3c7' };
     return { status: 'On Track', color: '#34d399', bgColor: '#dcfce7' };
@@ -449,7 +449,7 @@ export default function ProjectDetailsScreen() {
     const diff = now.getTime() - timestamp.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
     if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
     return 'Just now';
@@ -474,7 +474,7 @@ export default function ProjectDetailsScreen() {
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Loading project details...</Text>
-        <Text style={{color: 'blue', fontSize: 12, marginTop: 10}}>
+        <Text style={{ color: 'blue', fontSize: 12, marginTop: 10 }}>
           User Role: {user?.role || 'Not loaded'}
         </Text>
       </View>
@@ -485,7 +485,7 @@ export default function ProjectDetailsScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>Project not found</Text>
-        <Text style={{color: 'red', fontSize: 12, marginTop: 10}}>
+        <Text style={{ color: 'red', fontSize: 12, marginTop: 10 }}>
           User Role: {user?.role || 'Not loaded'} | Project ID: {id}
         </Text>
       </View>
@@ -494,251 +494,251 @@ export default function ProjectDetailsScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView 
+      <ScrollView
         style={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-      {/* Project Header */}
-      <View style={styles.header}>
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>{project.name}</Text>
-          <Text style={styles.projectCode}>{project.projectCode || ''}</Text>
-        </View>
-        <Text style={styles.client}>{project.client_name}</Text>
-        <View style={styles.statusContainer}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(project.status || 'active') }]}>
-            <Text style={styles.statusText}>{(project.status || 'active').toUpperCase()}</Text>
+        {/* Project Header */}
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>{project.name}</Text>
+            <Text style={styles.projectCode}>{project.projectCode || ''}</Text>
           </View>
-          {project.due_date && (
-            <Text style={styles.statusDueText}>
-              Due in {getDaysUntilDue(project)} days · {new Date(project.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </Text>
-          )}
-        </View>
-      </View>
-
-      {/* Tab Navigation - Admin has more tabs */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'overview' && styles.activeTab]}
-          onPress={() => setActiveTab('overview')}
-        >
-          <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Overview</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'budget' && styles.activeTab]}
-          onPress={() => setActiveTab('budget')}
-        >
-          <Text style={[styles.tabText, activeTab === 'budget' && styles.activeTabText]}>Budget</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'team' && styles.activeTab]}
-          onPress={() => setActiveTab('team')}
-        >
-          <Text style={[styles.tabText, activeTab === 'team' && styles.activeTabText]}>Team</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
-        <View style={styles.tabContent}>
-          <View style={{ marginBottom: 12 }}>
-            <Button
-              title="View Project Tasks"
-              onPress={() => navigation.navigate('ProjectTasks', { 
-                projectId: id, 
-                projectName: project?.name
-              })}
-            />
+          <Text style={styles.client}>{project.client_name}</Text>
+          <View style={styles.statusContainer}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(project.status || 'active') }]}>
+              <Text style={styles.statusText}>{(project.status || 'active').toUpperCase()}</Text>
+            </View>
+            {project.due_date && (
+              <Text style={styles.statusDueText}>
+                Due in {getDaysUntilDue(project)} days · {new Date(project.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </Text>
+            )}
           </View>
-          {projectMetrics && (
-            <Card style={styles.metricsCard}>
-              <Text style={styles.metricsTitle}>Project Progress</Text>
-              <View style={styles.metricItem}>
-                <View style={styles.metricHeader}>
-                  <Text style={styles.metricLabel}>Overall Progress</Text>
-                  <Text style={styles.metricValue}>{projectMetrics.progress}%</Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${projectMetrics.progress}%` }]} />
-                </View>
-                <Text style={[styles.metricBoxSubtext, { textAlign: 'right', marginTop: 4 }]}> 
-                  {projectMetrics.completedTasks} completed · {projectMetrics.inProgressTasks} in-progress · {projectMetrics.overdueTasks} overdue
-                </Text>
-              </View>
-            </Card>
-          )}
+        </View>
 
-          {/* Budget Chart - Admin view */}
-          {projectMetrics && (
-            <View style={styles.visualizationsContainer}>
-              <Card style={styles.chartCard}>
-                <Text style={styles.chartTitle}>Budget Utilization (INR)</Text>
-                <View style={styles.budgetChart}>
-                  <View style={styles.budgetBar}>
-                    <View style={[styles.budgetUsed, { width: `${(projectMetrics.budgetSpent / projectMetrics.budgetTotal) * 100}%` }]} />
+        {/* Tab Navigation - Admin has more tabs */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'overview' && styles.activeTab]}
+            onPress={() => setActiveTab('overview')}
+          >
+            <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Overview</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'budget' && styles.activeTab]}
+            onPress={() => setActiveTab('budget')}
+          >
+            <Text style={[styles.tabText, activeTab === 'budget' && styles.activeTabText]}>Budget</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'team' && styles.activeTab]}
+            onPress={() => setActiveTab('team')}
+          >
+            <Text style={[styles.tabText, activeTab === 'team' && styles.activeTabText]}>Team</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <View style={styles.tabContent}>
+            <View style={{ marginBottom: 12 }}>
+              <Button
+                title="View Project Tasks"
+                onPress={() => navigation.navigate('ProjectTasks', {
+                  projectId: id,
+                  projectName: project?.name
+                })}
+              />
+            </View>
+            {projectMetrics && (
+              <Card style={styles.metricsCard}>
+                <Text style={styles.metricsTitle}>Project Progress</Text>
+                <View style={styles.metricItem}>
+                  <View style={styles.metricHeader}>
+                    <Text style={styles.metricLabel}>Overall Progress</Text>
+                    <Text style={styles.metricValue}>{projectMetrics.progress}%</Text>
                   </View>
-                  <View style={styles.budgetLabels}>
-                    <Text style={styles.budgetLabel}>Used: {formatCurrencyINR(projectMetrics.budgetSpent)}</Text>
-                    <Text style={styles.budgetLabel}>Remaining: {formatCurrencyINR(projectMetrics.budgetTotal - projectMetrics.budgetSpent)}</Text>
+                  <View style={styles.progressBar}>
+                    <View style={[styles.progressFill, { width: `${projectMetrics.progress}%` }]} />
                   </View>
-                  {budgetCalculation && (
-                    <View style={styles.budgetDetails}>
-                      <Text style={styles.budgetDetailText}>
-                        Based on {budgetCalculation.totalHoursLogged}h logged by {budgetCalculation.employeeBreakdown?.length || 0} employees
-                      </Text>
-                    </View>
-                  )}
+                  <Text style={[styles.metricBoxSubtext, { textAlign: 'right', marginTop: 4 }]}>
+                    {projectMetrics.completedTasks} completed · {projectMetrics.inProgressTasks} in-progress · {projectMetrics.overdueTasks} overdue
+                  </Text>
                 </View>
               </Card>
+            )}
 
-              {/* Task Breakdown */}
-              <Card style={styles.chartCard}>
-                <Text style={styles.chartTitle}>Task Breakdown</Text>
-                <View style={styles.taskBreakdown}>
-                  <View style={styles.taskItem}>
-                    <View style={[styles.taskColor, { backgroundColor: '#34d399' }]} />
-                    <Text style={styles.taskLabel}>Completed ({projectMetrics.completedTasks})</Text>
-                  </View>
-                  <View style={styles.taskItem}>
-                    <View style={[styles.taskColor, { backgroundColor: '#3b82f6' }]} />
-                    <Text style={styles.taskLabel}>In Progress ({projectMetrics.inProgressTasks})</Text>
-                  </View>
-                  <View style={styles.taskItem}>
-                    <View style={[styles.taskColor, { backgroundColor: '#f59e0b' }]} />
-                    <Text style={styles.taskLabel}>To Do ({projectMetrics.todoTasks})</Text>
-                  </View>
-                </View>
-              </Card>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* Budget Tab - Admin specific */}
-      {activeTab === 'budget' && budgetCalculation && (
-        <View style={styles.tabContent}>
-          <Card style={styles.budgetBreakdownCard}>
-            <Text style={styles.sectionTitle}>Budget Breakdown by Employee</Text>
-            {budgetCalculation.employeeBreakdown.map((emp: any, index: number) => (
-              <View key={index} style={styles.employeeBudgetItem}>
-                <View style={styles.employeeBudgetHeader}>
-                  <Text style={styles.employeeBudgetName}>{emp.employeeName}</Text>
-                  <Text style={styles.employeeBudgetCost}>{formatCurrencyINR(emp.totalCost)}</Text>
-                </View>
-                <View style={styles.employeeBudgetDetails}>
-                  <Text style={styles.employeeBudgetDetail}>
-                    Monthly Salary: ₹{(emp.monthlySalary || 0).toLocaleString()}
-                  </Text>
-                  <Text style={styles.employeeBudgetDetail}>
-                    Hourly Rate: ₹{emp.hourlyRate}/hr
-                  </Text>
-                  <Text style={styles.employeeBudgetDetail}>
-                    Hours Logged: {Math.round(emp.totalHours * 10) / 10}h
-                  </Text>
-                </View>
-              </View>
-            ))}
-            <View style={styles.budgetSummary}>
-              <Text style={styles.budgetSummaryTitle}>Budget Summary</Text>
-              <View style={styles.budgetSummaryRow}>
-                <Text style={styles.budgetSummaryLabel}>Total Budget:</Text>
-                <Text style={styles.budgetSummaryAmount}>{formatCurrencyINR(project?.budget || 0)}</Text>
-              </View>
-              <View style={styles.budgetSummaryRow}>
-                <Text style={styles.budgetSummaryLabel}>Amount Spent:</Text>
-                <Text style={styles.budgetSummaryAmount}>{formatCurrencyINR(budgetCalculation.totalBudgetUsed)}</Text>
-              </View>
-              <View style={styles.budgetSummaryRow}>
-                <Text style={styles.budgetSummaryLabel}>Remaining:</Text>
-                <Text style={[styles.budgetSummaryAmount, { color: budgetCalculation.budgetRemaining >= 0 ? '#34C759' : '#FF3B30' }]}>
-                  {formatCurrencyINR(budgetCalculation.budgetRemaining)}
-                </Text>
-              </View>
-              <View style={styles.budgetSummaryRow}>
-                <Text style={styles.budgetSummaryLabel}>Utilization:</Text>
-                <Text style={styles.budgetSummaryAmount}>{budgetCalculation.budgetUtilization.toFixed(1)}%</Text>
-              </View>
-            </View>
-          </Card>
-        </View>
-      )}
-
-      {/* Team Tab - Admin specific */}
-      {activeTab === 'team' && (
-        <View style={styles.tabContent}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Text style={styles.sectionTitle}>Team Members</Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#007AFF',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 8,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-              }}
-              onPress={handleAddMember}
-            >
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>+</Text>
-              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Add Member</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {teamMembers && teamMembers.length > 0 ? (
-            <View style={styles.teamGrid}>
-              {teamMembers.map((member, index) => (
-                <View key={index} style={{ position: 'relative' }}>
-                  <TouchableOpacity style={styles.memberCard}>
-                    <View style={styles.memberAvatar}>
-                      <Text style={styles.avatarText}>{(member.name || '?').charAt(0)}</Text>
+            {/* Budget Chart - Admin view */}
+            {projectMetrics && (
+              <View style={styles.visualizationsContainer}>
+                <Card style={styles.chartCard}>
+                  <Text style={styles.chartTitle}>Budget Utilization (INR)</Text>
+                  <View style={styles.budgetChart}>
+                    <View style={styles.budgetBar}>
+                      <View style={[styles.budgetUsed, { width: `${(projectMetrics.budgetSpent / projectMetrics.budgetTotal) * 100}%` }]} />
                     </View>
-                    <Text style={styles.memberName}>{member.name || 'Unknown'}</Text>
-                    {member.jobTitle ? (
-                      <Text style={styles.memberRole}>{member.jobTitle}</Text>
-                    ) : null}
-                    {typeof member.monthlySalary === 'number' && (
-                      <Text style={styles.memberSalary}>₹{(member.monthlySalary || 0).toLocaleString()}/month</Text>
+                    <View style={styles.budgetLabels}>
+                      <Text style={styles.budgetLabel}>Used: {formatCurrencyINR(projectMetrics.budgetSpent)}</Text>
+                      <Text style={styles.budgetLabel}>Remaining: {formatCurrencyINR(projectMetrics.budgetTotal - projectMetrics.budgetSpent)}</Text>
+                    </View>
+                    {budgetCalculation && (
+                      <View style={styles.budgetDetails}>
+                        <Text style={styles.budgetDetailText}>
+                          Based on {budgetCalculation.totalHoursLogged}h logged by {budgetCalculation.employeeBreakdown?.length || 0} employees
+                        </Text>
+                      </View>
                     )}
-                    {typeof member.hourlyRate === 'number' && (
-                      <Text style={styles.memberHourlyRate}>₹{member.hourlyRate}/hr</Text>
-                    )}
-                    <Text style={styles.memberHoursLogged}>{member.totalHoursLogged || 0}h logged</Text>
-                    {typeof member.totalCost === 'number' && (
-                      <Text style={styles.memberCost}>Cost: {formatCurrencyINR(member.totalCost)}</Text>
-                    )}
-                    {typeof member.tasksAssigned === 'number' && (
-                      <Text style={styles.memberTasks}>{member.tasksAssigned} tasks assigned</Text>
-                    )}
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      width: 28,
-                      height: 28,
-                      borderRadius: 14,
-                      backgroundColor: '#FF3B30',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                    onPress={() => handleRemoveMember(member.id || '', member.name || 'Unknown')}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>×</Text>
-                  </TouchableOpacity>
+                  </View>
+                </Card>
+
+                {/* Task Breakdown */}
+                <Card style={styles.chartCard}>
+                  <Text style={styles.chartTitle}>Task Breakdown</Text>
+                  <View style={styles.taskBreakdown}>
+                    <View style={styles.taskItem}>
+                      <View style={[styles.taskColor, { backgroundColor: '#34d399' }]} />
+                      <Text style={styles.taskLabel}>Completed ({projectMetrics.completedTasks})</Text>
+                    </View>
+                    <View style={styles.taskItem}>
+                      <View style={[styles.taskColor, { backgroundColor: '#3b82f6' }]} />
+                      <Text style={styles.taskLabel}>In Progress ({projectMetrics.inProgressTasks})</Text>
+                    </View>
+                    <View style={styles.taskItem}>
+                      <View style={[styles.taskColor, { backgroundColor: '#f59e0b' }]} />
+                      <Text style={styles.taskLabel}>To Do ({projectMetrics.todoTasks})</Text>
+                    </View>
+                  </View>
+                </Card>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Budget Tab - Admin specific */}
+        {activeTab === 'budget' && budgetCalculation && (
+          <View style={styles.tabContent}>
+            <Card style={styles.budgetBreakdownCard}>
+              <Text style={styles.sectionTitle}>Budget Breakdown by Employee</Text>
+              {budgetCalculation.employeeBreakdown.map((emp: any, index: number) => (
+                <View key={index} style={styles.employeeBudgetItem}>
+                  <View style={styles.employeeBudgetHeader}>
+                    <Text style={styles.employeeBudgetName}>{emp.employeeName}</Text>
+                    <Text style={styles.employeeBudgetCost}>{formatCurrencyINR(emp.totalCost)}</Text>
+                  </View>
+                  <View style={styles.employeeBudgetDetails}>
+                    <Text style={styles.employeeBudgetDetail}>
+                      Monthly Salary: ₹{(emp.monthlySalary || 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.employeeBudgetDetail}>
+                      Hourly Rate: ₹{emp.hourlyRate}/hr
+                    </Text>
+                    <Text style={styles.employeeBudgetDetail}>
+                      Hours Logged: {Math.round(emp.totalHours * 10) / 10}h
+                    </Text>
+                  </View>
                 </View>
               ))}
-            </View>
-          ) : (
-            <Card style={styles.detailsCard}>
-              <Text style={styles.description}>No team assigned yet.</Text>
+              <View style={styles.budgetSummary}>
+                <Text style={styles.budgetSummaryTitle}>Budget Summary</Text>
+                <View style={styles.budgetSummaryRow}>
+                  <Text style={styles.budgetSummaryLabel}>Total Budget:</Text>
+                  <Text style={styles.budgetSummaryAmount}>{formatCurrencyINR(project?.budget || 0)}</Text>
+                </View>
+                <View style={styles.budgetSummaryRow}>
+                  <Text style={styles.budgetSummaryLabel}>Amount Spent:</Text>
+                  <Text style={styles.budgetSummaryAmount}>{formatCurrencyINR(budgetCalculation.totalBudgetUsed)}</Text>
+                </View>
+                <View style={styles.budgetSummaryRow}>
+                  <Text style={styles.budgetSummaryLabel}>Remaining:</Text>
+                  <Text style={[styles.budgetSummaryAmount, { color: budgetCalculation.budgetRemaining >= 0 ? '#34C759' : '#FF3B30' }]}>
+                    {formatCurrencyINR(budgetCalculation.budgetRemaining)}
+                  </Text>
+                </View>
+                <View style={styles.budgetSummaryRow}>
+                  <Text style={styles.budgetSummaryLabel}>Utilization:</Text>
+                  <Text style={styles.budgetSummaryAmount}>{budgetCalculation.budgetUtilization.toFixed(1)}%</Text>
+                </View>
+              </View>
             </Card>
-          )}
-        </View>
-      )}
+          </View>
+        )}
+
+        {/* Team Tab - Admin specific */}
+        {activeTab === 'team' && (
+          <View style={styles.tabContent}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={styles.sectionTitle}>Team Members</Text>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#007AFF',
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={handleAddMember}
+              >
+                <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>+</Text>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Add Member</Text>
+              </TouchableOpacity>
+            </View>
+
+            {teamMembers && teamMembers.length > 0 ? (
+              <View style={styles.teamGrid}>
+                {teamMembers.map((member, index) => (
+                  <View key={index} style={{ position: 'relative' }}>
+                    <TouchableOpacity style={styles.memberCard}>
+                      <View style={styles.memberAvatar}>
+                        <Text style={styles.avatarText}>{(member.name || '?').charAt(0)}</Text>
+                      </View>
+                      <Text style={styles.memberName}>{member.name || 'Unknown'}</Text>
+                      {member.jobTitle ? (
+                        <Text style={styles.memberRole}>{member.jobTitle}</Text>
+                      ) : null}
+                      {typeof member.monthlySalary === 'number' && (
+                        <Text style={styles.memberSalary}>₹{(member.monthlySalary || 0).toLocaleString()}/month</Text>
+                      )}
+                      {typeof member.hourlyRate === 'number' && (
+                        <Text style={styles.memberHourlyRate}>₹{member.hourlyRate}/hr</Text>
+                      )}
+                      <Text style={styles.memberHoursLogged}>{member.totalHoursLogged || 0}h logged</Text>
+                      {typeof member.totalCost === 'number' && (
+                        <Text style={styles.memberCost}>Cost: {formatCurrencyINR(member.totalCost)}</Text>
+                      )}
+                      {typeof member.tasksAssigned === 'number' && (
+                        <Text style={styles.memberTasks}>{member.tasksAssigned} tasks assigned</Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: '#FF3B30',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                      onPress={() => handleRemoveMember(member.id || '', member.name || 'Unknown')}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Card style={styles.detailsCard}>
+                <Text style={styles.description}>No team assigned yet.</Text>
+              </Card>
+            )}
+          </View>
+        )}
 
       </ScrollView>
 
