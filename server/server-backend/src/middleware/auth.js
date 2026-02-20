@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
-const { secondary: registryPool } = require('../config/databases');
+const { primary: registryPool, secondary: usersPool } = require('../config/databases');
 const { getOrganizationPool } = require('../services/databaseService');
 
 // Cache for organization database pools
@@ -69,12 +69,18 @@ const authenticateToken = async (req, res, next) => {
     }
     
     // Fallback: check users table in project_time_manager (using email_id and user_id column names)
-    const userResult = await pool.query('SELECT user_id as id, email_id as email, first_name, last_name, role, is_active FROM users WHERE user_id = $1', [decoded.userId]);
-    if (userResult.rows.length === 0 || !userResult.rows[0].is_active) {
+    if (!usersPool) {
+      return res.status(401).json({ error: 'User database not configured' });
+    }
+    const userResult = await usersPool.query('SELECT user_id as id, email_id as email, first_name, last_name, role, is_active FROM users WHERE user_id = $1', [decoded.userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+    if (userResult.rows[0].is_active === false) {
       return res.status(401).json({ error: 'Invalid or inactive user' });
     }
     req.user = userResult.rows[0];
-    req.orgPool = pool; // Use default pool for non-organization users
+    req.orgPool = usersPool; // Use users pool for demo/local users
     next();
   } catch (err) {
     return res.status(403).json({ error: 'Invalid or expired token' });

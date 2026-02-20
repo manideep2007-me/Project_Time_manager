@@ -31,7 +31,7 @@ function FloatingLabelInput({ label, multiline, style, ...rest }: FloatingLabelI
   const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
   const showFloatingLabel = isFocused || hasValue;
   const basePlaceholder = (rest.placeholder as string) || label;
-  const placeholderColor = rest.placeholderTextColor ?? '#727272';
+  const placeholderColor = rest.placeholderTextColor ?? '#A0A0A0';
 
   return (
     <View style={styles.floatingContainer}>
@@ -103,7 +103,7 @@ function FloatingLabelPicker({
             <Picker.Item
               label={label}
               value=""
-              color="#727272"
+              color="#A0A0A0"
             />
           )}
           {children}
@@ -130,7 +130,7 @@ function FloatingLabelPasswordInput({
   const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
   const showFloatingLabel = isFocused || hasValue;
   const basePlaceholder = (rest.placeholder as string) || label;
-  const placeholderColor = rest.placeholderTextColor ?? '#727272';
+  const placeholderColor = rest.placeholderTextColor ?? '#A0A0A0';
 
   return (
     <View style={styles.floatingContainer}>
@@ -736,7 +736,6 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
               />
 
               <View style={styles.navRow}>
-                <View style={{ flex: 1 }} />
                 <TouchableOpacity
                   style={[
                     styles.button,
@@ -1262,9 +1261,9 @@ const styles = StyleSheet.create({
   },
   container: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 32,
-    paddingTop: 16,
+    paddingTop: 20,
     flexGrow: 1,
   },
   wizardHeader: {
@@ -1276,90 +1275,90 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   progressContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   progressBarTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#DEDEDE',
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E5E7EB',
     overflow: 'hidden',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   progressBarFill: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#463EA0',
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#877ED2',
   },
   progressStepText: {
-    fontSize: 10,
-    color: '#727272',
-    fontWeight: '500',
-    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: '#999999',
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
   },
   sectionTitle: { 
     fontSize: 18, 
     fontWeight: '500', 
-    marginTop: 10, 
-    marginBottom: 8, 
+    marginTop: 0, 
+    marginBottom: 12, 
     color: '#404040',
     fontFamily: 'Inter_500Medium',
   },
   floatingContainer: {
     marginBottom: 16,
     position: 'relative',
-    paddingTop: 4,
+    paddingTop: 0,
   },
   floatingLabel: {
     position: 'absolute',
-    left: 12,
-    top: 14,
+    left: 14,
+    top: 16,
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#A0A0A0',
     zIndex: 1,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
   },
   floatingLabelActive: {
-    top: -6,
-    fontSize: 11,
-    color: '#7C3AED',
+    top: -8,
+    fontSize: 12,
+    color: '#877ED2',
   },
   floatingInput: {
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 14,
     backgroundColor: '#FFFFFF',
     fontSize: 14,
     lineHeight: 20,
-    minHeight: 50,
+    minHeight: 52,
   },
   floatingInputWithLabel: {
-    paddingTop: 20,
+    paddingTop: 18,
     paddingBottom: 12,
   },
   floatingInputMultiline: {
     // Address textarea height
-    minHeight: 75,
+    minHeight: 100,
     textAlignVertical: 'top',
-    marginBottom: 30,
+    paddingTop: 14,
   },
   floatingInputFocused: {
-    borderColor: '#7C3AED',
+    borderColor: '#877ED2',
   },
   floatingPicker: {
     paddingTop: 0,
     paddingBottom: 0,
     justifyContent: 'center',
-    paddingHorizontal: 4, // slightly closer to the left than text inputs
-    minHeight: 50,
-    height: 50,
+    paddingHorizontal: 4,
+    minHeight: 52,
+    height: 52,
   },
   picker: {
     // Extra height so the placeholder / selected text is fully visible
-    height: 67,
+    height: 52,
   },
   row: {
     flexDirection: 'row',
@@ -1468,9 +1467,9 @@ const styles = StyleSheet.create({
   },
   navRow: { 
     flexDirection: 'row', 
-    justifyContent: 'space-between', 
+    justifyContent: 'center', 
     alignItems: 'center', 
-    marginTop: 24,
+    marginTop: 32,
     paddingBottom: 24,
   },
   logoSection: {
@@ -1478,20 +1477,21 @@ const styles = StyleSheet.create({
   },
   logoLabel: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#8D8D8D',
-    fontFamily: 'Inter_500Medium',
-    marginTop: 4,
-    marginLeft: 4,
+    fontWeight: '400',
+    color: '#666666',
+    fontFamily: 'Inter_400Regular',
+    marginTop: 0,
+    marginBottom: 2,
+    marginLeft: 0,
   },
   logoHint: {
-    fontSize: 12,
-    color: '#8D8D8D',
-    fontWeight: '500',
-    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: '#999999',
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
     marginTop: 0,
     marginBottom: 8,
-    marginLeft: 4,
+    marginLeft: 0,
   },
   logoUploadRow: {
     flexDirection: 'row',
@@ -1500,21 +1500,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 0,
     backgroundColor: '#FFFFFF',
-    height: 50,
+    height: 52,
   },
   logoPlaceholder: {
     fontSize: 14,
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
-    color: '#727272',
+    color: '#A0A0A0',
   },
   logoAttachText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6F67CC',
+    color: '#877ED2',
     fontFamily: 'Inter_600SemiBold',
   },
   logoPreviewContainer: {
@@ -1634,12 +1634,11 @@ const styles = StyleSheet.create({
   button: { 
     backgroundColor: '#877ED2', 
     borderRadius: 8, 
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
     alignItems: 'center', 
     justifyContent: 'center',
-    flex: 1,
-    marginLeft: 12,
+    width: '100%',
   },
   buttonDisabled: { opacity: 0.5 },
   buttonText: { color: '#FFFFFF', fontWeight: '500', fontSize: 16 },

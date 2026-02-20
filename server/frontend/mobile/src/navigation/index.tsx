@@ -611,7 +611,8 @@ export default function RootNavigator() {
             <Stack.Screen name="AllTasks" component={AllTasksScreen} options={{ headerShown: true, title: 'All Tasks' }} />
             <Stack.Screen name="ProjectTasks" component={ProjectTasksScreenWrapper} options={{ headerShown: true, title: 'Project Tasks' }} />
             <Stack.Screen name="TaskView" component={TaskViewScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="AddClient" component={AddClientScreen} options={{ headerShown: true, title: 'Add Client' }} />
+            <Stack.Screen name="AddClient" component={AddClientScreen} options={{ headerShown: false, title: 'Add Client' }} />
+            <Stack.Screen name="EditClient" component={AddClientScreen} options={{ headerShown: false, title: 'Edit Client' }} />
             <Stack.Screen name="AddProject" component={AddProjectScreen} options={{ headerShown: true, title: 'Create Project' }} />
             <Stack.Screen name="AddEmployee" component={AddEmployeeScreen} options={{ headerShown: false }} />
             {/* Admin screens without bottom tabs */}

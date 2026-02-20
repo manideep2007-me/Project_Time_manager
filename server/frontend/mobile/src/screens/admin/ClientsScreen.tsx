@@ -25,6 +25,7 @@ export default function ClientsScreen() {
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedClientId, setExpandedClientId] = useState<number | null>(null);
 
   const loadClients = async (pageNum = 1) => {
     try {
@@ -56,6 +57,7 @@ export default function ClientsScreen() {
           contact_person: c.contact_person,
           onboard_date: c.onboard_date || c.created_at,
           project_count: c.project_count || 0,
+          status: c.status || 'active', // Default to active if not specified
           created_at: c.created_at,
           updated_at: c.updated_at,
         }));
@@ -272,6 +274,103 @@ export default function ClientsScreen() {
 
   const formatCurrency = (amount: any) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 
+  const toggleClientExpand = (clientId: number) => {
+    setExpandedClientId(expandedClientId === clientId ? null : clientId);
+  };
+
+  const getClientCounts = () => {
+    const total = filteredClients.length;
+    const active = filteredClients.filter(c => c.status === 'active' || !c.status).length;
+    const inactive = filteredClients.filter(c => c.status === 'inactive').length;
+    return { total, active, inactive };
+  };
+
+  const renderClientCard = ({ item, index }: { item: any; index: number }) => {
+    const isExpanded = expandedClientId === item.id;
+    const isLast = index === filteredClients.length - 1;
+
+    return (
+      <View style={[styles.clientCard, !isLast && styles.clientCardBorder]}>
+        {/* Collapsed Header */}
+        <TouchableOpacity 
+          style={styles.clientHeader}
+          onPress={() => toggleClientExpand(item.id)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.clientHeaderLeft}>
+            <Text style={styles.clientName}>{item.name}</Text>
+            <Text style={styles.clientSubtitle}>{item.client_type} | {item.location}</Text>
+          </View>
+          <Ionicons 
+            name={isExpanded ? "chevron-up" : "chevron-down"} 
+            size={24} 
+            color="#666" 
+          />
+        </TouchableOpacity>
+
+        {/* Expanded Content */}
+        {isExpanded && (
+          <View style={styles.clientDetails}>
+            {/* Status Badge */}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Status:</Text>
+              <View style={[styles.statusBadge, item.status === 'inactive' ? styles.statusInactive : styles.statusActive]}>
+                <Text style={[styles.statusText, item.status === 'inactive' && styles.statusTextInactive]}>
+                  {item.status === 'inactive' ? 'Inactive' : 'Active'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Address */}
+            {item.address && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Address:</Text>
+                <Text style={styles.detailValue}>{item.address}</Text>
+              </View>
+            )}
+
+            {/* Mobile & Email */}
+            <View style={styles.detailRowDouble}>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Mobile:</Text>
+                <Text style={styles.detailValue}>{item.phone || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Email:</Text>
+                <Text style={styles.detailValue}>{item.email || 'N/A'}</Text>
+              </View>
+            </View>
+
+            {/* Onboard Date & Projects */}
+            <View style={styles.detailRowDouble}>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Onboard Date:</Text>
+                <Text style={styles.detailValue}>
+                  {item.onboard_date 
+                    ? new Date(item.onboard_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : 'N/A'}
+                </Text>
+              </View>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Number of Projects:</Text>
+                <Text style={styles.detailValue}>{item.project_count || 0}</Text>
+              </View>
+            </View>
+
+            {/* More Button */}
+            <TouchableOpacity 
+              style={styles.moreButton}
+              onPress={() => handleClientPress(item)}
+            >
+              <Ionicons name="map-outline" size={16} color="#6B5CE7" />
+              <Text style={styles.moreButtonText}>More</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
+
 
   if (loading && clients.length === 0) {
     return (
@@ -287,7 +386,7 @@ export default function ClientsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="##101010" />
+          <Ionicons name="chevron-back" size={28} color="#101010" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('clients.clients')}</Text>
       </View>
@@ -303,7 +402,21 @@ export default function ClientsScreen() {
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
-            <Ionicons name="search" size={20} color="#999" />
+            <Ionicons name="search-outline" size={24} color="#6B5CE7" />
+          </View>
+
+          {/* Summary Bar */}
+          <View style={styles.summaryBar}>
+            <Text style={styles.summaryText}>
+              <Text style={styles.summaryLabel}>Total: </Text>
+              <Text style={styles.summaryTotal}>{getClientCounts().total}</Text>
+              <Text style={styles.summaryDivider}> | </Text>
+              <Text style={styles.summaryLabel}>Active: </Text>
+              <Text style={styles.summaryActive}>{getClientCounts().active}</Text>
+              <Text style={styles.summaryDivider}> | </Text>
+              <Text style={styles.summaryLabel}>Inactive: </Text>
+              <Text style={styles.summaryInactive}>{getClientCounts().inactive}</Text>
+            </Text>
           </View>
         </View>
 
@@ -312,34 +425,13 @@ export default function ClientsScreen() {
           <FlatList
             data={filteredClients}
             keyExtractor={(item) => String(item.id)}
-            renderItem={({ item, index }) => (
-              <ClientCard 
-                client={item} 
-                onPress={() => handleClientPress(item)}
-                onEdit={() => handleEditClient(item)}
-                onDelete={() => handleDeleteClient(item)}
-                canDelete={canManageClients}
-                canEdit={canManageClients}
-                isLast={index === filteredClients.length - 1}
-              />
-            )}
+            renderItem={renderClientCard}
             onEndReached={loadMore}
             onEndReachedThreshold={0.6}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>{t('clients.no_clients')}</Text>
-                <Text style={styles.emptySubtext}>
-                  {canManageClients ? t('clients.add_client') : t('common.no_data')}
-                </Text>
-                {canManageClients && (
-                  <View style={styles.emptyButton}>
-                    <Button
-                      title={t('clients.add_client')}
-                      onPress={() => navigation.navigate('AddClient')}
-                    />
-                  </View>
-                )}
+                <Text style={styles.emptyText}>No Client</Text>
               </View>
             }
             contentContainerStyle={styles.listContent}
@@ -363,7 +455,7 @@ export default function ClientsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '##F6F6F6',
+    backgroundColor: '#F6F6F6',
   },
   header: {
     flexDirection: 'row',
@@ -394,18 +486,47 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderWidth: 2,
+    // borderColor: '#6B9DFF',
+    borderColor: '#E8E8E8',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: '#1a1a1a',
     padding: 0,
+  },
+  summaryBar: {
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  summaryText: {
+    fontSize: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    color: '#666666',
+    fontWeight: '400',
+  },
+  summaryTotal: {
+    color: '#666666',
+    fontWeight: '600',
+  },
+  summaryActive: {
+    color: '#6B5CE7',
+    fontWeight: '600',
+  },
+  summaryInactive: {
+    color: '#6B5CE7',
+    fontWeight: '600',
+  },
+  summaryDivider: {
+    color: '#666666',
   },
   center: {
     flex: 1,
@@ -430,26 +551,111 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E8E8E8',
     overflow: 'hidden',
-    paddingHorizontal: 6,
+  },
+  clientCard: {
+    backgroundColor: '#fff',
+  },
+  clientCardBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  clientHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  clientHeaderLeft: {
+    flex: 1,
+  },
+  clientName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  clientSubtitle: {
+    fontSize: 13,
+    color: '#888888',
+    fontWeight: '400',
+  },
+  clientDetails: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  detailRowDouble: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 16,
+  },
+  detailColumn: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: '#999999',
+    marginBottom: 4,
+    fontWeight: '400',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#1a1a1a',
+    fontWeight: '400',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  statusActive: {
+    backgroundColor: '#E8F5E9',
+  },
+  statusInactive: {
+    backgroundColor: '#FFEBEE',
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#4CAF50',
+  },
+  statusTextInactive: {
+    color: '#F44336',
+  },
+  moreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F3FF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  moreButtonText: {
+    fontSize: 14,
+    color: '#6B5CE7',
+    fontWeight: '500',
+    marginLeft: 6,
   },
   emptyState: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 100,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
     fontSize: 16,
-    color: '#999',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  emptyButton: {
-    paddingHorizontal: 24,
+    fontWeight: '400',
+    color: '#999999',
   },
   fab: {
     position: 'absolute',

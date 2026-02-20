@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const pool = require('../config/database');
-const { secondary: registryPool, createOrgPool } = require('../config/databases');
+const { primary: registryPool, secondary, createOrgPool } = require('../config/databases');
 const { handleValidation } = require('../middleware/validation');
 
 const router = express.Router();
@@ -123,7 +123,12 @@ router.post('/register', [
     }
     
     // Fallback: Register in local/default users table only (for demo/development without organization)
-    const client = await pool.connect();
+    // Use secondary database (project_time_manager) for demo users
+    if (!secondary) {
+      return res.status(400).json({ error: 'Organization registration required. Secondary database not configured.' });
+    }
+    
+    const client = await secondary.connect();
     try {
       await client.query('BEGIN');
       
@@ -160,10 +165,18 @@ router.post('/login', [
   try {
     const { email, password } = req.body;
     
-    // Demo accounts (for development) - these are in users table
+    // Demo accounts (for development) - these are in users table in secondary database (project_time_manager)
     // Check users table FIRST for demo accounts (admin@company.com, rajesh@company.com, etc.)
     // Note: Using email_id and user_id column names to match actual database schema
-    const demoResult = await pool.query('SELECT user_id as id, email_id as email, password_hash, first_name, last_name, role FROM users WHERE email_id = $1', [email]);
+    // Use secondary pool (project_time_manager) for demo accounts
+    let demoResult = { rows: [] };
+    if (secondary) {
+      try {
+        demoResult = await secondary.query('SELECT user_id as id, email_id as email, password_hash, first_name, last_name, role FROM users WHERE email_id = $1', [email]);
+      } catch (err) {
+        console.log('Demo account check failed:', err.message);
+      }
+    }
     
     if (demoResult.rows.length > 0) {
       const row = demoResult.rows[0];
@@ -275,10 +288,14 @@ router.get('/profile', async (req, res) => {
       }
     }
     
-    // Fallback: check users table (using email_id and user_id column names)
-    const result = await pool.query('SELECT user_id as id, email_id as email, first_name, last_name, role FROM users WHERE user_id = $1', [decoded.userId]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: result.rows[0] });
+    // Fallback: check users table in secondary database (using email_id and user_id column names)
+    if (secondary) {
+      const result = await secondary.query('SELECT user_id as id, email_id as email, first_name, last_name, role FROM users WHERE user_id = $1', [decoded.userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      return res.json({ user: result.rows[0] });
+    }
+    
+    return res.status(404).json({ error: 'User not found' });
   } catch (err) {
     res.status(401).json({ error: 'Invalid or expired token' });
   }
