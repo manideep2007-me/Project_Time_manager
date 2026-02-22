@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 // DB-only: no selectors/mocks
 import { AuthContext } from '../../context/AuthContext';
 import { usePermissions } from '../../context/PermissionsContext';
+import { useTheme } from '../../theme'; // ✅ New unified theme
 // Removed useRole import to avoid context errors
 import { api } from '../../api/client';
 import ClientCard from '../../components/shared/ClientCard';
@@ -16,6 +17,7 @@ export default function ClientsScreen() {
   const navigation = useNavigation<any>();
   const { user } = useContext(AuthContext);
   const { has } = usePermissions();
+  const { theme } = useTheme(); // ✅ Access theme
   // Show Add Client button only if permission is granted
   const canManageClients = has('clients.add');
   const [clients, setClients] = useState<any[]>([]);
@@ -26,6 +28,228 @@ export default function ClientsScreen() {
   const [hasNext, setHasNext] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedClientId, setExpandedClientId] = useState<number | null>(null);
+
+  // ✅ Theme-aware styles created inside component
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background, // Was: '#F6F6F6'
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: theme.spacing.xs, // Was: 10
+      paddingTop: 30,
+      paddingBottom: theme.spacing.base, // Was: 16
+      backgroundColor: theme.colors.surface, // Was: '#F0F0F0'
+    },
+    backButton: {
+      padding: theme.spacing.xs, // Was: 4
+      marginRight: theme.spacing.xs, // Was: 8
+    },
+    headerTitle: {
+      flex: 1,
+      fontSize: theme.typography.fontSizes.xl, // Was: 20
+      fontWeight: '400',
+      fontFamily: theme.typography.families.regular, // Was: 'Inter_400Regular'
+      color: theme.colors.text, // Was: '#000000'
+    },
+    addButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.colors.primary, // Was: '#6B5CE7'
+      paddingHorizontal: theme.spacing.base, // Was: 16
+      paddingVertical: theme.spacing.xs, // Was: 8
+      borderRadius: theme.borderRadius.md, // Was: 8
+      gap: 6,
+    },
+    addButtonText: {
+      color: theme.colors.surface, // Was: '#fff'
+      fontSize: theme.typography.fontSizes.sm, // Was: 14
+      fontWeight: '600',
+    },
+    screenContent: {
+      flex: 1,
+    },
+    searchContainer: {
+      paddingHorizontal: theme.spacing.base, // Was: 16
+      paddingVertical: theme.spacing.md, // Was: 12
+      backgroundColor: theme.colors.surface, // Was: '#F0F0F0'
+    },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.colors.surface, // Was: '#FFFFFF'
+      borderRadius: theme.borderRadius.md, // Was: 8
+      paddingHorizontal: theme.spacing.md, // Was: 12
+      paddingVertical: theme.spacing.xs, // Was: 10
+      borderWidth: 2,
+      borderColor: theme.colors.border, // Was: '#E8E8E8'
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: theme.typography.fontSizes.base, // Was: 16
+      color: theme.colors.text, // Was: '#1a1a1a'
+      padding: 0,
+    },
+    summaryBar: {
+      marginTop: theme.spacing.md, // Was: 12
+      paddingHorizontal: theme.spacing.xs, // Was: 4
+    },
+    summaryText: {
+      fontSize: theme.typography.fontSizes.sm, // Was: 14
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    summaryLabel: {
+      color: theme.colors.textSecondary, // Was: '#666666'
+      fontWeight: '400',
+    },
+    summaryTotal: {
+      color: theme.colors.textSecondary, // Was: '#666666'
+      fontWeight: '600',
+    },
+    summaryActive: {
+      color: theme.colors.primary, // Was: '#6B5CE7'
+      fontWeight: '600',
+    },
+    summaryInactive: {
+      color: theme.colors.primary, // Was: '#6B5CE7'
+      fontWeight: '600',
+    },
+    summaryDivider: {
+      color: theme.colors.textSecondary, // Was: '#666666'
+    },
+    center: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background, // Was: '#f8f9fa'
+    },
+    loadingText: {
+      marginTop: theme.spacing.md, // Was: 12
+      fontSize: theme.typography.fontSizes.base, // Was: 16
+      color: theme.colors.textSecondary, // Was: '#666'
+    },
+    listContent: {
+      paddingBottom: 80,
+    },
+    bigCard: {
+      flex: 1,
+      backgroundColor: theme.colors.surface, // Was: '#fff'
+      marginHorizontal: theme.spacing.base, // Was: 16
+      marginTop: theme.spacing.md, // Was: 12
+      borderRadius: theme.borderRadius.lg, // Was: 12
+      borderWidth: 1,
+      borderColor: theme.colors.border, // Was: '#E8E8E8'
+      overflow: 'hidden',
+    },
+    clientCard: {
+      backgroundColor: theme.colors.surface, // Was: '#fff'
+    },
+    clientCardBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.background, // Was: '#F0F0F0'
+    },
+    clientHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing.base, // Was: 16
+      paddingVertical: theme.spacing.base, // Was: 16
+    },
+    clientHeaderLeft: {
+      flex: 1,
+    },
+    clientName: {
+      fontSize: theme.typography.fontSizes.base, // Was: 16
+      fontWeight: '600',
+      color: theme.colors.text, // Was: '#1a1a1a'
+      marginBottom: theme.spacing.xs, // Was: 4
+    },
+    clientSubtitle: {
+      fontSize: theme.typography.fontSizes.xs, // Was: 13
+      color: theme.colors.textTertiary, // Was: '#888888'
+      fontWeight: '400',
+    },
+    clientDetails: {
+      paddingHorizontal: theme.spacing.base, // Was: 16
+      paddingBottom: theme.spacing.base, // Was: 16
+      paddingTop: theme.spacing.xs, // Was: 4
+    },
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: theme.spacing.md, // Was: 12
+    },
+    detailRowDouble: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: theme.spacing.md, // Was: 12
+      gap: theme.spacing.base, // Was: 16
+    },
+    detailColumn: {
+      flex: 1,
+    },
+    detailLabel: {
+      fontSize: theme.typography.fontSizes.xs, // Was: 13
+      color: theme.colors.textTertiary, // Was: '#999999'
+      marginBottom: theme.spacing.xs, // Was: 4
+      fontWeight: '400',
+    },
+    detailValue: {
+      fontSize: theme.typography.fontSizes.sm, // Was: 14
+      color: theme.colors.text, // Was: '#1a1a1a'
+      fontWeight: '400',
+    },
+    statusBadge: {
+      paddingHorizontal: theme.spacing.md, // Was: 12
+      paddingVertical: theme.spacing.xs, // Was: 4
+      borderRadius: theme.borderRadius.lg, // Was: 12
+      marginLeft: theme.spacing.xs, // Was: 8
+    },
+    statusActive: {
+      backgroundColor: theme.colors.successLight, // Was: '#E8F5E9'
+    },
+    statusInactive: {
+      backgroundColor: theme.colors.errorLight, // Was: '#FFEBEE'
+    },
+    statusText: {
+      fontSize: theme.typography.fontSizes.xs, // Was: 13
+      fontWeight: '500',
+      color: theme.colors.success, // Was: '#4CAF50'
+    },
+    statusTextInactive: {
+      color: theme.colors.error, // Was: '#F44336'
+    },
+    moreButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.colors.primaryLight, // Was: '#F5F3FF'
+      paddingHorizontal: theme.spacing.base, // Was: 16
+      paddingVertical: theme.spacing.xs, // Was: 8
+      borderRadius: theme.borderRadius.xxl, // Was: 20
+      alignSelf: 'flex-start',
+      marginTop: theme.spacing.xs, // Was: 8
+    },
+    moreButtonText: {
+      fontSize: theme.typography.fontSizes.sm, // Was: 14
+      color: theme.colors.primary, // Was: '#6B5CE7'
+      fontWeight: '500',
+      marginLeft: 6,
+    },
+    emptyState: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 100,
+    },
+    emptyText: {
+      fontSize: theme.typography.fontSizes.base, // Was: 16
+      fontWeight: '400',
+      color: theme.colors.textTertiary, // Was: '#999999'
+    },
+  });
 
   const loadClients = async (pageNum = 1) => {
     try {
@@ -389,6 +613,15 @@ export default function ClientsScreen() {
           <Ionicons name="chevron-back" size={28} color="#101010" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('clients.clients')}</Text>
+        {canManageClients && (
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => navigation.navigate('AddClient')}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.addButtonText}>Add Client</Text>
+          </TouchableOpacity>
+        )}
       </View>
       
       <View style={styles.screenContent}>
@@ -438,239 +671,8 @@ export default function ClientsScreen() {
           />
         </View>
 
-        {/* Floating Add Button */}
-        {canManageClients && (
-          <TouchableOpacity 
-            style={styles.fab}
-            onPress={() => navigation.navigate('AddClient')}
-          >
-            <Ionicons name="add" size={28} color="#fff" />
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F6F6F6',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 30,
-    paddingBottom: 16,
-    backgroundColor: '#F0F0F0',
-  },
-  backButton: {
-    padding: 4,
-    marginRight: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '400',
-    fontFamily: 'Inter_400Regular',
-    color: '#000000',
-  },
-  screenContent: {
-    flex: 1,
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F0F0F0',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 2,
-    // borderColor: '#6B9DFF',
-    borderColor: '#E8E8E8',
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1a1a1a',
-    padding: 0,
-  },
-  summaryBar: {
-    marginTop: 12,
-    paddingHorizontal: 4,
-  },
-  summaryText: {
-    fontSize: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    color: '#666666',
-    fontWeight: '400',
-  },
-  summaryTotal: {
-    color: '#666666',
-    fontWeight: '600',
-  },
-  summaryActive: {
-    color: '#6B5CE7',
-    fontWeight: '600',
-  },
-  summaryInactive: {
-    color: '#6B5CE7',
-    fontWeight: '600',
-  },
-  summaryDivider: {
-    color: '#666666',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
-  },
-  listContent: {
-    paddingBottom: 80,
-  },
-  bigCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    overflow: 'hidden',
-  },
-  clientCard: {
-    backgroundColor: '#fff',
-  },
-  clientCardBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  clientHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  clientHeaderLeft: {
-    flex: 1,
-  },
-  clientName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  clientSubtitle: {
-    fontSize: 13,
-    color: '#888888',
-    fontWeight: '400',
-  },
-  clientDetails: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    paddingTop: 4,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  detailRowDouble: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    gap: 16,
-  },
-  detailColumn: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 13,
-    color: '#999999',
-    marginBottom: 4,
-    fontWeight: '400',
-  },
-  detailValue: {
-    fontSize: 14,
-    color: '#1a1a1a',
-    fontWeight: '400',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  statusActive: {
-    backgroundColor: '#E8F5E9',
-  },
-  statusInactive: {
-    backgroundColor: '#FFEBEE',
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#4CAF50',
-  },
-  statusTextInactive: {
-    color: '#F44336',
-  },
-  moreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F3FF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-  },
-  moreButtonText: {
-    fontSize: 14,
-    color: '#6B5CE7',
-    fontWeight: '500',
-    marginLeft: 6,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 100,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#999999',
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#6B5CE7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-});

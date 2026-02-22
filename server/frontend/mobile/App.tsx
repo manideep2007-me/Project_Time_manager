@@ -10,8 +10,9 @@ import { TimerProvider } from './src/context/TimerContext';
 import { RoleProvider } from './src/context/RoleContext';
 import { ActivityProvider } from './src/context/ActivityContext';
 import { PermissionsProvider } from './src/context/PermissionsContext';
+import { ThemeProvider } from './src/theme'; // ✅ New unified theme system
 import SplashScreen from './src/screens/SplashScreen';
-
+import ThemeTestScreen from './src/screens/ThemeTestScreen';
 // Keep the native splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
 
@@ -49,17 +50,19 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <RoleProvider>
-          <PermissionsProvider>
-            <TimerProvider>
-              <ActivityProvider>
-                <RootNavigator />
-              </ActivityProvider>
-            </TimerProvider>
-          </PermissionsProvider>
-        </RoleProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <RoleProvider>
+            <PermissionsProvider>
+              <TimerProvider>
+                <ActivityProvider>
+                  <ThemeTestScreen />
+                </ActivityProvider>
+              </TimerProvider>
+            </PermissionsProvider>
+          </RoleProvider>
+        </AuthProvider>
+      </ThemeProvider>
       <StatusBar style="dark" />
     </SafeAreaProvider>
   );

@@ -4,6 +4,17 @@
     "strict": true,
     "jsx": "react-jsx",
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/theme": ["src/theme"],
+      "@/theme/*": ["src/theme/*"],
+      "@/components/*": ["src/components/*"],
+      "@/screens/*": ["src/screens/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@/context/*": ["src/context/*"],
+      "@/api/*": ["src/api/*"]
+    }
   }
 }

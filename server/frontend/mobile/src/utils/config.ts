@@ -3,7 +3,7 @@ type AppConfig = {
 };
 
 // Your PC's local network IP - update this when your IP changes
-const LAN_IP = '192.168.0.122';
+const LAN_IP = '10.10.53.182';
 
 // Set to true to use emulator URL (10.0.2.2), false for real device (LAN IP)
 const USE_EMULATOR = false;
