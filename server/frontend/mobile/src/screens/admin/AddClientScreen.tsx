@@ -624,18 +624,18 @@ export default function AddClientScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screenContainer: {
-    flex: 1,
-    backgroundColor: '#F6F6F6',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 50,
-    paddingBottom: 16,
-    backgroundColor: '#F0F0F0',
+  const styles = StyleSheet.create({
+    screenContainer: {
+      flex: 1,
+      backgroundColor: '#F6F6F6',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingTop: 50,
+      paddingBottom: 16,
+      backgroundColor: '#F0F0F0',
   },
   backButton: {
     padding: 4,

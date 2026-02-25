@@ -6,7 +6,7 @@ type AppConfig = {
 const LAN_IP = '10.10.53.182';
 
 // Set to true to use emulator URL (10.0.2.2), false for real device (LAN IP)
-const USE_EMULATOR = false;
+const USE_EMULATOR = true;
 
 export function getConfig(): AppConfig {
   // Prefer explicit env variable

@@ -56,7 +56,7 @@ export default function App() {
             <PermissionsProvider>
               <TimerProvider>
                 <ActivityProvider>
-                  <ThemeTestScreen />
+                  <RootNavigator />
                 </ActivityProvider>
               </TimerProvider>
             </PermissionsProvider>

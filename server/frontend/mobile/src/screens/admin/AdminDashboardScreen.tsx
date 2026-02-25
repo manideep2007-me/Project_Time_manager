@@ -136,12 +136,14 @@ export default function AdminDashboardScreen() {
       activeOpacity={onCardPress ? 0.7 : 1}
       disabled={!onCardPress}
     >
-      <View style={styles.statCardHeader}>
-        <Text style={styles.statCardTitle}>{title}</Text>
-        <View style={styles.statCardIcon}>
-          <Ionicons name={iconName as any} size={32} color="#E88D4E" />
-        </View>
-      </View>
+      {/* Background watermark image */}
+      <Image 
+        source={require('../../../assets/Vector.png')} 
+        style={styles.statCardIconBackground}
+        resizeMode="contain"
+      />
+      
+      <Text style={styles.statCardTitle}>{title}</Text>
       <Text style={styles.statCardValue}>{value}</Text>
       <TouchableOpacity style={styles.statCardButton} onPress={onButtonPress}>
         <Text style={styles.statCardButtonText}>{buttonText}</Text>
@@ -206,7 +208,7 @@ export default function AdminDashboardScreen() {
                 title="Employee"
                 value={overview?.totalActiveEmployees || 0}
                 iconName="people-outline"
-                buttonText="Add New Employee"
+                buttonText="Add Employee"
                 onCardPress={() => navigation.navigate('Employees')}
                 onButtonPress={() => navigation.navigate('AddEmployee')}
               />
@@ -284,7 +286,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: PRIMARY_PURPLE,
     paddingHorizontal: 20,
-    paddingTop: 44,
+    paddingTop: 20,
     paddingBottom: 26,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -354,66 +356,73 @@ const styles = StyleSheet.create({
   contentArea: {
     flex: 1,
     backgroundColor: BG_COLOR,
-    paddingTop: 64,
+    paddingTop: 24,
   },
 
   // Stats Grid
   statsGrid: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
+    gap: 12,
   },
   statCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 16,
-    marginHorizontal: 6,
+    borderRadius: 12,
+    padding: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowRadius: 6,
     elevation: 2,
-    width: 176,
-    height: 142,
-  },
-  statCardHeader: {
-    flexDirection: 'row',
+    minHeight: 148,
+    position: 'relative',
+    overflow: 'hidden',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  },
+  statCardIconBackground: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 100,
+    height: 100,
+    opacity: 0.12,
+    zIndex: 0,
   },
   statCardTitle: {
     fontSize: 16,
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
-    color: '#404040',
-    marginTop: -4,
-  },
-  statCardIcon: {
-    opacity: 0.6,
+    color: '#333333',
+    marginBottom: 4,
+    zIndex: 1,
   },
   statCardValue: {
-    fontSize: 40,
+    fontSize: 44,
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
     color: '#727272',
-    marginTop: -22,
-    marginBottom: 10,
+    marginVertical: 8,
+    zIndex: 1,
+    lineHeight: 52,
   },
   statCardButton: {
     backgroundColor: BUTTON_COLOR,
-    borderRadius: 25,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     alignSelf: 'flex-start',
+    zIndex: 1,
+    marginTop: 4,
   },
   statCardButtonText: {
     fontSize: 12,
-    fontWeight: '400',
-    fontFamily: 'Inter_400Regular',
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
     color: '#FFFFFF',
   },
 
@@ -421,7 +430,7 @@ const styles = StyleSheet.create({
   qrCard: {
     marginHorizontal: 16,
     marginTop: 8,
-    marginBottom: 24,
+    marginBottom: 32,
     padding: 20,
     alignItems: 'center',
     borderRadius: 16,

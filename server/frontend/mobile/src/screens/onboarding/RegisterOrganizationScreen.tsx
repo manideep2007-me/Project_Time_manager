@@ -31,7 +31,7 @@ function FloatingLabelInput({ label, multiline, style, ...rest }: FloatingLabelI
   const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
   const showFloatingLabel = isFocused || hasValue;
   const basePlaceholder = (rest.placeholder as string) || label;
-  const placeholderColor = rest.placeholderTextColor ?? '#A0A0A0';
+  const placeholderColor = rest.placeholderTextColor ?? '#BBBBBB';
 
   return (
     <View style={styles.floatingContainer}>
@@ -130,7 +130,7 @@ function FloatingLabelPasswordInput({
   const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
   const showFloatingLabel = isFocused || hasValue;
   const basePlaceholder = (rest.placeholder as string) || label;
-  const placeholderColor = rest.placeholderTextColor ?? '#A0A0A0';
+  const placeholderColor = rest.placeholderTextColor ?? '#BBBBBB';
 
   return (
     <View style={styles.floatingContainer}>
@@ -170,7 +170,7 @@ function FloatingLabelPasswordInput({
           <Ionicons 
             name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
             size={22} 
-            color="#877ED2" 
+            color="#999999" 
           />
         </TouchableOpacity>
       </View>
@@ -498,12 +498,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
         if (res.otp) {
           setPhoneOtpGenerated(res.otp);
         }
-        // Show WhatsApp notification
-        Alert.alert(
-          '📱 WhatsApp OTP Sent', 
-          `A 6-digit verification code has been sent to your WhatsApp number +91 ${adminPhone}. Please check your WhatsApp messages.`,
-          [{ text: 'OK' }]
-        );
+        // OTP sent successfully - modal is already open
       } else {
         Alert.alert('Error', res.message || 'Failed to send OTP to WhatsApp');
       }
@@ -562,7 +557,6 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
     if (newOtp.every((digit) => digit !== '') && newOtp.join('') === phoneOtpGenerated) {
       setPhoneVerified(true);
       setShowPhoneOtpModal(false);
-      Alert.alert('✅ Success', 'WhatsApp number verified successfully!');
     }
   };
 
@@ -585,7 +579,6 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       if (res.success) {
         setPhoneVerified(true);
         setShowPhoneOtpModal(false);
-        Alert.alert('✅ Success', 'WhatsApp number verified successfully!');
       } else {
         Alert.alert('Invalid OTP', res.message || 'Please enter the correct code from WhatsApp');
         setPhoneOtpDigits(['', '', '', '', '', '']);
@@ -596,7 +589,6 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       if (enteredOtp === phoneOtpGenerated) {
         setPhoneVerified(true);
         setShowPhoneOtpModal(false);
-        Alert.alert('✅ Success', 'WhatsApp number verified successfully!');
       } else {
         Alert.alert('Invalid OTP', 'Please enter the correct code from WhatsApp');
         setPhoneOtpDigits(['', '', '', '', '', '']);
@@ -766,48 +758,57 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
                 <Text style={styles.progressStepText}>{step} of 3</Text>
               </View>
 
-              <View style={styles.row}>
-                <FloatingLabelInput
-                  label="Email*"
-                  value={adminEmail}
-                  onChangeText={(t) => { setAdminEmail(t); setEmailVerified(false); }}
-                  placeholder="Email*"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  style={styles.inputFlex}
-                />
-                <TouchableOpacity style={styles.emailOtpButton} onPress={sendEmailOtp}>
-                  <Text style={styles.secondaryButtonText}>{emailOtpSent ? 'Resend OTP' : 'Send OTP'}</Text>
+              {emailVerified && (
+                <View style={styles.verifiedBadge}>
+                  <Ionicons name="checkmark-circle" size={16} color="#25D366" />
+                  <Text style={styles.verifiedText}>Email verified</Text>
+                </View>
+              )}
+
+              <View style={styles.emailRow}>
+                <View style={styles.emailInputWrapper}>
+                  <FloatingLabelInput
+                    label="Email*"
+                    value={adminEmail}
+                    onChangeText={(t) => { setAdminEmail(t); setEmailVerified(false); }}
+                    placeholder="Email*"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <TouchableOpacity style={styles.sendOtpButton} onPress={sendEmailOtp}>
+                  <Text style={styles.sendOtpButtonText}>Send OTP</Text>
                 </TouchableOpacity>
               </View>
-              <View style={styles.row}>
-                <View style={styles.phoneContainer}>
-                  <View style={styles.countryCodeBox}>
+
+              <View style={styles.phoneRow}>
+                <View style={styles.phoneInputContainer}>
+                  <View style={styles.countryCodePrefix}>
                     <Text style={styles.countryCodeText}>+91</Text>
                   </View>
-                  <View style={styles.phoneInputWrapper}>
+                  <View style={styles.phoneInputField}>
                     <FloatingLabelInput
-                      label="WhatsApp Phone*"
+                      label="Phone*"
                       value={adminPhone}
                       onChangeText={(t) => { setAdminPhone(t); setPhoneVerified(false); }}
                       keyboardType="phone-pad"
                       maxLength={10}
-                      style={styles.phoneInput}
                     />
                   </View>
                 </View>
-                <TouchableOpacity style={styles.whatsappOtpButton} onPress={sendPhoneOtp}>
-                  <Ionicons name="logo-whatsapp" size={16} color="#fff" style={{ marginRight: 4 }} />
-                  <Text style={styles.whatsappButtonText}>Send OTP</Text>
+                <TouchableOpacity style={styles.sendOtpButton} onPress={sendPhoneOtp}>
+                  <Text style={styles.sendOtpButtonText}>Send OTP</Text>
                 </TouchableOpacity>
               </View>
+
               {phoneVerified && (
                 <View style={styles.verifiedBadge}>
                   <Ionicons name="checkmark-circle" size={16} color="#25D366" />
-                  <Text style={styles.verifiedText}>WhatsApp verified</Text>
+                  <Text style={styles.verifiedText}>Phone verified</Text>
                 </View>
               )}
-              <View style={styles.passwordFieldContainer}>
+
+              <View style={styles.passwordFieldWithStrength}>
                 <FloatingLabelPasswordInput
                   label="Password*"
                   placeholder="Password*"
@@ -818,7 +819,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
                   autoCapitalize="none"
                 />
                 {adminPassword.length > 0 && (
-                  <Text style={styles.passwordStrengthInline}>
+                  <Text style={styles.passwordStrengthText}>
                     {adminPassword.length >= 6 ? 'Strong' : 'Weak'}
                   </Text>
                 )}
@@ -836,11 +837,11 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
 
               <View style={styles.spacer} />
 
-              <View style={styles.navRow}>
-                <TouchableOpacity style={styles.outlineButton} onPress={() => setStep(1)}>
-                  <Ionicons name="arrow-back" size={20} color="#877ED2" />
+              <View style={styles.step2NavRow}>
+                <TouchableOpacity style={styles.backButton} onPress={() => setStep(1)}>
+                  <Ionicons name="arrow-back" size={24} color="#877ED2" />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.button, !canGoNextFromStep2 && styles.buttonDisabled]} onPress={() => setStep(3)} disabled={!canGoNextFromStep2}>
+                <TouchableOpacity style={[styles.continueButton, !canGoNextFromStep2 && styles.buttonDisabled]} onPress={() => setStep(3)} disabled={!canGoNextFromStep2}>
                   <Text style={styles.buttonText}>Continue</Text>
                 </TouchableOpacity>
               </View>
@@ -913,15 +914,15 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
 
               <View style={styles.spacer} />
 
-              <View style={styles.navRow}>
+              <View style={styles.step2NavRow}>
                 <TouchableOpacity
-                  style={styles.outlineButton}
+                  style={styles.backButton}
                   onPress={() => setStep(2)}
                 >
-                  <Ionicons name="arrow-back" size={20} color="#877ED2" />
+                  <Ionicons name="arrow-back" size={24} color="#877ED2" />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.button, submitting && { opacity: 0.6 }]}
+                  style={[styles.continueButton, submitting && { opacity: 0.6 }]}
                   onPress={handleSubmit}
                   disabled={submitting}
                 >
@@ -1229,11 +1230,22 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
             <TouchableOpacity
               style={styles.licenseModalSendButton}
               onPress={() => {
-                // Handle send license key logic here
-                if (!licenceNumber) {
-                  // Just a masked placeholder for now; replace with real key if needed
-                  setLicenceNumber('****  ****  ****');
-                }
+                // Generate a random license key (format: XXXX-XXXX-XXXX)
+                const generateLicenseKey = () => {
+                  const segment = () => Math.random().toString(36).substring(2, 6).toUpperCase();
+                  return `${segment()}-${segment()}-${segment()}`;
+                };
+                
+                const generatedKey = generateLicenseKey();
+                console.log('═══════════════════════════════════════');
+                console.log('🔑 LICENSE KEY GENERATED (FOR TESTING)');
+                console.log('═══════════════════════════════════════');
+                console.log('License Key:', generatedKey);
+                console.log('Email:', adminEmail);
+                console.log('Valid for: 12 hours');
+                console.log('═══════════════════════════════════════');
+                
+                setLicenceNumber(generatedKey);
                 setShowLicenseField(true);
                 setShowLicenseKeyModal(false);
               }}
@@ -1263,7 +1275,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 32,
-    paddingTop: 20,
+    paddingTop: 16,
     flexGrow: 1,
   },
   wizardHeader: {
@@ -1271,18 +1283,19 @@ const styles = StyleSheet.create({
   },
   wizardTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#333',
+    fontFamily: 'Inter_600SemiBold',
   },
   progressContainer: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   progressBarTrack: {
     height: 6,
     borderRadius: 3,
     backgroundColor: '#E5E7EB',
     overflow: 'hidden',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   progressBarFill: {
     height: 6,
@@ -1290,30 +1303,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#877ED2',
   },
   progressStepText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#999999',
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
+    marginTop: 6,
   },
   sectionTitle: { 
     fontSize: 18, 
     fontWeight: '500', 
     marginTop: 0, 
-    marginBottom: 12, 
-    color: '#404040',
+    marginBottom: 16, 
+    color: '#333333',
     fontFamily: 'Inter_500Medium',
   },
   floatingContainer: {
-    marginBottom: 16,
+    marginBottom: 5,
     position: 'relative',
     paddingTop: 0,
   },
   floatingLabel: {
     position: 'absolute',
     left: 14,
-    top: 16,
+    top: 18,
     fontSize: 14,
-    color: '#A0A0A0',
+    color: '#999999',
     zIndex: 1,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 4,
@@ -1321,23 +1335,24 @@ const styles = StyleSheet.create({
   floatingLabelActive: {
     top: -8,
     fontSize: 12,
-    color: '#877ED2',
+    color: '#999999',
   },
   floatingInput: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E0E0E0',
     borderRadius: 8,
     paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingTop: 16,
+    paddingBottom: 16,
     backgroundColor: '#FFFFFF',
     fontSize: 14,
+    color: '#333333',
     lineHeight: 20,
     minHeight: 52,
   },
   floatingInputWithLabel: {
-    paddingTop: 18,
-    paddingBottom: 12,
+    paddingTop: 20,
+    paddingBottom: 14,
   },
   floatingInputMultiline: {
     // Address textarea height
@@ -1365,15 +1380,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 12,
+    marginBottom: 12,
   },
   inputFlex: {
     width: 260,
   },
+  emailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    gap: 12,
+  },
+  emailInputWrapper: {
+    flex: 1,
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    gap: 12,
+  },
+  phoneInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  countryCodePrefix: {
+    width: 60,
+    height: 55,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phoneInputField: {
+    flex: 1,
+    marginBottom: -18,
+    marginTop: 0,
+  },
+  sendOtpButton: {
+    backgroundColor: '#877ED2',
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 0,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 100,
+  },
+  sendOtpButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+  },
   labelInline: {
     fontSize: 14,
     color: '#8D8D8D',
-    marginTop: 10,
-    marginBottom: 6,
+    marginTop: 0,
+    marginBottom: 8,
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
   },
@@ -1385,40 +1455,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     fontSize: 14,
   },
-  emailOtpButton: {
-    width: 102,
-    height: 47,
-    borderRadius: 8,
-    backgroundColor: '#877ED2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -10,
-  },
-  phoneOtpButton: {
-    width: 102,
-    height: 47,
-    borderRadius: 8,
-    backgroundColor: '#877ED2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -10,
-  },
-  whatsappOtpButton: {
-    flexDirection: 'row',
-    width: 110,
-    height: 47,
-    borderRadius: 8,
-    backgroundColor: '#25D366',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -10,
-  },
-  whatsappButtonText: {
-    fontWeight: '500',
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-  },
+
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1427,8 +1464,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     alignSelf: 'flex-start',
-    marginBottom: 8,
-    marginTop: -4,
+    marginBottom: 16,
+    marginTop: 0,
   },
   verifiedText: {
     color: '#25D366',
@@ -1436,13 +1473,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 4,
   },
-  secondaryButtonText: { fontWeight: '500', color: '#FFFFFF', fontSize: 14, fontFamily: 'Inter_500Medium' },
   verified: { backgroundColor: '#E6FFED', borderColor: '#34C759' },
   chip: {
     flex: 1,
     height: 80,
     borderRadius: 10,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#877ED2',
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
@@ -1463,7 +1499,7 @@ const styles = StyleSheet.create({
   },
   spacer: {
     flex: 1,
-    minHeight: 120,
+    minHeight: 80,
   },
   navRow: { 
     flexDirection: 'row', 
@@ -1472,8 +1508,36 @@ const styles = StyleSheet.create({
     marginTop: 32,
     paddingBottom: 24,
   },
+  step2NavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  backButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#877ED2',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueButton: {
+    flex: 1,
+    backgroundColor: '#877ED2',
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+  },
   logoSection: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   logoLabel: {
     fontSize: 14,
@@ -1536,35 +1600,11 @@ const styles = StyleSheet.create({
     color: '#333333',
     flex: 1,
   },
-  phoneContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 50,
-    width: 260,
-  },
-  countryCodeBox: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    marginRight: 8,
-    width: 54,
-    minHeight: 50,
-    marginTop: -12,
-  },
   countryCodeText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: '#333',
-  },
-  phoneInputWrapper: {
-    flex: 1,
-  },
-  phoneInput: {
-    width: '100%',
+    fontFamily: 'Inter_400Regular',
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -1594,18 +1634,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E0E0E0',
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     paddingRight: 12,
-    minHeight: 50,
+    minHeight: 52,
   },
   floatingPasswordInput: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    paddingBottom: 16,
     fontSize: 14,
+    color: '#333333',
     lineHeight: 20,
   },
   floatingPasswordToggle: {
@@ -1613,7 +1654,11 @@ const styles = StyleSheet.create({
   },
   passwordFieldContainer: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: 18,
+  },
+  passwordFieldWithStrength: {
+    position: 'relative',
+    marginBottom: 18,
   },
   passwordStrength: {
     alignSelf: 'flex-end',
@@ -1622,6 +1667,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#22C55E',
     fontWeight: '500',
+  },
+  passwordStrengthText: {
+    position: 'absolute',
+    right: 10,
+    top: '105%',
+    transform: [{ translateY: -8 }],
+    fontSize: 12,
+    color: '#22C55E',
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   passwordStrengthInline: {
     position: 'absolute',
@@ -1641,7 +1696,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#FFFFFF', fontWeight: '500', fontSize: 16 },
+  buttonText: { 
+    color: '#FFFFFF', 
+    fontWeight: '600', 
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+  },
   outlineButton: { 
     borderWidth: 1, 
     borderColor: '#877ED2', 
@@ -1655,7 +1715,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   compareText: {
-    marginTop: 12,
+    marginTop: 0,
+    marginBottom: 12,
     fontSize: 14,
     color: '#877ED2',
     textAlign: 'center',

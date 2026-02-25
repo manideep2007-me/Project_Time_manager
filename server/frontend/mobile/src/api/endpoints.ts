@@ -2,7 +2,7 @@ import { api } from './client';
 
 // Types
 export type LoginPayload = { email: string; password: string };
-export type RegisterPayload = { email: string; password: string; firstName: string; lastName: string; organizationCode?: string; role?: string };
+export type RegisterPayload = { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationCode?: string; role?: string };
 export type PaginatedParams = { page?: number; limit?: number } & Record<string, any>;
 
 // Auth

@@ -13,7 +13,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Appearance, ColorSchemeName } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-
 // ============================================================================
 // TYPOGRAPHY - Shared across all themes
 // ============================================================================
@@ -41,7 +40,8 @@ export const typography = {
     extrabold: '800' as const,
   },
   families: {
-    regular: 'Inter_400Regular',
+     regular: 'Inter_400Regular', 
+    // regular:'System',
     medium: 'Inter_500Medium',
     semibold: 'Inter_600SemiBold',
     bold: 'Inter_700Bold',
