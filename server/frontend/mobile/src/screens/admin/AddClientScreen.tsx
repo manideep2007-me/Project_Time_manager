@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import {
   View,
   Text,
@@ -8,35 +8,171 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Modal,
+  TextInputProps,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../api/client';
-import Card from '../../components/shared/Card';
-import Button from '../../components/shared/Button';
-import AppHeader from '../../components/shared/AppHeader';
-import VoiceToTextButton from '../../components/shared/VoiceToTextButton';
 
 const SALUTATIONS = ['Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'];
+const CATEGORIES = ['Individual', 'Company', 'Government', 'Non-Profit', 'Freelancer'];
+const COUNTRIES = ['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 'Japan', 'Singapore', 'UAE'];
+const STATES: Record<string, string[]> = {
+  'India': ['Andhra Pradesh', 'Karnataka', 'Kerala', 'Maharashtra', 'Tamil Nadu', 'Telangana', 'Gujarat', 'Rajasthan', 'Uttar Pradesh', 'West Bengal', 'Delhi', 'Punjab', 'Haryana', 'Madhya Pradesh', 'Bihar'],
+  'United States': ['California', 'New York', 'Texas', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'Michigan', 'Washington'],
+  'United Kingdom': ['England', 'Scotland', 'Wales', 'Northern Ireland'],
+  'Canada': ['Ontario', 'Quebec', 'British Columbia', 'Alberta', 'Manitoba'],
+  'Australia': ['New South Wales', 'Victoria', 'Queensland', 'Western Australia', 'South Australia'],
+  'Germany': ['Bavaria', 'Berlin', 'Hamburg', 'Hesse', 'Saxony'],
+  'France': ['Île-de-France', 'Provence-Alpes-Côte d\'Azur', 'Auvergne-Rhône-Alpes', 'Occitanie'],
+  'Japan': ['Tokyo', 'Osaka', 'Kyoto', 'Hokkaido', 'Fukuoka'],
+  'Singapore': ['Singapore'],
+  'UAE': ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman'],
+};
+
+// Floating Label Input Component
+interface FloatingLabelInputProps extends TextInputProps {
+  label: string;
+  multiline?: boolean;
+}
+
+function FloatingLabelInput({ label, multiline, style, ...rest }: FloatingLabelInputProps) {
+  const [isFocused, setIsFocused] = useState(false);
+  const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
+  const showFloatingLabel = isFocused || hasValue;
+  const basePlaceholder = (rest.placeholder as string) || label;
+  const placeholderColor = rest.placeholderTextColor ?? '#727272';
+
+  return (
+    <View style={styles.floatingContainer}>
+      {showFloatingLabel && (
+        <Text style={[styles.floatingLabel, styles.floatingLabelActive]}>
+          {label}
+        </Text>
+      )}
+      <TextInput
+        {...rest}
+        multiline={multiline}
+        placeholder={showFloatingLabel ? '' : basePlaceholder}
+        placeholderTextColor={placeholderColor}
+        style={[
+          styles.floatingInput,
+          showFloatingLabel && styles.floatingInputWithLabel,
+          multiline && styles.floatingInputMultiline,
+          isFocused && styles.floatingInputFocused,
+          style,
+        ]}
+        onFocus={(e) => {
+          setIsFocused(true);
+          rest.onFocus && rest.onFocus(e);
+        }}
+        onBlur={(e) => {
+          setIsFocused(false);
+          rest.onBlur && rest.onBlur(e);
+        }}
+      />
+    </View>
+  );
+}
+
+// Floating Label Picker Component
+interface FloatingLabelPickerProps {
+  label: string;
+  selectedValue: string;
+  onValueChange: (value: string) => void;
+  children: ReactNode;
+}
+
+function FloatingLabelPicker({
+  label,
+  selectedValue,
+  onValueChange,
+  children,
+}: FloatingLabelPickerProps) {
+  const hasValue = !!selectedValue;
+  const showFloatingLabel = hasValue;
+
+  return (
+    <View style={styles.floatingContainer}>
+      {showFloatingLabel && (
+        <Text style={[styles.floatingLabel, styles.floatingLabelActive]}>
+          {label}
+        </Text>
+      )}
+      <View style={[styles.floatingInput, styles.floatingPicker]}>
+        <Picker
+          selectedValue={selectedValue}
+          onValueChange={(v: string) => onValueChange(v)}
+          style={styles.picker}
+        >
+          {!hasValue && (
+            <Picker.Item
+              label={label}
+              value=""
+              color="#727272"
+            />
+          )}
+          {children}
+        </Picker>
+      </View>
+    </View>
+  );
+}
 
 export default function AddClientScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const editingClient = route.params?.client;
+  const isEditing = !!editingClient;
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
+    companyName: '',
     salutation: '',
     firstName: '',
     lastName: '',
     gst: '',
+    category: '',
     email: '',
     phone: '',
     address: '',
+    country: '',
+    state: '',
+    city: '',
+    zipCode: '',
   });
-  const [showSalutationPicker, setShowSalutationPicker] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
   const [addedProjects, setAddedProjects] = useState<any[]>([]);
+
+  // Pre-fill form when editing an existing client
+  useEffect(() => {
+    if (editingClient) {
+      const name = editingClient.name || '';
+      const nameParts = name.split(' ');
+      // Try to parse address into components
+      const fullAddress = editingClient.address || '';
+      const addressParts = fullAddress.split(' ');
+      
+      setFormData({
+        companyName: editingClient.company_name || name || '',
+        salutation: editingClient.salutation || '',
+        firstName: editingClient.first_name || nameParts[0] || '',
+        lastName: editingClient.last_name || nameParts.slice(1).join(' ') || '',
+        gst: editingClient.gst_number || editingClient.gst || '',
+        category: editingClient.category || editingClient.client_type || '',
+        email: editingClient.email || '',
+        phone: editingClient.phone || '',
+        address: editingClient.address || '',
+        country: editingClient.country || '',
+        state: editingClient.state || '',
+        city: editingClient.city || editingClient.location || '',
+        zipCode: editingClient.zip_code || editingClient.zipCode || '',
+      });
+      setClientId(editingClient.id);
+    }
+  }, [editingClient]);
 
   // Reload projects when returning from Add Project screen
   useFocusEffect(
@@ -76,6 +212,12 @@ export default function AddClientScreen() {
   };
 
   const validateForm = () => {
+    // Company Name - Required
+    if (!formData.companyName.trim()) {
+      Alert.alert('Validation Error', 'Company name is required');
+      return false;
+    }
+
     // First Name - Required
     if (!formData.firstName.trim()) {
       Alert.alert('Validation Error', 'First name is required');
@@ -88,26 +230,47 @@ export default function AddClientScreen() {
       return false;
     }
     
-    // Email - Required with validation
-    if (!formData.email.trim()) {
-      Alert.alert('Validation Error', 'Email address is required');
-      return false;
-    }
-    
-    if (!formData.email.includes('@') || !formData.email.includes('.')) {
-      Alert.alert('Validation Error', 'Please enter a valid email address');
-      return false;
-    }
-    
     // Phone - Required
     if (!formData.phone.trim()) {
       Alert.alert('Validation Error', 'Phone number is required');
       return false;
     }
     
+    // Email - Optional but validate format if provided
+    if (formData.email.trim()) {
+      if (!formData.email.includes('@') || !formData.email.includes('.')) {
+        Alert.alert('Validation Error', 'Please enter a valid email address');
+        return false;
+      }
+    }
+    
     // Address - Required
     if (!formData.address.trim()) {
       Alert.alert('Validation Error', 'Address is required');
+      return false;
+    }
+
+    // Country - Required
+    if (!formData.country.trim()) {
+      Alert.alert('Validation Error', 'Country is required');
+      return false;
+    }
+
+    // State - Required
+    if (!formData.state.trim()) {
+      Alert.alert('Validation Error', 'State is required');
+      return false;
+    }
+
+    // City - Required
+    if (!formData.city.trim()) {
+      Alert.alert('Validation Error', 'City is required');
+      return false;
+    }
+
+    // Zip Code - Required
+    if (!formData.zipCode.trim()) {
+      Alert.alert('Validation Error', 'Zip code is required');
       return false;
     }
     
@@ -118,7 +281,6 @@ export default function AddClientScreen() {
         Alert.alert('Validation Error', 'GST number must be exactly 15 characters');
         return false;
       }
-      // Validate GSTIN format: 2 digit state code + 10 char PAN + 1 entity code + Z + 1 checksum
       const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
       if (!gstRegex.test(gst)) {
         Alert.alert('Validation Error', 'Invalid GST number format.\n\nFormat: State Code(2) + PAN(10) + Entity(1) + Z + Checksum(1)\n\nExample: 27ABCDE1234F1Z5');
@@ -136,13 +298,19 @@ export default function AddClientScreen() {
       setLoading(true);
       console.log('Creating new client:', formData);
       const payload = {
+        companyName: formData.companyName.trim(),
         salutation: formData.salutation.trim() || null,
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         gstNumber: formData.gst.trim() || null,
-        email: formData.email.trim(),
+        category: formData.category.trim() || null,
+        email: formData.email.trim() || null,
         phone: formData.phone.trim(),
         address: formData.address.trim(),
+        country: formData.country.trim(),
+        state: formData.state.trim(),
+        city: formData.city.trim(),
+        zipCode: formData.zipCode.trim(),
       } as any;
 
       let savedClientId = clientId;
@@ -190,7 +358,7 @@ export default function AddClientScreen() {
   };
 
   const handleCancel = () => {
-    if (formData.firstName || formData.lastName || formData.email || formData.phone || formData.address) {
+    if (formData.companyName || formData.firstName || formData.lastName || formData.email || formData.phone || formData.address || formData.city || formData.zipCode) {
       Alert.alert(
         'Discard Changes',
         'Are you sure you want to discard your changes?',
@@ -205,182 +373,161 @@ export default function AddClientScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <AppHeader />
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Card style={styles.formCard}>
-          <View style={styles.form}>
-            {/* Salutation */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Salutation</Text>
-              <TouchableOpacity
-                style={styles.pickerButton}
-                onPress={() => setShowSalutationPicker(true)}
-              >
-                <Text style={[styles.pickerButtonText, !formData.salutation && styles.placeholder]}>
-                  {formData.salutation || 'Select salutation (e.g., Mr., Ms., Dr.)'}
-                </Text>
-                <Text style={styles.pickerArrow}>▼</Text>
-              </TouchableOpacity>
-            </View>
+    <View style={styles.screenContainer}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={28} color="#101010" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{isEditing ? 'Edit Client' : 'Add Client'}</Text>
+      </View>
 
-            {/* First Name */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>{t('auth.first_name')} *</Text>
-                <VoiceToTextButton
-                  onResult={(text) => handleInputChange('firstName', text)}
-                  size="small"
-                />
-              </View>
-              <TextInput
-                style={styles.input}
-                value={formData.firstName}
-                onChangeText={(value) => handleInputChange('firstName', value)}
-                placeholder={t('auth.first_name')}
-                placeholderTextColor="#999"
-                autoCapitalize="words"
-                autoCorrect={false}
-              />
-            </View>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {/* Form Card Container */}
+        <View style={styles.formCard}>
+          {/* Company Name */}
+          <FloatingLabelInput
+            label="Company name*"
+            placeholder="Company name*"
+            value={formData.companyName}
+            onChangeText={(value) => handleInputChange('companyName', value)}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
 
-            {/* Last Name */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>{t('auth.last_name')} *</Text>
-                <VoiceToTextButton
-                  onResult={(text) => handleInputChange('lastName', text)}
-                  size="small"
-                />
-              </View>
-              <TextInput
-                style={styles.input}
-                value={formData.lastName}
-                onChangeText={(value) => handleInputChange('lastName', value)}
-                placeholder={t('auth.last_name')}
-                placeholderTextColor="#999"
-                autoCapitalize="words"
-                autoCorrect={false}
-              />
-            </View>
+          {/* Salutation */}
+          <FloatingLabelPicker
+            label="Salutation"
+            selectedValue={formData.salutation}
+            onValueChange={(v) => handleInputChange('salutation', v)}
+          >
+            {SALUTATIONS.map((sal) => (
+              <Picker.Item key={sal} label={sal} value={sal} />
+            ))}
+          </FloatingLabelPicker>
 
-            {/* GST */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>GST Number</Text>
-              <Text style={styles.sampleText}>Format: 27ABCDE1234F1Z5 (15 characters)</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.gst}
-                onChangeText={(value) => handleInputChange('gst', value.toUpperCase())}
-                placeholder="e.g. 27ABCDE1234F1Z5"
-                placeholderTextColor="#999"
-                autoCapitalize="characters"
-                autoCorrect={false}
-                maxLength={15}
-              />
-            </View>
+          {/* First Name */}
+          <FloatingLabelInput
+            label="First Name*"
+            placeholder="First Name*"
+            value={formData.firstName}
+            onChangeText={(value) => handleInputChange('firstName', value)}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
 
-            {/* Email */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('auth.email')} *</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.email}
-                onChangeText={(value) => handleInputChange('email', value)}
-                placeholder={t('auth.enter_email')}
-                placeholderTextColor="#999"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
+          {/* Last Name */}
+          <FloatingLabelInput
+            label="Last Name*"
+            placeholder="Last Name*"
+            value={formData.lastName}
+            onChangeText={(value) => handleInputChange('lastName', value)}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
 
-            {/* Phone */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('auth.phone_number')} *</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.phone}
-                onChangeText={(value) => handleInputChange('phone', value)}
-                placeholder={t('auth.enter_phone')}
-                placeholderTextColor="#999"
-                keyboardType="phone-pad"
-                autoCorrect={false}
-              />
-            </View>
+          {/* GST Number */}
+          <FloatingLabelInput
+            label="GST Number"
+            placeholder="GST Number (e.g. 27ABCDE1234F1Z5)"
+            value={formData.gst}
+            onChangeText={(value) => handleInputChange('gst', value.toUpperCase())}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={15}
+          />
 
-            {/* Address */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>Address *</Text>
-                <VoiceToTextButton
-                  onResult={(text) => handleInputChange('address', formData.address ? `${formData.address} ${text}` : text)}
-                  size="small"
-                />
-              </View>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={formData.address}
-                onChangeText={(value) => handleInputChange('address', value)}
-                placeholder="Enter full street address, city, state, zip/post code"
-                placeholderTextColor="#999"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-          </View>
-        </Card>
+          {/* Category */}
+          <FloatingLabelPicker
+            label="Category"
+            selectedValue={formData.category}
+            onValueChange={(v) => handleInputChange('category', v)}
+          >
+            {CATEGORIES.map((cat) => (
+              <Picker.Item key={cat} label={cat} value={cat} />
+            ))}
+          </FloatingLabelPicker>
 
-        {/* Salutation Picker Modal */}
-        <Modal
-          visible={showSalutationPicker}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowSalutationPicker(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeaderRow}>
-                <Text style={styles.modalTitle}>Select Salutation</Text>
-                <TouchableOpacity
-                  style={styles.modalCloseButton}
-                  onPress={() => setShowSalutationPicker(false)}
-                >
-                  <Text style={styles.modalCloseIcon}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              {SALUTATIONS.map((salutation) => {
-                const selected = formData.salutation === salutation;
-                return (
-                  <TouchableOpacity
-                    key={salutation}
-                    style={[styles.modalOptionRow, selected && styles.modalOptionRowSelected]}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      handleInputChange('salutation', salutation);
-                      setShowSalutationPicker(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        selected && styles.modalOptionTextSelected,
-                      ]}
-                    >
-                      {salutation}
-                    </Text>
-                    <View style={[styles.modalRadioOuter, selected && styles.modalRadioOuterActive]}>
-                      {selected && <View style={styles.modalRadioInner} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </Modal>
+          {/* Phone Number */}
+          <FloatingLabelInput
+            label="Phone number*"
+            placeholder="Phone number*"
+            value={formData.phone}
+            onChangeText={(value) => handleInputChange('phone', value)}
+            keyboardType="phone-pad"
+            autoCorrect={false}
+          />
 
-        {/* Add Projects Button */}
+          {/* Email ID */}
+          <FloatingLabelInput
+            label="Email ID"
+            placeholder="Email ID"
+            value={formData.email}
+            onChangeText={(value) => handleInputChange('email', value)}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          {/* Address */}
+          <FloatingLabelInput
+            label="Address*"
+            placeholder="Address*"
+            value={formData.address}
+            onChangeText={(value) => handleInputChange('address', value)}
+            multiline
+            numberOfLines={4}
+          />
+
+          {/* Country */}
+          <FloatingLabelPicker
+            label="Country*"
+            selectedValue={formData.country}
+            onValueChange={(v) => {
+              handleInputChange('country', v);
+              handleInputChange('state', '');
+            }}
+          >
+            {COUNTRIES.map((c) => (
+              <Picker.Item key={c} label={c} value={c} />
+            ))}
+          </FloatingLabelPicker>
+
+          {/* State */}
+          <FloatingLabelPicker
+            label="State*"
+            selectedValue={formData.state}
+            onValueChange={(v) => handleInputChange('state', v)}
+          >
+            {(STATES[formData.country] || []).map((s) => (
+              <Picker.Item key={s} label={s} value={s} />
+            ))}
+          </FloatingLabelPicker>
+
+          {/* City */}
+          <FloatingLabelInput
+            label="City*"
+            placeholder="City*"
+            value={formData.city}
+            onChangeText={(value) => handleInputChange('city', value)}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
+
+          {/* Zip Code */}
+          <FloatingLabelInput
+            label="Zip Code*"
+            placeholder="Zip Code*"
+            value={formData.zipCode}
+            onChangeText={(value) => handleInputChange('zipCode', value)}
+            keyboardType="numeric"
+            autoCorrect={false}
+            maxLength={10}
+          />
+        </View>
+
+        {/* Add Projects Section */}
         <View style={styles.addProjectsContainer}>
           <View style={styles.addProjectsHeader}>
             <Text style={styles.addProjectsTitle}>Projects</Text>
@@ -395,13 +542,19 @@ export default function AddClientScreen() {
                   if (!currentClientId) {
                     setLoading(true);
                     const res = await api.post('/api/clients', {
+                      companyName: formData.companyName.trim(),
                       salutation: formData.salutation.trim() || null,
                       firstName: formData.firstName.trim(),
                       lastName: formData.lastName.trim(),
                       gstNumber: formData.gst.trim() || null,
-                      email: formData.email.trim(),
+                      category: formData.category.trim() || null,
+                      email: formData.email.trim() || null,
                       phone: formData.phone.trim(),
                       address: formData.address.trim(),
+                      country: formData.country.trim(),
+                      state: formData.state.trim(),
+                      city: formData.city.trim(),
+                      zipCode: formData.zipCode.trim(),
                     });
                     currentClientId = res.data?.client?.id;
                     setClientId(currentClientId);
@@ -429,8 +582,8 @@ export default function AddClientScreen() {
               }}
               disabled={loading}
             >
-            <Text style={styles.addProjectsButtonText}>➕ Add Projects</Text>
-          </TouchableOpacity>
+              <Text style={styles.addProjectsButtonText}>➕ Add Projects</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Display Added Projects */}
@@ -453,274 +606,156 @@ export default function AddClientScreen() {
           )}
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleCancel}
-            disabled={loading}
-          >
-            <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>{t('clients.add_client')}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        {/* Action Button */}
+        <TouchableOpacity
+          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.submitButtonText}>{isEditing ? 'Update Client' : 'Save Client'}</Text>
+          )}
+        </TouchableOpacity>
 
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
+  const styles = StyleSheet.create({
+    screenContainer: {
+      flex: 1,
+      backgroundColor: '#F0F0F0',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 50,
+      paddingBottom: 16,
+      backgroundColor: '#F0F0F0',
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+    color: '#1A1A1A',
   },
   scrollView: {
     flex: 1,
   },
-  header: {
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    paddingTop: 24,
+    flexGrow: 1,
   },
   formCard: {
-    margin: 16,
+    borderRadius: 14,
     padding: 20,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  form: {
-    gap: 20,
+  // Floating Label Styles
+  floatingContainer: {
+    marginBottom: 16,
+    position: 'relative',
+    paddingTop: 4,
   },
-  inputGroup: {
-    gap: 8,
+  floatingLabel: {
+    position: 'absolute',
+    left: 12,
+    top: 14,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    fontWeight: '400',
+    color: '#727272',
+    zIndex: 1,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 2,
   },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+  floatingLabelActive: {
+    top: -6,
+    fontSize: 11,
+    color: '#A098DC',
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    flex: 1,
-  },
-  sampleText: {
-    fontSize: 12,
-    color: '#007AFF',
-    marginBottom: 4,
-    fontStyle: 'italic',
-  },
-  input: {
+  floatingInput: {
     borderWidth: 1,
-    borderColor: '#e1e5e9',
+    borderColor: '#F2F2F2',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1a1a1a',
-    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: '#F5F5F5',
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    fontWeight: '400',
+    color: '#1A1A1A',
+    lineHeight: 15,
+    minHeight: 48,
   },
-  textArea: {
-    height: 100,
+  floatingInputWithLabel: {
+    paddingTop: 20,
+    paddingBottom: 10,
+  },
+  floatingInputMultiline: {
+    minHeight: 90,
+    paddingTop: 20,
     textAlignVertical: 'top',
   },
-  buttonContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    paddingBottom: 32,
+  floatingInputFocused: {
+    borderColor: '#A098DC',
   },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
+  floatingPicker: {
+    paddingTop: 0,
+    paddingBottom: 0,
     justifyContent: 'center',
+    paddingHorizontal: 6,
+    minHeight: 48,
+    height: 48,
   },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  submitButton: {
-    flex: 1,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  pickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-  },
-  pickerButtonText: {
-    fontSize: 16,
-    color: '#1a1a1a',
-    flex: 1,
-  },
-  placeholder: {
-    color: '#999',
-  },
-  pickerArrow: {
-    fontSize: 12,
-    color: '#666',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    width: '90%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-      padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
-  },
-  modalTitle: {
-      fontSize: 20,
-    fontWeight: '600',
-    color: '#1a1a1a',
-      flex: 1,
-      textAlign: 'center',
-      marginRight: -32,
-  },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    backgroundColor: '#f8f9fa',
-  },
-  modalCloseIcon: {
-    fontSize: 20,
-    color: '#666',
-    fontWeight: '300',
-  },
-  modalOption: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
-  },
-  modalOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
-  },
-  modalOptionText: {
-    fontSize: 16,
-    color: '#1a1a1a',
-    textAlign: 'left',
-  },
-  modalOptionTextSelected: {
-    fontWeight: '700',
-    color: '#0b63ff',
-  },
-  modalOptionRowSelected: {
-    backgroundColor: '#f5f9ff',
-  },
-  modalRadioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#c7d7fe',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalRadioOuterActive: {
-    borderColor: '#0b63ff',
-    backgroundColor: '#e8f0ff',
-  },
-  modalRadioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#0b63ff',
+  picker: {
+    height: 67,
   },
   addProjectsContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
   },
   addProjectsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   addProjectsTitle: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
     color: '#1a1a1a',
   },
   addProjectsButton: {
-    backgroundColor: '#34C759',
-    borderRadius: 8,
+    backgroundColor: '#A098DC',
+    borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#A098DC',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 1,
   },
   addProjectsButtonText: {
     fontSize: 14,
@@ -732,10 +767,15 @@ const styles = StyleSheet.create({
   },
   projectCard: {
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e1e5e9',
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   projectName: {
     fontSize: 16,
@@ -752,5 +792,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 6,
+  },
+  submitButton: {
+    backgroundColor: '#A098DC',
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 16,
+    shadowColor: '#A098DC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    shadowOpacity: 0.1,
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

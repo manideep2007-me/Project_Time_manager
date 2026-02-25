@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { View, Text, FlatList, ActivityIndicator, StyleSheet, TouchableOpacity, RefreshControl, Alert, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 // DB-only: no selectors/mocks
 import { AuthContext } from '../../context/AuthContext';
 import { usePermissions } from '../../context/PermissionsContext';
+import { useTheme } from '../../theme'; // ✅ New unified theme
 // Removed useRole import to avoid context errors
 import { api } from '../../api/client';
 import ClientCard from '../../components/shared/ClientCard';
@@ -16,6 +18,7 @@ export default function ClientsScreen() {
   const navigation = useNavigation<any>();
   const { user } = useContext(AuthContext);
   const { has } = usePermissions();
+  const { theme } = useTheme(); // ✅ Access theme
   // Show Add Client button only if permission is granted
   const canManageClients = has('clients.add');
   const [clients, setClients] = useState<any[]>([]);
@@ -25,6 +28,284 @@ export default function ClientsScreen() {
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedClientId, setExpandedClientId] = useState<number | null>(null);
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#F0F0F0',
+    },
+    screenContent: {
+      flex: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 16,
+      backgroundColor: '#F0F0F0',
+    },
+    backButton: {
+      padding: 4,
+      marginRight: 8,
+    },
+    headerTitle: {
+      flex: 1,
+      fontSize: 20,
+      fontWeight: '400',
+      fontFamily: theme.typography.families.regular,
+      color: '#000000',
+    },
+    headerAddButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: '#877ED2',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 3,
+      elevation: 3,
+    },
+    addButton: {
+      display: 'none',
+    },
+    addButtonText: {
+      display: 'none',
+    },
+    searchContainer: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 8,
+      backgroundColor: '#F0F0F0',
+    },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderWidth: 1,
+      borderColor: '#E0E0E0',
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 15,
+      color: '#1a1a1a',
+      padding: 0,
+      fontWeight: '400',
+    },
+    summaryBar: {
+      marginTop: 12,
+      paddingHorizontal: 4,
+    },
+    summaryText: {
+      fontSize: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    summaryLabel: {
+      color: '#333333',
+      fontWeight: '400',
+    },
+    summaryTotal: {
+      color: '#333333',
+      fontWeight: '700',
+    },
+    summaryActive: {
+      color: '#877ED2',
+      fontWeight: '700',
+    },
+    summaryInactive: {
+      color: '#877ED2',
+      fontWeight: '700',
+    },
+    summaryDivider: {
+      color: '#999999',
+      fontWeight: '400',
+    },
+    center: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#F0F0F0',
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 15,
+      color: '#666666',
+      fontWeight: '400',
+    },
+    listContent: {
+      paddingBottom: 20,
+    },
+    bigCard: {
+      backgroundColor: '#FFFFFF',
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+      overflow: 'hidden',
+    },
+    clientCard: {
+      backgroundColor: '#FFFFFF',
+    },
+    clientCardBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor: '#F0F0F0',
+    },
+    clientHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    clientHeaderLeft: {
+      flex: 1,
+    },
+    clientHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    actionButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    editButton: {
+      backgroundColor: '#F0EEFF',
+    },
+    deleteButton: {
+      backgroundColor: '#FFEBEE',
+    },
+    actionButtonsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 16,
+      gap: 10,
+    },
+    clientName: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#1a1a1a',
+      marginBottom: 4,
+    },
+    clientSubtitle: {
+      fontSize: 13,
+      color: '#999999',
+      fontWeight: '400',
+    },
+    clientDetails: {
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      paddingTop: 4,
+      backgroundColor: '#FFFFFF',
+    },
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: 12,
+    },
+    addressRow: {
+      flexDirection: 'column',
+      marginBottom: 12,
+    },
+    detailRowDouble: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+      gap: 16,
+    },
+    detailColumn: {
+      flex: 1,
+    },
+    detailLabel: {
+      fontSize: 12,
+      color: '#999999',
+      marginBottom: 4,
+      fontWeight: '400',
+    },
+    detailValue: {
+      fontSize: 14,
+      color: '#1a1a1a',
+      fontWeight: '400',
+      flex: 1,
+    },
+    statusBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
+      marginLeft: 8,
+    },
+    statusActive: {
+      backgroundColor: '#E8F5E9',
+    },
+    statusInactive: {
+      backgroundColor: '#FFEBEE',
+    },
+    statusText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#4CAF50',
+    },
+    statusTextInactive: {
+      color: '#F44336',
+    },
+    moreButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#877ED2',
+      paddingHorizontal: 18,
+      height: 40,
+      borderRadius: 10,
+      flex: 1,
+      justifyContent: 'center',
+      shadowColor: '#877ED2',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    moreButtonText: {
+      fontSize: 13,
+      color: '#FFFFFF',
+      fontWeight: '600',
+      marginLeft: 6,
+    },
+    emptyState: {
+      alignItems: 'center',
+      paddingTop: 24,
+    },
+    emptyPill: {
+      backgroundColor: '#FFFFFF',
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    emptyText: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: '#666666',
+    },
+  });
 
   const loadClients = async (pageNum = 1) => {
     try {
@@ -56,6 +337,7 @@ export default function ClientsScreen() {
           contact_person: c.contact_person,
           onboard_date: c.onboard_date || c.created_at,
           project_count: c.project_count || 0,
+          status: c.status || 'active', // Default to active if not specified
           created_at: c.created_at,
           updated_at: c.updated_at,
         }));
@@ -272,199 +554,203 @@ export default function ClientsScreen() {
 
   const formatCurrency = (amount: any) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 
+  const toggleClientExpand = (clientId: number) => {
+    setExpandedClientId(expandedClientId === clientId ? null : clientId);
+  };
+
+  const getClientCounts = () => {
+    const total = filteredClients.length;
+    const active = filteredClients.filter(c => c.status === 'active' || !c.status).length;
+    const inactive = filteredClients.filter(c => c.status === 'inactive').length;
+    return { total, active, inactive };
+  };
+
+  const renderClientCard = ({ item, index }: { item: any; index: number }) => {
+    const isExpanded = expandedClientId === item.id;
+    const isLast = index === filteredClients.length - 1;
+
+    return (
+      <View style={[styles.clientCard, !isLast && styles.clientCardBorder]}>
+        {/* Collapsed Header */}
+        <TouchableOpacity 
+          style={styles.clientHeader}
+          onPress={() => toggleClientExpand(item.id)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.clientHeaderLeft}>
+            <Text style={styles.clientName}>{item.name}</Text>
+            <Text style={styles.clientSubtitle}>{item.client_type} | {item.location}</Text>
+          </View>
+          <View style={styles.clientHeaderActions}>
+            <Ionicons 
+              name={isExpanded ? "chevron-up" : "chevron-down"} 
+              size={22} 
+              color="#877ED2" 
+            />
+          </View>
+        </TouchableOpacity>
+
+        {/* Expanded Content */}
+        {isExpanded && (
+          <View style={styles.clientDetails}>
+            {/* Status Row */}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Status:</Text>
+              <View style={[styles.statusBadge, item.status === 'inactive' ? styles.statusInactive : styles.statusActive]}>
+                <Text style={[styles.statusText, item.status === 'inactive' && styles.statusTextInactive]}>
+                  {item.status === 'inactive' ? 'Inactive' : 'Active'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Address Block */}
+            {item.address && (
+              <View style={styles.addressRow}>
+                <Text style={styles.detailLabel}>Address:</Text>
+                <Text style={styles.detailValue}>{item.address}</Text>
+              </View>
+            )}
+
+            {/* Mobile & Email (two columns) */}
+            <View style={styles.detailRowDouble}>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Mobile:</Text>
+                <Text style={styles.detailValue}>{item.phone || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Email:</Text>
+                <Text style={styles.detailValue}>{item.email || 'N/A'}</Text>
+              </View>
+            </View>
+
+            {/* Onboard Date & Projects (two columns) */}
+            <View style={styles.detailRowDouble}>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Onboard Date:</Text>
+                <Text style={styles.detailValue}>
+                  {item.onboard_date 
+                    ? new Date(item.onboard_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : 'N/A'}
+                </Text>
+              </View>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Number of Projects:</Text>
+                <Text style={styles.detailValue}>{item.project_count || 0}</Text>
+              </View>
+            </View>
+
+            {/* Action Buttons Row */}
+            <View style={styles.actionButtonsRow}>
+              <TouchableOpacity 
+                style={styles.moreButton}
+                onPress={() => handleClientPress(item)}
+              >
+                <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.moreButtonText}>More</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.editButton]}
+                onPress={() => handleEditClient(item)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="pencil" size={18} color="#877ED2" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.deleteButton]}
+                onPress={() => handleDeleteClient(item)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={18} color="#F44336" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
 
   if (loading && clients.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6B5CE7" />
+        <ActivityIndicator size="large" color="#877ED2" />
         <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="##101010" />
+          <Ionicons name="chevron-back" size={24} color="#101010" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('clients.clients')}</Text>
-      </View>
-      
-      <View style={styles.screenContent}>
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search"
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            <Ionicons name="search" size={20} color="#999" />
-          </View>
-        </View>
-
-        {/* Big Card Container */}
-        <View style={styles.bigCard}>
-          <FlatList
-            data={filteredClients}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={({ item, index }) => (
-              <ClientCard 
-                client={item} 
-                onPress={() => handleClientPress(item)}
-                onEdit={() => handleEditClient(item)}
-                onDelete={() => handleDeleteClient(item)}
-                canDelete={canManageClients}
-                canEdit={canManageClients}
-                isLast={index === filteredClients.length - 1}
-              />
-            )}
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.6}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>{t('clients.no_clients')}</Text>
-                <Text style={styles.emptySubtext}>
-                  {canManageClients ? t('clients.add_client') : t('common.no_data')}
-                </Text>
-                {canManageClients && (
-                  <View style={styles.emptyButton}>
-                    <Button
-                      title={t('clients.add_client')}
-                      onPress={() => navigation.navigate('AddClient')}
-                    />
-                  </View>
-                )}
-              </View>
-            }
-            contentContainerStyle={styles.listContent}
-          />
-        </View>
-
-        {/* Floating Add Button */}
         {canManageClients && (
           <TouchableOpacity 
-            style={styles.fab}
             onPress={() => navigation.navigate('AddClient')}
+            style={styles.headerAddButton}
+            activeOpacity={0.8}
           >
-            <Ionicons name="add" size={28} color="#fff" />
+            <Ionicons name="add" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         )}
       </View>
-    </View>
+      
+      <View style={styles.screenContent}>
+        {/* Search Bar - Only show when there are clients */}
+        {filteredClients.length > 0 && (
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search"
+                placeholderTextColor="#AAAAAA"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              <Ionicons name="search-outline" size={20} color="#877ED2" />
+            </View>
+
+            {/* Summary Bar */}
+            <View style={styles.summaryBar}>
+              <Text style={styles.summaryText}>
+                <Text style={styles.summaryLabel}>Total: </Text>
+                <Text style={styles.summaryTotal}>{getClientCounts().total}</Text>
+                <Text style={styles.summaryDivider}> | </Text>
+                <Text style={styles.summaryLabel}>Active: </Text>
+                <Text style={styles.summaryActive}>{getClientCounts().active}</Text>
+                <Text style={styles.summaryDivider}> | </Text>
+                <Text style={styles.summaryLabel}>Inactive: </Text>
+                <Text style={styles.summaryInactive}>{getClientCounts().inactive}</Text>
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Client List Container */}
+        {filteredClients.length > 0 ? (
+          <View style={styles.bigCard}>
+            <FlatList
+              data={filteredClients}
+              keyExtractor={(item) => String(item.id)}
+              renderItem={renderClientCard}
+              onEndReached={loadMore}
+              onEndReachedThreshold={0.6}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              contentContainerStyle={styles.listContent}
+            />
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyPill}>
+              <Text style={styles.emptyText}>No Client</Text>
+            </View>
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '##F6F6F6',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 30,
-    paddingBottom: 16,
-    backgroundColor: '#F0F0F0',
-  },
-  backButton: {
-    padding: 4,
-    marginRight: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '400',
-    fontFamily: 'Inter_400Regular',
-    color: '#000000',
-  },
-  screenContent: {
-    flex: 1,
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F0F0F0',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1a1a1a',
-    padding: 0,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
-  },
-  listContent: {
-    paddingBottom: 80,
-  },
-  bigCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    overflow: 'hidden',
-    paddingHorizontal: 6,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 16,
-    color: '#999',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  emptyButton: {
-    paddingHorizontal: 24,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#6B5CE7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-});

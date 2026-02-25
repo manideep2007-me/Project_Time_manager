@@ -15,6 +15,7 @@ type ClientCardProps = {
     address?: string;
     onboard_date?: string;
     project_count?: number;
+    status?: string;
   };
   onPress: () => void;
   onEdit?: () => void;
@@ -25,15 +26,15 @@ type ClientCardProps = {
   isLast?: boolean;
 };
 
-export default function ClientCard({ 
-  client, 
-  onPress, 
+export default function ClientCard({
+  client,
+  onPress,
   onEdit,
-  onDelete, 
+  onDelete,
   onMore,
   canDelete = false,
   canEdit = false,
-  isLast = false
+  isLast = false,
 }: ClientCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -43,143 +44,171 @@ export default function ClientCard({
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
+  const isActive = (client.status || 'Active').toLowerCase() === 'active';
+
   return (
-    <View style={[
-      styles.cardContainer, 
-      expanded && styles.cardContainerExpanded,
-      isLast && !expanded && styles.cardContainerLast
-    ]}>
-      <TouchableOpacity 
-        onPress={() => setExpanded(!expanded)} 
-        style={styles.cardHeader}
-        activeOpacity={0.7}
-      >
-        <View style={styles.headerContent}>
-          <Text style={styles.clientName}>{client.name}</Text>
-          <Text style={styles.clientSubtitle}>
-            {client.client_type || 'Client'}{client.location ? ` | ${client.location}` : ''}
-          </Text>
-        </View>
-        <Ionicons 
-          name={expanded ? 'chevron-up' : 'chevron-down'} 
-          size={24} 
-          color="#6B5CE7" 
-        />
-      </TouchableOpacity>
+    <View
+      style={[
+        styles.cardWrapper,
+        !isLast && !expanded && styles.borderBottom,
+      ]}
+    >
+      {/* Purple left accent - only when expanded */}
+      {expanded && <View style={styles.leftAccent} />}
 
-      {expanded && (
-        <View style={styles.expandedContent}>
-          {/* Address */}
-          {client.address && (
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Address:</Text>
-              <Text style={styles.value}>{client.address}</Text>
-            </View>
-          )}
-
-          {/* Mobile and Email Row */}
-          <View style={styles.twoColumnRow}>
-            <View style={styles.column}>
-              <Text style={styles.label}>Mobile:</Text>
-              <Text style={styles.value}>{client.phone || '-'}</Text>
-            </View>
-            <View style={styles.column}>
-              <Text style={styles.label}>Email:</Text>
-              <Text style={styles.value}>{client.email || '-'}</Text>
-            </View>
+      <View style={styles.cardContent}>
+        {/* Header - always visible */}
+        <TouchableOpacity
+          onPress={() => setExpanded(!expanded)}
+          style={styles.header}
+          activeOpacity={0.7}
+        >
+          <View style={styles.headerLeft}>
+            <Text style={styles.clientName}>{client.name}</Text>
+            <Text style={styles.clientSubtitle}>
+              {client.client_type || 'Residential properties developer'}
+              {client.location ? ` | ${client.location}` : ''}
+            </Text>
           </View>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color="#5856D6"
+          />
+        </TouchableOpacity>
 
-          {/* Onboard Date and Number of Projects Row */}
-          <View style={styles.twoColumnRow}>
-            <View style={styles.column}>
-              <Text style={styles.label}>Onboard Date:</Text>
-              <Text style={styles.value}>{formatDate(client.onboard_date)}</Text>
+        {/* Expanded content */}
+        {expanded && (
+          <View style={styles.expanded}>
+            {/* Status */}
+            <View style={styles.row}>
+              <Text style={styles.label}>Status:</Text>
+              <View style={[styles.statusBadge, isActive ? styles.statusActive : styles.statusInactive]}>
+                <Text style={[styles.statusText, isActive ? styles.statusTextActive : styles.statusTextInactive]}>
+                  {client.status || 'Active'}
+                </Text>
+              </View>
             </View>
-            <View style={styles.column}>
-              <Text style={styles.label}>Number of Projects:</Text>
-              <Text style={styles.value}>{client.project_count ?? 0}</Text>
-            </View>
-          </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            {canEdit && onEdit && (
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.editButton]} 
-                onPress={onEdit}
-              >
-                <Ionicons name="pencil" size={14} color="#fff" />
-                <Text style={styles.editButtonText}>Edit</Text>
-              </TouchableOpacity>
+            {/* Address */}
+            {client.address && (
+              <View style={styles.fieldRow}>
+                <Text style={styles.label}>Address:</Text>
+                <Text style={styles.value}>{client.address}</Text>
+              </View>
             )}
-            
-            {canDelete && onDelete && (
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.deleteButton]} 
-                onPress={onDelete}
-              >
-                <Ionicons name="trash" size={14} color="#fff" />
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.moreButton]} 
-              onPress={onPress}
-            >
-              <Ionicons name="apps" size={14} color="#6B5CE7" />
-              <Text style={styles.moreButtonText}>More</Text>
+
+            {/* Mobile & Email */}
+            <View style={styles.twoColumns}>
+              <View style={styles.column}>
+                <Text style={styles.label}>Mobile:</Text>
+                <Text style={styles.value}>{client.phone || '-'}</Text>
+              </View>
+              <View style={styles.column}>
+                <Text style={styles.label}>Email:</Text>
+                <Text style={[styles.value, styles.smallValue]}>{client.email || '-'}</Text>
+              </View>
+            </View>
+
+            {/* Onboard Date & Projects */}
+            <View style={styles.twoColumns}>
+              <View style={styles.column}>
+                <Text style={styles.label}>Onboard Date:</Text>
+                <Text style={styles.value}>{formatDate(client.onboard_date)}</Text>
+              </View>
+              <View style={styles.column}>
+                <Text style={styles.label}>Number of Projects:</Text>
+                <Text style={styles.value}>{client.project_count ?? 0}</Text>
+              </View>
+            </View>
+
+            {/* More button */}
+            <TouchableOpacity style={styles.moreButton} onPress={onPress} activeOpacity={0.8}>
+              <Ionicons name="apps" size={14} color="#fff" />
+              <Text style={styles.moreText}>More</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      )}
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  cardContainer: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8E7ED',
-  },
-  cardContainerExpanded: {
-    
-    borderRadius: 8,
-    margin: 8,
-  },
-  cardContainerLast: {
-    borderBottomWidth: 0,
-  },
-  cardHeader: {
+  cardWrapper: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 6,
+    backgroundColor: '#FFFFFF',
   },
-  headerContent: {
+  borderBottom: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#C6C6C8',
+  },
+  leftAccent: {
+    width: 4,
+    backgroundColor: '#5856D6',
+  },
+  cardContent: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  headerLeft: {
     flex: 1,
     marginRight: 12,
   },
   clientName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#1a1a1a',
+    fontFamily: 'Inter_400Regular',
+    color: '#000000',
     marginBottom: 4,
   },
   clientSubtitle: {
     fontSize: 13,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
+    color: '#8E8E93',
   },
-  expandedContent: {
+  expanded: {
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
-  infoRow: {
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  twoColumnRow: {
+  statusBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  statusActive: {
+    backgroundColor: '#34C759',
+  },
+  statusInactive: {
+    backgroundColor: '#E5E5EA',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+  },
+  statusTextActive: {
+    color: '#FFFFFF',
+  },
+  statusTextInactive: {
+    color: '#8E8E93',
+  },
+  fieldRow: {
+    marginBottom: 12,
+  },
+  twoColumns: {
     flexDirection: 'row',
     marginBottom: 12,
   },
@@ -188,51 +217,34 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    color: '#888',
-    marginBottom: 2,
+    fontFamily: 'Inter_400Regular',
+    color: '#8E8E93',
+    marginBottom: 4,
   },
   value: {
     fontSize: 14,
-    color: '#1a1a1a',
+    fontFamily: 'Inter_400Regular',
     fontWeight: '500',
+    color: '#000000',
   },
-  actionButtons: {
-    flexDirection: 'row',
-    marginTop: 8,
-    gap: 10,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  editButton: {
-    backgroundColor: '#6B5CE7',
-  },
-  editButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    backgroundColor: '#6B5CE7',
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  smallValue: {
+    fontSize: 13,
   },
   moreButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#6B5CE7',
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#5856D6',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginTop: 4,
   },
-  moreButtonText: {
-    color: '#6B5CE7',
+  moreText: {
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+    marginLeft: 6,
   },
 });

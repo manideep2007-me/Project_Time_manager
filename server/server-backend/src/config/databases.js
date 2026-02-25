@@ -2,7 +2,7 @@
 
 const { Pool } = require('pg');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 
 /**
  * Create a database pool with environment variable prefix
@@ -16,7 +16,7 @@ function createPool(prefix, defaults = {}) {
     port: process.env[`${prefix}_PORT`] ? Number(process.env[`${prefix}_PORT`]) : (defaults.port || 5432),
     database: process.env[`${prefix}_NAME`] || defaults.database,
     user: process.env[`${prefix}_USER`] || defaults.user || 'postgres',
-    password: process.env[`${prefix}_PASSWORD`] || defaults.password,
+    password: String(process.env[`${prefix}_PASSWORD`] || defaults.password || ''),
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
@@ -35,21 +35,22 @@ function createPool(prefix, defaults = {}) {
   return pool;
 }
 
-// Primary database (project_time_manager) - Used for operational data
+// Primary database (project_registry) - Master database for organization/employee registry
 const primary = createPool('DB', {
-  database: 'project_time_manager',
+  database: 'project_registry',
 });
 
-// Secondary database (project_registry) - Used for organization/employee registration data
+// Secondary database (project_time_manager) - Demo/development database with users table
+// Also serves as template for organization-specific databases
 // Only initialize if DB2_HOST or DB2_NAME is configured
 let secondary = null;
 if (process.env.DB2_HOST || process.env.DB2_NAME) {
   const config = {
     host: process.env.DB2_HOST || 'localhost',
     port: process.env.DB2_PORT ? Number(process.env.DB2_PORT) : 5432,
-    database: process.env.DB2_NAME || 'project_registry',
+    database: process.env.DB2_NAME || 'project_time_manager',
     user: process.env.DB2_USER || 'postgres',
-    password: process.env.DB2_PASSWORD,
+    password: String(process.env.DB2_PASSWORD || ''),
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
@@ -100,7 +101,7 @@ function createOrgPool(databaseName) {
     port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
     database: databaseName,
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD,
+    password: String(process.env.DB_PASSWORD || ''),
     max: 5, // Smaller pool for dynamic connections
     idleTimeoutMillis: 10000,
     connectionTimeoutMillis: 2000,

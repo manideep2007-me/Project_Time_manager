@@ -439,7 +439,7 @@ router.get('/:id/stats', async (req, res) => {
     // Get project statistics
     const [timeStats, employeeStats, costStats] = await Promise.all([
       // Time statistics
-      pool.query(`
+      db.query(`
         SELECT 
           COUNT(*) as total_entries,
           SUM(te.duration_minutes) as total_minutes,
@@ -451,7 +451,7 @@ router.get('/:id/stats', async (req, res) => {
       `, [id]),
       
       // Employee breakdown
-      pool.query(`
+      db.query(`
         SELECT 
           e.user_id as id,
           e.user_id as employee_id,
@@ -472,7 +472,7 @@ router.get('/:id/stats', async (req, res) => {
       `, [id]),
       
       // Cost breakdown by day
-      pool.query(`
+      db.query(`
         SELECT 
           DATE(te.start_time) as date,
           SUM(te.duration_minutes) as daily_minutes,
@@ -526,6 +526,7 @@ router.get('/:id/stats', async (req, res) => {
       dailyBreakdown
     });
   } catch (err) {
+    console.error('Error fetching project stats:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

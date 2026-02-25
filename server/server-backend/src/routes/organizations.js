@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
-const pool = require('../config/database'); // Primary DB for operational data
-const { secondary: registryPool } = require('../config/databases'); // Secondary DB for organization registry
+const pool = require('../config/database'); // Primary DB (project_registry)
+const { primary: registryPool } = require('../config/databases'); // Master registry DB for organization data
 const { handleValidation } = require('../middleware/validation');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { createOrganizationDatabase, listOrganizationDatabases } = require('../services/databaseService');

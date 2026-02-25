@@ -2,40 +2,42 @@ type AppConfig = {
   apiBaseUrl: string;
 };
 
+// Your PC's local network IP - update this when your IP changes
+const LAN_IP = '10.10.53.182';
+
+// Set to true to use emulator URL (10.0.2.2), false for real device (LAN IP)
+const USE_EMULATOR = true;
+
 export function getConfig(): AppConfig {
-  // Prefer explicit env, otherwise try to detect LAN IP for Expo device testing
+  // Prefer explicit env variable
   const explicit = process.env.EXPO_PUBLIC_API_BASE_URL;
   if (explicit) return { apiBaseUrl: explicit };
 
-  // For web platform, use localhost (works when backend is on same machine)
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Platform } = require('react-native');
+    
     if (Platform && Platform.OS === 'web') {
-      // On web, use localhost - backend should be running on same machine
       return { apiBaseUrl: 'http://localhost:5000' };
     }
+    
     if (Platform && Platform.OS === 'android') {
-      // Android emulator maps host loopback to 10.0.2.2
-      return { apiBaseUrl: 'http://10.0.2.2:5000' };
+      if (USE_EMULATOR) {
+        // Android emulator maps host loopback to 10.0.2.2
+        return { apiBaseUrl: 'http://10.0.2.2:5000' };
+      }
+      // Real device - use LAN IP
+      return { apiBaseUrl: `http://${LAN_IP}:5000` };
+    }
+    
+    if (Platform && Platform.OS === 'ios') {
+      return { apiBaseUrl: `http://${LAN_IP}:5000` };
     }
   } catch {}
 
-  // Try to infer LAN IP at runtime from Expo manifest if available
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Constants = require('expo-constants').default;
-    const manifest = Constants?.expoConfig || Constants?.manifest;
-    const hostUri: string | undefined = Constants?.expoConfig?.hostUri || Constants?.manifest?.hostUri;
-    if (hostUri) {
-      const host = hostUri.split(':')[0];
-      const guessed = `http://${host}:5000`;
-      return { apiBaseUrl: guessed };
-    }
-  } catch {}
-
-  // Fallback to localhost
-  return { apiBaseUrl: 'http://localhost:5000' };
+  return { apiBaseUrl: `http://${LAN_IP}:5000` };
 }
 
 export const API_BASE_URL = getConfig().apiBaseUrl;
+
+console.log('📡 API Base URL configured:', API_BASE_URL);

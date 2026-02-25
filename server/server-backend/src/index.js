@@ -3,14 +3,14 @@ const cors = require('cors');
 const path = require('path');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 
 const { securityHeaders, requestLogger, sanitizeInput, errorHandler, generalLimiter, authLimiter } = require('./middleware/security');
 const { auditLog, createAuditTable } = require('./middleware/audit');
 
 const routes = require('./routes');
 // Ensure DB pools are initialized and allow optional secondary ping
-const { secondary } = require('./config/databases');
+const { primary, secondary } = require('./config/databases');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -245,15 +245,27 @@ app.use('*', (req, res) => res.status(404).json({ error: 'Route not found' }));
 app.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);
   console.log(`API Documentation available at http://${HOST}:${PORT}/api-docs`);
-  // Warm up secondary DB (project_registry) if configured, so connection log is visible
+  
+  // Warm up primary DB (project_registry) connection
+  primary
+    .query('SELECT current_database()')
+    .then((r) => {
+      const dbName = r?.rows?.[0]?.current_database || 'project_registry';
+      console.log(`✅ Connected to PRIMARY database (Master Registry): ${dbName}`);
+    })
+    .catch((e) => console.error('❌ Primary DB connection failed:', e.message));
+  
+  // Warm up secondary DB (organization database) if configured
   if (secondary) {
     secondary
       .query('SELECT current_database()')
       .then((r) => {
-        const dbName = r?.rows?.[0]?.current_database || 'project_registry';
-        console.log(`Connected to PostgreSQL database: ${dbName}`);
+        const dbName = r?.rows?.[0]?.current_database || 'project_time_manager';
+        console.log(`✅ Connected to SECONDARY database (Organization DB): ${dbName}`);
       })
-      .catch((e) => console.warn('Secondary DB ping failed:', e.message));
+      .catch((e) => console.warn('⚠️  Secondary DB connection failed:', e.message));
+  } else {
+    console.log('ℹ️  Secondary database not configured (optional for development)');
   }
 });
 

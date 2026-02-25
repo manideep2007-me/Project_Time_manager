@@ -113,7 +113,7 @@ export default function ProfileScreen() {
             />
             <MenuItem 
               title="Language option" 
-              onPress={() => {}}
+              onPress={() => navigation.navigate('LanguageOptions')}
             />
             <MenuItem 
               title="Buy Pro version" 
