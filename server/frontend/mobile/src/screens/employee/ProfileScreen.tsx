@@ -111,7 +111,7 @@ export default function ProfileScreen() {
             />
             <MenuItem 
               title="Language option" 
-              onPress={() => Alert.alert('Language', 'Coming soon!')}
+              onPress={() => navigation.navigate('LanguageOptions')}
             />
             <MenuItem 
               title="Notifications" 

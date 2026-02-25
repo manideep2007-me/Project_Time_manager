@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { View, Text, FlatList, ActivityIndicator, StyleSheet, TouchableOpacity, RefreshControl, Alert, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,225 +30,280 @@ export default function ClientsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedClientId, setExpandedClientId] = useState<number | null>(null);
 
-  // ✅ Theme-aware styles created inside component
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background, // Was: '#F6F6F6'
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: theme.spacing.xs, // Was: 10
-      paddingTop: 30,
-      paddingBottom: theme.spacing.base, // Was: 16
-      backgroundColor: theme.colors.surface, // Was: '#F0F0F0'
-    },
-    backButton: {
-      padding: theme.spacing.xs, // Was: 4
-      marginRight: theme.spacing.xs, // Was: 8
-    },
-    headerTitle: {
-      flex: 1,
-      fontSize: theme.typography.fontSizes.xl, // Was: 20
-      fontWeight: '400',
-      fontFamily: theme.typography.families.regular, // Was: 'Inter_400Regular'
-      color: theme.colors.text, // Was: '#000000'
-    },
-    addButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: theme.colors.primary, // Was: '#6B5CE7'
-      paddingHorizontal: theme.spacing.base, // Was: 16
-      paddingVertical: theme.spacing.xs, // Was: 8
-      borderRadius: theme.borderRadius.md, // Was: 8
-      gap: 6,
-    },
-    addButtonText: {
-      color: theme.colors.surface, // Was: '#fff'
-      fontSize: theme.typography.fontSizes.sm, // Was: 14
-      fontWeight: '600',
+      backgroundColor: '#F0F0F0',
     },
     screenContent: {
       flex: 1,
     },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 16,
+      backgroundColor: '#F0F0F0',
+    },
+    backButton: {
+      padding: 4,
+      marginRight: 8,
+    },
+    headerTitle: {
+      flex: 1,
+      fontSize: 20,
+      fontWeight: '400',
+      fontFamily: theme.typography.families.regular,
+      color: '#000000',
+    },
+    headerAddButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: '#877ED2',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 3,
+      elevation: 3,
+    },
+    addButton: {
+      display: 'none',
+    },
+    addButtonText: {
+      display: 'none',
+    },
     searchContainer: {
-      paddingHorizontal: theme.spacing.base, // Was: 16
-      paddingVertical: theme.spacing.md, // Was: 12
-      backgroundColor: theme.colors.surface, // Was: '#F0F0F0'
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 8,
+      backgroundColor: '#F0F0F0',
     },
     searchBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme.colors.surface, // Was: '#FFFFFF'
-      borderRadius: theme.borderRadius.md, // Was: 8
-      paddingHorizontal: theme.spacing.md, // Was: 12
-      paddingVertical: theme.spacing.xs, // Was: 10
-      borderWidth: 2,
-      borderColor: theme.colors.border, // Was: '#E8E8E8'
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderWidth: 1,
+      borderColor: '#E0E0E0',
     },
     searchInput: {
       flex: 1,
-      fontSize: theme.typography.fontSizes.base, // Was: 16
-      color: theme.colors.text, // Was: '#1a1a1a'
+      fontSize: 15,
+      color: '#1a1a1a',
       padding: 0,
+      fontWeight: '400',
     },
     summaryBar: {
-      marginTop: theme.spacing.md, // Was: 12
-      paddingHorizontal: theme.spacing.xs, // Was: 4
+      marginTop: 12,
+      paddingHorizontal: 4,
     },
     summaryText: {
-      fontSize: theme.typography.fontSizes.sm, // Was: 14
+      fontSize: 13,
       flexDirection: 'row',
       alignItems: 'center',
     },
     summaryLabel: {
-      color: theme.colors.textSecondary, // Was: '#666666'
+      color: '#333333',
       fontWeight: '400',
     },
     summaryTotal: {
-      color: theme.colors.textSecondary, // Was: '#666666'
-      fontWeight: '600',
+      color: '#333333',
+      fontWeight: '700',
     },
     summaryActive: {
-      color: theme.colors.primary, // Was: '#6B5CE7'
-      fontWeight: '600',
+      color: '#877ED2',
+      fontWeight: '700',
     },
     summaryInactive: {
-      color: theme.colors.primary, // Was: '#6B5CE7'
-      fontWeight: '600',
+      color: '#877ED2',
+      fontWeight: '700',
     },
     summaryDivider: {
-      color: theme.colors.textSecondary, // Was: '#666666'
+      color: '#999999',
+      fontWeight: '400',
     },
     center: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: theme.colors.background, // Was: '#f8f9fa'
+      backgroundColor: '#F0F0F0',
     },
     loadingText: {
-      marginTop: theme.spacing.md, // Was: 12
-      fontSize: theme.typography.fontSizes.base, // Was: 16
-      color: theme.colors.textSecondary, // Was: '#666'
+      marginTop: 12,
+      fontSize: 15,
+      color: '#666666',
+      fontWeight: '400',
     },
     listContent: {
-      paddingBottom: 80,
+      paddingBottom: 20,
     },
     bigCard: {
-      flex: 1,
-      backgroundColor: theme.colors.surface, // Was: '#fff'
-      marginHorizontal: theme.spacing.base, // Was: 16
-      marginTop: theme.spacing.md, // Was: 12
-      borderRadius: theme.borderRadius.lg, // Was: 12
-      borderWidth: 1,
-      borderColor: theme.colors.border, // Was: '#E8E8E8'
+      backgroundColor: '#FFFFFF',
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
       overflow: 'hidden',
     },
     clientCard: {
-      backgroundColor: theme.colors.surface, // Was: '#fff'
+      backgroundColor: '#FFFFFF',
     },
     clientCardBorder: {
       borderBottomWidth: 1,
-      borderBottomColor: theme.colors.background, // Was: '#F0F0F0'
+      borderBottomColor: '#F0F0F0',
     },
     clientHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: theme.spacing.base, // Was: 16
-      paddingVertical: theme.spacing.base, // Was: 16
+      paddingHorizontal: 16,
+      paddingVertical: 14,
     },
     clientHeaderLeft: {
       flex: 1,
     },
+    clientHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    actionButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    editButton: {
+      backgroundColor: '#F0EEFF',
+    },
+    deleteButton: {
+      backgroundColor: '#FFEBEE',
+    },
+    actionButtonsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 16,
+      gap: 10,
+    },
     clientName: {
-      fontSize: theme.typography.fontSizes.base, // Was: 16
+      fontSize: 16,
       fontWeight: '600',
-      color: theme.colors.text, // Was: '#1a1a1a'
-      marginBottom: theme.spacing.xs, // Was: 4
+      color: '#1a1a1a',
+      marginBottom: 4,
     },
     clientSubtitle: {
-      fontSize: theme.typography.fontSizes.xs, // Was: 13
-      color: theme.colors.textTertiary, // Was: '#888888'
+      fontSize: 13,
+      color: '#999999',
       fontWeight: '400',
     },
     clientDetails: {
-      paddingHorizontal: theme.spacing.base, // Was: 16
-      paddingBottom: theme.spacing.base, // Was: 16
-      paddingTop: theme.spacing.xs, // Was: 4
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      paddingTop: 4,
+      backgroundColor: '#FFFFFF',
     },
     detailRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: theme.spacing.md, // Was: 12
+      alignItems: 'flex-start',
+      marginBottom: 12,
+    },
+    addressRow: {
+      flexDirection: 'column',
+      marginBottom: 12,
     },
     detailRowDouble: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginBottom: theme.spacing.md, // Was: 12
-      gap: theme.spacing.base, // Was: 16
+      marginBottom: 12,
+      gap: 16,
     },
     detailColumn: {
       flex: 1,
     },
     detailLabel: {
-      fontSize: theme.typography.fontSizes.xs, // Was: 13
-      color: theme.colors.textTertiary, // Was: '#999999'
-      marginBottom: theme.spacing.xs, // Was: 4
+      fontSize: 12,
+      color: '#999999',
+      marginBottom: 4,
       fontWeight: '400',
     },
     detailValue: {
-      fontSize: theme.typography.fontSizes.sm, // Was: 14
-      color: theme.colors.text, // Was: '#1a1a1a'
+      fontSize: 14,
+      color: '#1a1a1a',
       fontWeight: '400',
+      flex: 1,
     },
     statusBadge: {
-      paddingHorizontal: theme.spacing.md, // Was: 12
-      paddingVertical: theme.spacing.xs, // Was: 4
-      borderRadius: theme.borderRadius.lg, // Was: 12
-      marginLeft: theme.spacing.xs, // Was: 8
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
+      marginLeft: 8,
     },
     statusActive: {
-      backgroundColor: theme.colors.successLight, // Was: '#E8F5E9'
+      backgroundColor: '#E8F5E9',
     },
     statusInactive: {
-      backgroundColor: theme.colors.errorLight, // Was: '#FFEBEE'
+      backgroundColor: '#FFEBEE',
     },
     statusText: {
-      fontSize: theme.typography.fontSizes.xs, // Was: 13
-      fontWeight: '500',
-      color: theme.colors.success, // Was: '#4CAF50'
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#4CAF50',
     },
     statusTextInactive: {
-      color: theme.colors.error, // Was: '#F44336'
+      color: '#F44336',
     },
     moreButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme.colors.primaryLight, // Was: '#F5F3FF'
-      paddingHorizontal: theme.spacing.base, // Was: 16
-      paddingVertical: theme.spacing.xs, // Was: 8
-      borderRadius: theme.borderRadius.xxl, // Was: 20
-      alignSelf: 'flex-start',
-      marginTop: theme.spacing.xs, // Was: 8
+      backgroundColor: '#877ED2',
+      paddingHorizontal: 18,
+      height: 40,
+      borderRadius: 10,
+      flex: 1,
+      justifyContent: 'center',
+      shadowColor: '#877ED2',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 3,
     },
     moreButtonText: {
-      fontSize: theme.typography.fontSizes.sm, // Was: 14
-      color: theme.colors.primary, // Was: '#6B5CE7'
-      fontWeight: '500',
+      fontSize: 13,
+      color: '#FFFFFF',
+      fontWeight: '600',
       marginLeft: 6,
     },
     emptyState: {
-      flex: 1,
-      justifyContent: 'center',
       alignItems: 'center',
-      paddingVertical: 100,
+      paddingTop: 24,
+    },
+    emptyPill: {
+      backgroundColor: '#FFFFFF',
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
     },
     emptyText: {
-      fontSize: theme.typography.fontSizes.base, // Was: 16
+      fontSize: 14,
       fontWeight: '400',
-      color: theme.colors.textTertiary, // Was: '#999999'
+      color: '#666666',
     },
   });
 
@@ -525,17 +581,19 @@ export default function ClientsScreen() {
             <Text style={styles.clientName}>{item.name}</Text>
             <Text style={styles.clientSubtitle}>{item.client_type} | {item.location}</Text>
           </View>
-          <Ionicons 
-            name={isExpanded ? "chevron-up" : "chevron-down"} 
-            size={24} 
-            color="#666" 
-          />
+          <View style={styles.clientHeaderActions}>
+            <Ionicons 
+              name={isExpanded ? "chevron-up" : "chevron-down"} 
+              size={22} 
+              color="#877ED2" 
+            />
+          </View>
         </TouchableOpacity>
 
         {/* Expanded Content */}
         {isExpanded && (
           <View style={styles.clientDetails}>
-            {/* Status Badge */}
+            {/* Status Row */}
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Status:</Text>
               <View style={[styles.statusBadge, item.status === 'inactive' ? styles.statusInactive : styles.statusActive]}>
@@ -545,15 +603,15 @@ export default function ClientsScreen() {
               </View>
             </View>
 
-            {/* Address */}
+            {/* Address Block */}
             {item.address && (
-              <View style={styles.detailRow}>
+              <View style={styles.addressRow}>
                 <Text style={styles.detailLabel}>Address:</Text>
                 <Text style={styles.detailValue}>{item.address}</Text>
               </View>
             )}
 
-            {/* Mobile & Email */}
+            {/* Mobile & Email (two columns) */}
             <View style={styles.detailRowDouble}>
               <View style={styles.detailColumn}>
                 <Text style={styles.detailLabel}>Mobile:</Text>
@@ -565,7 +623,7 @@ export default function ClientsScreen() {
               </View>
             </View>
 
-            {/* Onboard Date & Projects */}
+            {/* Onboard Date & Projects (two columns) */}
             <View style={styles.detailRowDouble}>
               <View style={styles.detailColumn}>
                 <Text style={styles.detailLabel}>Onboard Date:</Text>
@@ -581,14 +639,30 @@ export default function ClientsScreen() {
               </View>
             </View>
 
-            {/* More Button */}
-            <TouchableOpacity 
-              style={styles.moreButton}
-              onPress={() => handleClientPress(item)}
-            >
-              <Ionicons name="map-outline" size={16} color="#6B5CE7" />
-              <Text style={styles.moreButtonText}>More</Text>
-            </TouchableOpacity>
+            {/* Action Buttons Row */}
+            <View style={styles.actionButtonsRow}>
+              <TouchableOpacity 
+                style={styles.moreButton}
+                onPress={() => handleClientPress(item)}
+              >
+                <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.moreButtonText}>More</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.editButton]}
+                onPress={() => handleEditClient(item)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="pencil" size={18} color="#877ED2" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.deleteButton]}
+                onPress={() => handleDeleteClient(item)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={18} color="#F44336" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -599,80 +673,84 @@ export default function ClientsScreen() {
   if (loading && clients.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6B5CE7" />
+        <ActivityIndicator size="large" color="#877ED2" />
         <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="#101010" />
+          <Ionicons name="chevron-back" size={24} color="#101010" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('clients.clients')}</Text>
         {canManageClients && (
           <TouchableOpacity 
-            style={styles.addButton}
             onPress={() => navigation.navigate('AddClient')}
+            style={styles.headerAddButton}
+            activeOpacity={0.8}
           >
-            <Ionicons name="add" size={20} color="#fff" />
-            <Text style={styles.addButtonText}>Add Client</Text>
+            <Ionicons name="add" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         )}
       </View>
       
       <View style={styles.screenContent}>
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search"
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+        {/* Search Bar - Only show when there are clients */}
+        {filteredClients.length > 0 && (
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search"
+                placeholderTextColor="#AAAAAA"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              <Ionicons name="search-outline" size={20} color="#877ED2" />
+            </View>
+
+            {/* Summary Bar */}
+            <View style={styles.summaryBar}>
+              <Text style={styles.summaryText}>
+                <Text style={styles.summaryLabel}>Total: </Text>
+                <Text style={styles.summaryTotal}>{getClientCounts().total}</Text>
+                <Text style={styles.summaryDivider}> | </Text>
+                <Text style={styles.summaryLabel}>Active: </Text>
+                <Text style={styles.summaryActive}>{getClientCounts().active}</Text>
+                <Text style={styles.summaryDivider}> | </Text>
+                <Text style={styles.summaryLabel}>Inactive: </Text>
+                <Text style={styles.summaryInactive}>{getClientCounts().inactive}</Text>
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Client List Container */}
+        {filteredClients.length > 0 ? (
+          <View style={styles.bigCard}>
+            <FlatList
+              data={filteredClients}
+              keyExtractor={(item) => String(item.id)}
+              renderItem={renderClientCard}
+              onEndReached={loadMore}
+              onEndReachedThreshold={0.6}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              contentContainerStyle={styles.listContent}
             />
-            <Ionicons name="search-outline" size={24} color="#6B5CE7" />
           </View>
-
-          {/* Summary Bar */}
-          <View style={styles.summaryBar}>
-            <Text style={styles.summaryText}>
-              <Text style={styles.summaryLabel}>Total: </Text>
-              <Text style={styles.summaryTotal}>{getClientCounts().total}</Text>
-              <Text style={styles.summaryDivider}> | </Text>
-              <Text style={styles.summaryLabel}>Active: </Text>
-              <Text style={styles.summaryActive}>{getClientCounts().active}</Text>
-              <Text style={styles.summaryDivider}> | </Text>
-              <Text style={styles.summaryLabel}>Inactive: </Text>
-              <Text style={styles.summaryInactive}>{getClientCounts().inactive}</Text>
-            </Text>
+        ) : (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyPill}>
+              <Text style={styles.emptyText}>No Client</Text>
+            </View>
           </View>
-        </View>
-
-        {/* Big Card Container */}
-        <View style={styles.bigCard}>
-          <FlatList
-            data={filteredClients}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={renderClientCard}
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.6}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No Client</Text>
-              </View>
-            }
-            contentContainerStyle={styles.listContent}
-          />
-        </View>
-
+        )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
