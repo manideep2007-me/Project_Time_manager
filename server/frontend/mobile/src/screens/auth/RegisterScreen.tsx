@@ -213,7 +213,7 @@ export default function RegisterScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F5F5F8',
   },
   content: {
     flexGrow: 1,
@@ -223,6 +223,13 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 40,
+    backgroundColor: '#877ED2',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingVertical: 40,
+    marginHorizontal: -20,
+    marginTop: -20,
+    paddingHorizontal: 20,
   },
   logoContainer: {
     alignItems: 'center',
@@ -235,7 +242,7 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: '#FFFFFF',
   },
   welcomeText: {
     fontSize: 28,
@@ -250,14 +257,14 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   formHeader: {
     marginBottom: 32,
@@ -266,7 +273,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: '#1A1A1A',
     marginBottom: 8,
   },
   formSubtitle: {
@@ -276,7 +283,7 @@ const styles = StyleSheet.create({
   },
   orgText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#877ED2',
     marginTop: 8,
     fontWeight: '600',
   },
@@ -301,12 +308,12 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#e1e5e9',
+    backgroundColor: '#EAEAEA',
   },
   dividerText: {
     marginHorizontal: 16,
     fontSize: 14,
-    color: '#666',
+    color: '#9E9E9E',
     fontWeight: '500',
   },
   loginContainer: {
@@ -316,11 +323,11 @@ const styles = StyleSheet.create({
   },
   loginText: {
     fontSize: 16,
-    color: '#666',
+    color: '#9E9E9E',
   },
   loginLink: {
     fontSize: 16,
-    color: '#007AFF',
+    color: '#877ED2',
     fontWeight: '600',
   },
 });

@@ -58,28 +58,29 @@ export default function Button({ title, onPress, loading = false, variant = 'pri
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
+    backgroundColor: '#877ED2',
+    paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: 52,
   },
   secondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: '#877ED2',
   },
   disabled: {
-    opacity: 0.6,
+    backgroundColor: '#CFCBEA',
+    opacity: 1,
   },
   text: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
   secondaryText: {
-    color: '#007AFF',
+    color: '#877ED2',
   },
 });

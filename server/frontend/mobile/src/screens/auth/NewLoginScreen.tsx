@@ -207,29 +207,29 @@ function FloatingLabelPhoneInput({ label, style, ...rest }: FloatingLabelPhoneIn
 
 // Local Variables Mapper - Maps global theme tokens to local component scope
 const getLocalVars = (theme: any) => ({
-  // Primary Colors - Main brand colors
-  primaryColor: theme.colors.primary || '#877ED2',
-  primaryDark: theme.colors.primaryDark || '#7C6AC8',
-  primaryLight: theme.colors.primaryLight || '#F0EEF8',
+  // Primary Colors - Using secondary (#877ED2) to match app-wide visual identity
+  primaryColor: theme.colors.secondary || '#877ED2',
+  primaryDark: theme.colors.primaryDark || '#6B5CA5',
+  primaryLight: theme.colors.primaryLight || '#E9E7FF',
   
-  // Background Colors
-  bgPrimary: theme.colors.background || '#F0EEF8',
+  // Background Colors - Match dashboard (#f8f9fa)
+  bgPrimary: theme.colors.background || '#F5F6FA',
   bgSurface: theme.colors.surface || '#FFFFFF',
   bgInput: theme.colors.surface || '#FFFFFF',
-  bgCountryCode: theme.colors.backgroundSecondary || '#F8F9FA',
+  bgCountryCode: theme.colors.elevated || theme.colors.card || '#F8F9FA',
   
-  // Text Colors
-  textPrimary: theme.colors.text || '#333333',
-  textSecondary: theme.colors.textSecondary || '#8E8E93',
-  textMuted: theme.colors.textSecondary || '#8E8E93',
-  textPlaceholder: theme.colors.textTertiary || '#9CA3AF',
+  // Text Colors - Match app text hierarchy
+  textPrimary: theme.colors.text || '#1A1A1A',
+  textSecondary: theme.colors.textSecondary || '#6A6D73',
+  textMuted: theme.colors.textSecondary || '#6A6D73',
+  textPlaceholder: theme.colors.textTertiary || '#8E8E93',
   textInverse: '#FFFFFF',
-  textAccent: theme.colors.info || '#6256C4',
+  textAccent: theme.colors.secondary || '#877ED2',
   
   // Border Colors
-  borderDefault: theme.colors.border || '#E5E5EA',
-  borderFocused: theme.colors.primary || '#877ED2',
-  borderDivider: theme.colors.border || '#E5E5EA',
+  borderDefault: theme.colors.border || '#E5E6EB',
+  borderFocused: theme.colors.secondary || '#877ED2',
+  borderDivider: theme.colors.border || '#E5E6EB',
   
   // Status Colors
   errorColor: theme.colors.error || '#FF3B30',
@@ -237,9 +237,9 @@ const getLocalVars = (theme: any) => ({
   // Spacing - Use theme spacing tokens
   spacingXs: theme.spacing?.xs || 4,
   spacingSm: theme.spacing?.sm || 8,
-  spacingMd: theme.spacing?.md || 16,
-  spacingLg: theme.spacing?.lg || 24,
-  spacingXl: theme.spacing?.xl || 32,
+  spacingMd: theme.spacing?.md || 12,
+  spacingLg: theme.spacing?.lg || 20,
+  spacingXl: theme.spacing?.xl || 24,
   
   // Border Radius - Use theme border radius tokens
   radiusSm: theme.borderRadius?.sm || 4,
@@ -263,15 +263,15 @@ const getLocalVars = (theme: any) => ({
   fontWeightSemibold: theme.typography?.weights?.semibold || '600',
   fontWeightBold: theme.typography?.weights?.bold || '700',
   
-  // Typography - Font Families ✅ MAPPED FROM THEME
+  // Typography - Font Families
   fontFamilyRegular: theme.typography?.families?.regular || 'Inter_400Regular',
   fontFamilyMedium: theme.typography?.families?.medium || 'Inter_500Medium',
   fontFamilySemibold: theme.typography?.families?.semibold || 'Inter_600SemiBold',
   fontFamilyBold: theme.typography?.families?.bold || 'Inter_700Bold',
   
   // Component-specific
-  placeholderColor: '#727272',
-  shadowColor: theme.colors.primary || '#877ED2',
+  placeholderColor: theme.colors.placeholder || '#9CA3AF',
+  shadowColor: '#877ED2',
 });
 
 export default function NewLoginScreen() {
@@ -462,7 +462,7 @@ export default function NewLoginScreen() {
             <View style={styles.header(localVars)}>
               <View style={styles.logoContainer(localVars)}>
                 <View style={styles.logoIcon(localVars)}>
-                  <Ionicons name="checkmark" size={40} color={localVars.textInverse} />
+                  <Ionicons name="checkmark" size={45} color={localVars.textInverse} />
                 </View>
               </View>
               <AppText style={styles.appName(localVars)}>Taskly</AppText>
@@ -770,29 +770,29 @@ const styles = {
   // Header Styles
   header: (vars: ReturnType<typeof getLocalVars>) => ({
     alignItems: 'center' as const,
-    marginBottom: 70,
+    marginBottom: 40,
   }),
   logoContainer: (vars: ReturnType<typeof getLocalVars>) => ({
     marginBottom: vars.spacingSm,
   }),
   logoIcon: (vars: ReturnType<typeof getLocalVars>) => ({
-    width: 70,
-    height: 70,
+    width: 80,
+    height: 80,
     borderRadius: vars.radiusXl,
-    backgroundColor: vars.primaryDark,
+    backgroundColor: '#6B5CA5',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
-    shadowColor: vars.shadowColor,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 5,
   }),
   appName: (vars: ReturnType<typeof getLocalVars>) => ({
     fontSize: vars.fontSizeXxxl,
-    fontFamily: vars.fontFamilyBold, // ✅ THEME FONT
+    fontFamily: vars.fontFamilyBold,
     fontWeight: vars.fontWeightBold as any,
-    color: vars.primaryDark,
+    color: vars.primaryColor,
     marginBottom: vars.spacingMd,
   }),
   welcomeText: (vars: ReturnType<typeof getLocalVars>) => ({
@@ -815,7 +815,7 @@ const styles = {
     borderRadius: vars.radiusLg,
     padding: 4,
     marginBottom: 28,
-    shadowColor: '#000',
+    shadowColor: vars.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -899,12 +899,12 @@ const styles = {
     justifyContent: 'center' as const,
     shadowColor: vars.shadowColor,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
     marginTop: 48,
     height: 50,
-    width: 371,
+    width: '100%' as any,
   }),
   loginButtonDisabled: {
     opacity: 0.7,

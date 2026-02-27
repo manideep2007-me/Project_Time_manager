@@ -15,6 +15,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../api/client';
+import Input from '../../components/shared/Input';
 
 const SALUTATIONS = ['Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'];
 const CATEGORIES = ['Individual', 'Company', 'Government', 'Non-Profit', 'Freelancer'];
@@ -32,88 +33,29 @@ const STATES: Record<string, string[]> = {
   'UAE': ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman'],
 };
 
-// Floating Label Input Component
-interface FloatingLabelInputProps extends TextInputProps {
-  label: string;
-  multiline?: boolean;
-}
-
-function FloatingLabelInput({ label, multiline, style, ...rest }: FloatingLabelInputProps) {
-  const [isFocused, setIsFocused] = useState(false);
-  const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
-  const showFloatingLabel = isFocused || hasValue;
-  const basePlaceholder = (rest.placeholder as string) || label;
-  const placeholderColor = rest.placeholderTextColor ?? '#727272';
-
-  return (
-    <View style={styles.floatingContainer}>
-      {showFloatingLabel && (
-        <Text style={[styles.floatingLabel, styles.floatingLabelActive]}>
-          {label}
-        </Text>
-      )}
-      <TextInput
-        {...rest}
-        multiline={multiline}
-        placeholder={showFloatingLabel ? '' : basePlaceholder}
-        placeholderTextColor={placeholderColor}
-        style={[
-          styles.floatingInput,
-          showFloatingLabel && styles.floatingInputWithLabel,
-          multiline && styles.floatingInputMultiline,
-          isFocused && styles.floatingInputFocused,
-          style,
-        ]}
-        onFocus={(e) => {
-          setIsFocused(true);
-          rest.onFocus && rest.onFocus(e);
-        }}
-        onBlur={(e) => {
-          setIsFocused(false);
-          rest.onBlur && rest.onBlur(e);
-        }}
-      />
-    </View>
-  );
-}
-
-// Floating Label Picker Component
-interface FloatingLabelPickerProps {
+// Picker Component styled to match Input
+interface PickerInputProps {
   label: string;
   selectedValue: string;
   onValueChange: (value: string) => void;
   children: ReactNode;
 }
 
-function FloatingLabelPicker({
+function PickerInput({
   label,
   selectedValue,
   onValueChange,
   children,
-}: FloatingLabelPickerProps) {
-  const hasValue = !!selectedValue;
-  const showFloatingLabel = hasValue;
-
+}: PickerInputProps) {
   return (
-    <View style={styles.floatingContainer}>
-      {showFloatingLabel && (
-        <Text style={[styles.floatingLabel, styles.floatingLabelActive]}>
-          {label}
-        </Text>
-      )}
-      <View style={[styles.floatingInput, styles.floatingPicker]}>
+    <View style={styles.pickerContainer}>
+      <View style={styles.pickerWrapper}>
         <Picker
           selectedValue={selectedValue}
           onValueChange={(v: string) => onValueChange(v)}
           style={styles.picker}
         >
-          {!hasValue && (
-            <Picker.Item
-              label={label}
-              value=""
-              color="#727272"
-            />
-          )}
+          <Picker.Item label={label} value="" color="#999" />
           {children}
         </Picker>
       </View>
@@ -387,17 +329,16 @@ export default function AddClientScreen() {
         {/* Form Card Container */}
         <View style={styles.formCard}>
           {/* Company Name */}
-          <FloatingLabelInput
+          <Input
             label="Company name*"
             placeholder="Company name*"
             value={formData.companyName}
             onChangeText={(value) => handleInputChange('companyName', value)}
             autoCapitalize="words"
-            autoCorrect={false}
           />
 
           {/* Salutation */}
-          <FloatingLabelPicker
+          <PickerInput
             label="Salutation"
             selectedValue={formData.salutation}
             onValueChange={(v) => handleInputChange('salutation', v)}
@@ -405,41 +346,37 @@ export default function AddClientScreen() {
             {SALUTATIONS.map((sal) => (
               <Picker.Item key={sal} label={sal} value={sal} />
             ))}
-          </FloatingLabelPicker>
+          </PickerInput>
 
           {/* First Name */}
-          <FloatingLabelInput
+          <Input
             label="First Name*"
             placeholder="First Name*"
             value={formData.firstName}
             onChangeText={(value) => handleInputChange('firstName', value)}
             autoCapitalize="words"
-            autoCorrect={false}
           />
 
           {/* Last Name */}
-          <FloatingLabelInput
+          <Input
             label="Last Name*"
             placeholder="Last Name*"
             value={formData.lastName}
             onChangeText={(value) => handleInputChange('lastName', value)}
             autoCapitalize="words"
-            autoCorrect={false}
           />
 
           {/* GST Number */}
-          <FloatingLabelInput
-            label="GST Number"
+          <Input
+            label="GST Number (e.g. 27ABCDE1234F1Z5)"
             placeholder="GST Number (e.g. 27ABCDE1234F1Z5)"
             value={formData.gst}
             onChangeText={(value) => handleInputChange('gst', value.toUpperCase())}
             autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={15}
           />
 
           {/* Category */}
-          <FloatingLabelPicker
+          <PickerInput
             label="Category"
             selectedValue={formData.category}
             onValueChange={(v) => handleInputChange('category', v)}
@@ -447,41 +384,37 @@ export default function AddClientScreen() {
             {CATEGORIES.map((cat) => (
               <Picker.Item key={cat} label={cat} value={cat} />
             ))}
-          </FloatingLabelPicker>
+          </PickerInput>
 
           {/* Phone Number */}
-          <FloatingLabelInput
+          <Input
             label="Phone number*"
             placeholder="Phone number*"
             value={formData.phone}
             onChangeText={(value) => handleInputChange('phone', value)}
             keyboardType="phone-pad"
-            autoCorrect={false}
           />
 
           {/* Email ID */}
-          <FloatingLabelInput
+          <Input
             label="Email ID"
             placeholder="Email ID"
             value={formData.email}
             onChangeText={(value) => handleInputChange('email', value)}
             keyboardType="email-address"
             autoCapitalize="none"
-            autoCorrect={false}
           />
 
           {/* Address */}
-          <FloatingLabelInput
+          <Input
             label="Address*"
             placeholder="Address*"
             value={formData.address}
             onChangeText={(value) => handleInputChange('address', value)}
-            multiline
-            numberOfLines={4}
           />
 
           {/* Country */}
-          <FloatingLabelPicker
+          <PickerInput
             label="Country*"
             selectedValue={formData.country}
             onValueChange={(v) => {
@@ -492,10 +425,10 @@ export default function AddClientScreen() {
             {COUNTRIES.map((c) => (
               <Picker.Item key={c} label={c} value={c} />
             ))}
-          </FloatingLabelPicker>
+          </PickerInput>
 
           {/* State */}
-          <FloatingLabelPicker
+          <PickerInput
             label="State*"
             selectedValue={formData.state}
             onValueChange={(v) => handleInputChange('state', v)}
@@ -503,27 +436,24 @@ export default function AddClientScreen() {
             {(STATES[formData.country] || []).map((s) => (
               <Picker.Item key={s} label={s} value={s} />
             ))}
-          </FloatingLabelPicker>
+          </PickerInput>
 
           {/* City */}
-          <FloatingLabelInput
+          <Input
             label="City*"
             placeholder="City*"
             value={formData.city}
             onChangeText={(value) => handleInputChange('city', value)}
             autoCapitalize="words"
-            autoCorrect={false}
           />
 
           {/* Zip Code */}
-          <FloatingLabelInput
+          <Input
             label="Zip Code*"
             placeholder="Zip Code*"
             value={formData.zipCode}
             onChangeText={(value) => handleInputChange('zipCode', value)}
             keyboardType="numeric"
-            autoCorrect={false}
-            maxLength={10}
           />
         </View>
 
@@ -667,66 +597,19 @@ export default function AddClientScreen() {
     shadowRadius: 4,
     elevation: 2,
   },
-  // Floating Label Styles
-  floatingContainer: {
-    marginBottom: 16,
-    position: 'relative',
-    paddingTop: 4,
+  pickerContainer: {
+    marginBottom: 20,
   },
-  floatingLabel: {
-    position: 'absolute',
-    left: 12,
-    top: 14,
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    fontWeight: '400',
-    color: '#727272',
-    zIndex: 1,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 2,
-  },
-  floatingLabelActive: {
-    top: -6,
-    fontSize: 11,
-    color: '#A098DC',
-  },
-  floatingInput: {
+  pickerWrapper: {
     borderWidth: 1,
-    borderColor: '#F2F2F2',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    backgroundColor: '#F5F5F5',
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
-    fontWeight: '400',
-    color: '#1A1A1A',
-    lineHeight: 15,
-    minHeight: 48,
-  },
-  floatingInputWithLabel: {
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  floatingInputMultiline: {
-    minHeight: 90,
-    paddingTop: 20,
-    textAlignVertical: 'top',
-  },
-  floatingInputFocused: {
-    borderColor: '#A098DC',
-  },
-  floatingPicker: {
-    paddingTop: 0,
-    paddingBottom: 0,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    minHeight: 56,
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    minHeight: 48,
-    height: 48,
   },
   picker: {
-    height: 67,
+    height: 56,
   },
   addProjectsContainer: {
     paddingVertical: 8,
@@ -745,7 +628,7 @@ export default function AddClientScreen() {
     color: '#1a1a1a',
   },
   addProjectsButton: {
-    backgroundColor: '#A098DC',
+    backgroundColor: '#877ED2',
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -794,7 +677,7 @@ export default function AddClientScreen() {
     marginTop: 6,
   },
   submitButton: {
-    backgroundColor: '#A098DC',
+    backgroundColor: '#877ED2',
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: 'center',

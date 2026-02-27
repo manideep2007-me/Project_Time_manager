@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { Platform, Image } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 // Auth screens
 import RegisterScreen from '../screens/auth/RegisterScreen';
@@ -237,26 +237,28 @@ function AppTabs() {
   if (isAdmin) {
     return (
       <Tab.Navigator
+        safeAreaInsets={{ bottom: 10 }}
         screenOptions={{
           tabBarActiveTintColor: '#877ED2',
           tabBarInactiveTintColor: '#666',
           tabBarLabelStyle: {
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: '400',
             marginTop: 2,
+            marginBottom: 2,
           },
           tabBarItemStyle: {
             flex: 1,
           },
           tabBarStyle: {
-            backgroundColor: '#fff',
-            borderTopWidth: 1,
-            borderTopColor: '#e1e5e9',
-            paddingBottom: 8,
-            paddingTop: 8,
-            height: 60,
-            justifyContent: 'space-around',
+            backgroundColor: '#FFFFFF',
+            borderTopWidth: 0,
+            paddingBottom: 12,
+            paddingTop: 6,
+            height: 68,
+            elevation: 0,
           },
+          tabBarHideOnKeyboard: true,
           headerShown: false,
         }}
       >
@@ -265,11 +267,15 @@ function AppTabs() {
           component={AdminDashboardScreen}
           options={{
             tabBarLabel: 'Dashboard',
-            tabBarIcon: ({ color, focused, size }) => (
-              <Ionicons 
-                name={focused ? 'grid' : 'grid-outline'} 
-                size={size || 24} 
-                color={color} 
+            tabBarIcon: ({ focused }) => (
+              <Image
+                source={require('../../assets/card-icons/dashboard.png')}
+                style={{
+                  width: 28,
+                  height: 29,
+                  tintColor: focused ? '#877ED2' : '#B0B0B0',
+                }}
+                resizeMode="contain"
               />
             ),
           }}
@@ -284,11 +290,15 @@ function AppTabs() {
           }}
           options={{
             tabBarLabel: 'Task',
-            tabBarIcon: ({ color, focused, size }) => (
-              <Ionicons 
-                name={focused ? 'clipboard' : 'clipboard-outline'} 
-                size={size || 24} 
-                color={color} 
+            tabBarIcon: ({ focused }) => (
+              <Image
+                source={require('../../assets/card-icons/task.png')}
+                style={{
+                  width: 28,
+                  height: 29,
+                  tintColor: focused ? '#877ED2' : '#B0B0B0',
+                }}
+                resizeMode="contain"
               />
             ),
           }}
@@ -304,11 +314,15 @@ function AppTabs() {
           })}
           options={{
             tabBarLabel: 'Projects',
-            tabBarIcon: ({ color, focused, size }) => (
-              <Ionicons 
-                name={focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} 
-                size={size || 24} 
-                color={color} 
+            tabBarIcon: ({ focused }) => (
+              <Image
+                source={require('../../assets/card-icons/projects.png')}
+                style={{
+                  width: 28,
+                  height: 29,
+                  tintColor: focused ? '#877ED2' : '#B0B0B0',
+                }}
+                resizeMode="contain"
               />
             ),
           }}
@@ -324,11 +338,15 @@ function AppTabs() {
           })}
           options={{
             tabBarLabel: 'Expense',
-            tabBarIcon: ({ color, focused, size }) => (
-              <Ionicons 
-                name={focused ? 'stats-chart' : 'stats-chart-outline'} 
-                size={size || 24} 
-                color={color} 
+            tabBarIcon: ({ focused }) => (
+              <Image
+                source={require('../../assets/card-icons/Expense.png')}
+                style={{
+                  width: 28,
+                  height: 29,
+                  tintColor: focused ? '#877ED2' : '#B0B0B0',
+                }}
+                resizeMode="contain"
               />
             ),
           }}
@@ -343,11 +361,15 @@ function AppTabs() {
           }}
           options={{
             tabBarLabel: 'Notifications',
-            tabBarIcon: ({ color, focused, size }) => (
-              <Ionicons 
-                name={focused ? 'notifications' : 'notifications-outline'} 
-                size={size || 24} 
-                color={color} 
+            tabBarIcon: ({ focused }) => (
+              <Image
+                source={require('../../assets/card-icons/notifications.png')}
+                style={{
+                  width: 28,
+                  height: 29,
+                  tintColor: focused ? '#877ED2' : '#B0B0B0',
+                }}
+                resizeMode="contain"
               />
             ),
           }}

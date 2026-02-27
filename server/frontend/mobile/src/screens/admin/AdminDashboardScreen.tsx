@@ -137,18 +137,18 @@ export default function AdminDashboardScreen() {
       disabled={!onCardPress}
     >
       {/* Background watermark image */}
-      <Image 
-        source={require('../../../assets/Vector.png')} 
-        style={styles.statCardIconBackground}
+      {/* <Image
+        source={require('../../../assets/card-icons/projects-bg.png')}
+        style={styles.statCardWatermark}
         resizeMode="contain"
-      />
+      /> */}
       
       <Text style={styles.statCardTitle}>{title}</Text>
       <Text style={styles.statCardValue}>{value}</Text>
       <TouchableOpacity style={styles.statCardButton} onPress={onButtonPress}>
         <Text style={styles.statCardButtonText}>{buttonText}</Text>
       </TouchableOpacity>
-    </TouchableOpacity>
+    </TouchableOpacity> 
   );
 
   return (
@@ -286,8 +286,8 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: PRIMARY_PURPLE,
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 26,
+    paddingTop: 10,
+    paddingBottom: 18,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },
@@ -310,7 +310,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 18,
   },
   avatarText: {
     fontSize: 22,
@@ -384,13 +383,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'space-between',
   },
-  statCardIconBackground: {
+  statCardWatermark: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 100,
-    height: 100,
-    opacity: 0.12,
+    right: -18,
+    bottom: -18,
+    width: 96,
+    height: 96,
+    opacity: 0.98,
     zIndex: 0,
   },
   statCardTitle: {
@@ -400,6 +399,7 @@ const styles = StyleSheet.create({
     color: '#333333',
     marginBottom: 4,
     zIndex: 1,
+    position: 'relative',
   },
   statCardValue: {
     fontSize: 44,
@@ -409,6 +409,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     zIndex: 1,
     lineHeight: 52,
+    position: 'relative',
   },
   statCardButton: {
     backgroundColor: BUTTON_COLOR,
@@ -418,6 +419,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     zIndex: 1,
     marginTop: 4,
+    position: 'relative',
   },
   statCardButtonText: {
     fontSize: 12,

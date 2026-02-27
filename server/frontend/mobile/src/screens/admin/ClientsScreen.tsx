@@ -110,7 +110,7 @@ export default function ClientsScreen() {
       alignItems: 'center',
     },
     summaryLabel: {
-      color: '#333333',
+      color: '#877ED2',
       fontWeight: '400',
     },
     summaryTotal: {
@@ -247,11 +247,11 @@ export default function ClientsScreen() {
     statusBadge: {
       paddingHorizontal: 12,
       paddingVertical: 4,
-      borderRadius: 12,
+      borderRadius: 15,
       marginLeft: 8,
     },
     statusActive: {
-      backgroundColor: '#E8F5E9',
+      backgroundColor: '#83B465',
     },
     statusInactive: {
       backgroundColor: '#FFEBEE',
@@ -259,7 +259,7 @@ export default function ClientsScreen() {
     statusText: {
       fontSize: 12,
       fontWeight: '600',
-      color: '#4CAF50',
+      color: '#edf3ed',
     },
     statusTextInactive: {
       color: '#F44336',

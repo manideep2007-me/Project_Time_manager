@@ -208,12 +208,12 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showEmailOtpModal, setShowEmailOtpModal] = useState(false);
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [otpTimer, setOtpTimer] = useState(30);
   const otpInputRefs = useRef<(TextInput | null)[]>([]);
   const slideAnim = useRef(new Animated.Value(500)).current;
   const [showPhoneOtpModal, setShowPhoneOtpModal] = useState(false);
-  const [phoneOtpDigits, setPhoneOtpDigits] = useState(['', '', '', '', '', '']); // 6-digit OTP for WhatsApp
+  const [phoneOtpDigits, setPhoneOtpDigits] = useState(['', '', '', '', '', '']); // 6-digit OTP
   const [phoneOtpTimer, setPhoneOtpTimer] = useState(30);
   const [phoneOtpGenerated, setPhoneOtpGenerated] = useState('');
   const phoneOtpInputRefs = useRef<(TextInput | null)[]>([]);
@@ -228,6 +228,33 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
   // Hidden/derived
   const [maxEmployees, setMaxEmployees] = useState('50');
   const [submitting, setSubmitting] = useState(false);
+
+  // Custom toast modal
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  const [toastTitle, setToastTitle] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
+  const toastAnim = useRef(new Animated.Value(0)).current;
+
+  const showToast = (type: 'success' | 'error', title: string, message: string) => {
+    setToastType(type);
+    setToastTitle(title);
+    setToastMessage(message);
+    setToastVisible(true);
+    toastAnim.setValue(0);
+    Animated.spring(toastAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+    // Auto dismiss after 2.5s
+    setTimeout(() => {
+      Animated.timing(toastAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => setToastVisible(false));
+    }, 2500);
+  };
 
   // Progress calculation (must be at top level for hooks)
   const progressWidth = useMemo(() => (step / 3) * 100, [step]);
@@ -372,22 +399,15 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       Alert.alert('Invalid email', 'Please enter a valid email address before requesting OTP.');
       return;
     }
-    const code = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
     setEmailOtpGenerated(code);
     setEmailOtpSent(true);
     setOtpTimer(30);
-    setOtpDigits(['', '', '', '']);
+    setOtpDigits(['', '', '', '', '', '']);
     setShowEmailOtpModal(true);
-    // Start timer
-    const timer = setInterval(() => {
-      setOtpTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    console.log('========================================');
+    console.log(`[EMAIL OTP] Code for ${adminEmail}: ${code}`);
+    console.log('========================================');
   };
 
   // Timer effect
@@ -430,16 +450,16 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
     newOtp[index] = text;
     setOtpDigits(newOtp);
 
-    // Auto-focus next input
-    if (text && index < 3) {
+    // Auto-focus next input (6 digits for Email OTP)
+    if (text && index < 5) {
       otpInputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-verify when all 4 digits are entered
+    // Auto-verify when all 6 digits are entered
     if (newOtp.every((digit) => digit !== '') && newOtp.join('') === emailOtpGenerated) {
       setEmailVerified(true);
       setShowEmailOtpModal(false);
-      Alert.alert('Success', 'Email verified');
+      showToast('success', 'Verified!', 'Email verified successfully');
     }
   };
 
@@ -451,13 +471,17 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
 
   const verifyEmailOtp = () => {
     const enteredOtp = otpDigits.join('');
+    if (enteredOtp.length !== 6) {
+      showToast('error', 'Invalid OTP', 'Please enter the complete 6-digit code');
+      return;
+    }
     if (enteredOtp === emailOtpGenerated) {
       setEmailVerified(true);
       setShowEmailOtpModal(false);
-      Alert.alert('Success', 'Email verified');
+      showToast('success', 'Verified!', 'Email verified successfully');
     } else {
-      Alert.alert('Invalid OTP', 'Please enter the correct code');
-      setOtpDigits(['', '', '', '']);
+      showToast('error', 'Invalid OTP', 'Please enter the correct code sent to your email');
+      setOtpDigits(['', '', '', '', '', '']);
       otpInputRefs.current[0]?.focus();
     }
   };
@@ -491,19 +515,22 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       setPhoneOtpDigits(['', '', '', '', '', '']); // 6-digit OTP
       setShowPhoneOtpModal(true);
       
-      // Call the WhatsApp OTP service
+      // Call the Phone OTP service
       const res = await otp.sendOTP(adminPhone);
       if (res.success) {
         // Store the OTP for verification (in development mode, API returns OTP)
         if (res.otp) {
           setPhoneOtpGenerated(res.otp);
+          console.log('========================================');
+          console.log(`[PHONE OTP] Code for +91 ${adminPhone}: ${res.otp}`);
+          console.log('========================================');
         }
         // OTP sent successfully - modal is already open
       } else {
-        Alert.alert('Error', res.message || 'Failed to send OTP to WhatsApp');
+        Alert.alert('Error', res.message || 'Failed to send OTP to your phone');
       }
     } catch (error: any) {
-      console.error('Send WhatsApp OTP error:', error);
+      console.error('Send Phone OTP error:', error);
       Alert.alert('Error', error.message || 'Failed to send OTP. Please check your connection.');
     }
   };
@@ -548,7 +575,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
     newOtp[index] = text;
     setPhoneOtpDigits(newOtp);
 
-    // Auto-focus next input (6 digits for WhatsApp OTP)
+    // Auto-focus next input (6 digits for Phone OTP)
     if (text && index < 5) {
       phoneOtpInputRefs.current[index + 1]?.focus();
     }
@@ -569,7 +596,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
   const verifyPhoneOtp = async () => {
     const enteredOtp = phoneOtpDigits.join('');
     if (enteredOtp.length !== 6) {
-      Alert.alert('Invalid OTP', 'Please enter the complete 6-digit code');
+      showToast('error', 'Invalid OTP', 'Please enter the complete 6-digit code');
       return;
     }
     
@@ -579,8 +606,9 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       if (res.success) {
         setPhoneVerified(true);
         setShowPhoneOtpModal(false);
+        showToast('success', 'Verified!', 'Phone number verified successfully');
       } else {
-        Alert.alert('Invalid OTP', res.message || 'Please enter the correct code from WhatsApp');
+        showToast('error', 'Invalid OTP', res.message || 'Please enter the correct code sent to your phone');
         setPhoneOtpDigits(['', '', '', '', '', '']);
         phoneOtpInputRefs.current[0]?.focus();
       }
@@ -589,8 +617,9 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
       if (enteredOtp === phoneOtpGenerated) {
         setPhoneVerified(true);
         setShowPhoneOtpModal(false);
+        showToast('success', 'Verified!', 'Phone number verified successfully');
       } else {
-        Alert.alert('Invalid OTP', 'Please enter the correct code from WhatsApp');
+        showToast('error', 'Invalid OTP', 'Please enter the correct code sent to your phone');
         setPhoneOtpDigits(['', '', '', '', '', '']);
         phoneOtpInputRefs.current[0]?.focus();
       }
@@ -1028,7 +1057,10 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
             ]}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Verify your email</Text>
+              <View style={styles.phoneHeaderRow}>
+                <Ionicons name="mail-outline" size={22} color="#877ED2" />
+                <Text style={styles.modalTitle}>Verify Email</Text>
+              </View>
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={() => setShowEmailOtpModal(false)}
@@ -1037,10 +1069,11 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>
-              Please enter the 4 digit sent to your mobile {adminEmail ? maskEmail(adminEmail) : 'xxxx1653'}
+              Please enter the 6-digit code sent to{'\n'}
+              <Text style={styles.phoneNumber}>{adminEmail || 'your email'}</Text>
             </Text>
 
-            <View style={styles.otpContainer}>
+            <View style={styles.otpContainerSix}>
               {otpDigits.map((digit, index) => (
                 <TextInput
                   key={index}
@@ -1048,7 +1081,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
                     otpInputRefs.current[index] = ref;
                   }}
                   style={[
-                    styles.otpInput,
+                    styles.otpInputSix,
                     digit && styles.otpInputFilled,
                     index === otpDigits.findIndex((d) => d === '') && styles.otpInputActive,
                   ]}
@@ -1060,29 +1093,37 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
                   selectTextOnFocus
                 />
               ))}
-              {otpTimer > 0 && (
-                <View style={styles.timerContainer}>
-                  <View style={styles.timerSpinner} />
-                  <Text style={styles.timerText}>
-                    {String(Math.floor(otpTimer / 60)).padStart(2, '0')}:
-                    {String(otpTimer % 60).padStart(2, '0')}
-                  </Text>
-                </View>
-              )}
             </View>
+
+            {otpTimer > 0 && (
+              <View style={styles.timerContainerCenter}>
+                <View style={styles.timerSpinner} />
+                <Text style={styles.timerText}>
+                  Code expires in {String(Math.floor(otpTimer / 60)).padStart(2, '0')}:
+                  {String(otpTimer % 60).padStart(2, '0')}
+                </Text>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.resendLink, otpTimer > 0 && styles.resendLinkDisabled]}
               onPress={resendEmailOtp}
               disabled={otpTimer > 0}
             >
+              <Ionicons 
+                name="refresh-outline" 
+                size={16} 
+                color={otpTimer > 0 ? '#999' : '#877ED2'} 
+                style={{ marginRight: 6 }}
+              />
               <Text style={[styles.resendLinkText, otpTimer > 0 && styles.resendLinkTextDisabled]}>
-                Resend OTP
+                Resend OTP via Email
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.modalConfirmButton} onPress={verifyEmailOtp}>
-              <Text style={styles.modalConfirmButtonText}>Confirm</Text>
+            <TouchableOpacity style={styles.phoneConfirmButton} onPress={verifyEmailOtp}>
+              <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.modalConfirmButtonText}>Verify Code</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1119,9 +1160,9 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
             ]}
           >
             <View style={styles.modalHeader}>
-              <View style={styles.whatsappHeaderRow}>
-                <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
-                <Text style={styles.modalTitle}>Verify via WhatsApp</Text>
+              <View style={styles.phoneHeaderRow}>
+                <Ionicons name="call-outline" size={22} color="#877ED2" />
+                <Text style={styles.modalTitle}>Verify Phone Number</Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseButton}
@@ -1131,8 +1172,8 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>
-              Please enter the 6-digit code sent to your WhatsApp{'\n'}
-              <Text style={styles.whatsappNumber}>+91 {adminPhone || 'xxxxxxxxxx'}</Text>
+              Please enter the 6-digit code sent to{'\n'}
+              <Text style={styles.phoneNumber}>+91 {adminPhone || 'xxxxxxxxxx'}</Text>
             </Text>
 
             <View style={styles.otpContainerSix}>
@@ -1173,17 +1214,17 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
               disabled={phoneOtpTimer > 0}
             >
               <Ionicons 
-                name="logo-whatsapp" 
+                name="refresh-outline" 
                 size={16} 
-                color={phoneOtpTimer > 0 ? '#999' : '#25D366'} 
+                color={phoneOtpTimer > 0 ? '#999' : '#877ED2'} 
                 style={{ marginRight: 6 }}
               />
               <Text style={[styles.resendLinkText, phoneOtpTimer > 0 && styles.resendLinkTextDisabled]}>
-                Resend OTP via WhatsApp
+                Resend OTP via SMS
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.whatsappConfirmButton} onPress={verifyPhoneOtp}>
+            <TouchableOpacity style={styles.phoneConfirmButton} onPress={verifyPhoneOtp}>
               <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 8 }} />
               <Text style={styles.modalConfirmButtonText}>Verify Code</Text>
             </TouchableOpacity>
@@ -1262,6 +1303,56 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Toast Notification */}
+      {toastVisible && (
+        <Animated.View
+          style={[
+            styles.toastContainer,
+            toastType === 'success' ? styles.toastSuccess : styles.toastError,
+            {
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-40, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.toastIconWrapper}>
+            <Ionicons
+              name={toastType === 'success' ? 'checkmark-circle' : 'alert-circle'}
+              size={28}
+              color={toastType === 'success' ? '#22C55E' : '#EF4444'}
+            />
+          </View>
+          <View style={styles.toastTextWrapper}>
+            <Text style={[
+              styles.toastTitle,
+              toastType === 'success' ? styles.toastTitleSuccess : styles.toastTitleError,
+            ]}>
+              {toastTitle}
+            </Text>
+            <Text style={styles.toastMessage}>{toastMessage}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.toastDismiss}
+            onPress={() => {
+              Animated.timing(toastAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }).start(() => setToastVisible(false));
+            }}
+          >
+            <Ionicons name="close" size={18} color="#999" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -1275,7 +1366,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 32,
-    paddingTop: 16,
+    paddingTop: 20,
     flexGrow: 1,
   },
   wizardHeader: {
@@ -1288,7 +1379,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
   progressContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   progressBarTrack: {
     height: 6,
@@ -1318,7 +1409,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
   },
   floatingContainer: {
-    marginBottom: 5,
+    marginBottom: 16,
     position: 'relative',
     paddingTop: 0,
   },
@@ -1356,7 +1447,7 @@ const styles = StyleSheet.create({
   },
   floatingInputMultiline: {
     // Address textarea height
-    minHeight: 100,
+    minHeight: 90,
     textAlignVertical: 'top',
     paddingTop: 14,
   },
@@ -1537,7 +1628,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   logoSection: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   logoLabel: {
     fontSize: 14,
@@ -1545,7 +1636,7 @@ const styles = StyleSheet.create({
     color: '#666666',
     fontFamily: 'Inter_400Regular',
     marginTop: 0,
-    marginBottom: 2,
+    marginBottom: 4,
     marginLeft: 0,
   },
   logoHint: {
@@ -1554,7 +1645,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
     marginTop: 0,
-    marginBottom: 8,
+    marginBottom: 10,
     marginLeft: 0,
   },
   logoUploadRow: {
@@ -1766,11 +1857,11 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingTop: 28,
+    paddingBottom: 36,
     maxHeight: '80%',
   },
   modalHeader: {
@@ -1801,7 +1892,8 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 24,
+    marginBottom: 28,
+    lineHeight: 22,
     fontFamily: 'Inter_400Regular',
   },
   otpContainer: {
@@ -1846,12 +1938,12 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 14,
-    color: '#333',
+    color: '#555',
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
   },
   resendLink: {
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     marginBottom: 24,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1868,44 +1960,45 @@ const styles = StyleSheet.create({
   resendLinkTextDisabled: {
     color: '#999',
   },
-  // WhatsApp OTP Modal styles
-  whatsappHeaderRow: {
+  // Phone OTP Modal styles
+  phoneHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  whatsappNumber: {
-    color: '#25D366',
+  phoneNumber: {
+    color: '#877ED2',
     fontWeight: '600',
     fontSize: 15,
   },
   otpContainerSix: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    gap: 8,
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 10,
   },
   otpInputSix: {
-    width: 45,
-    height: 52,
+    width: 46,
+    height: 54,
     borderWidth: 1.5,
     borderColor: '#E0E0E0',
-    borderRadius: 10,
+    borderRadius: 12,
     fontSize: 22,
     fontWeight: '700',
     textAlign: 'center',
     color: '#333',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F8F8FC',
   },
   timerContainerCenter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
+    gap: 6,
   },
-  whatsappConfirmButton: {
-    backgroundColor: '#25D366',
-    borderRadius: 8,
+  phoneConfirmButton: {
+    backgroundColor: '#877ED2',
+    borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 16,
@@ -1927,6 +2020,7 @@ const styles = StyleSheet.create({
   },
   changeEmailLink: {
     alignSelf: 'center',
+    paddingVertical: 4,
   },
   changeEmailLinkText: {
     fontSize: 14,
@@ -2055,5 +2149,59 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '500',
+  },
+  // Custom Toast styles
+  toastContainer: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 9999,
+  },
+  toastSuccess: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  toastError: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  toastIconWrapper: {
+    marginRight: 12,
+  },
+  toastTextWrapper: {
+    flex: 1,
+  },
+  toastTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  toastTitleSuccess: {
+    color: '#166534',
+  },
+  toastTitleError: {
+    color: '#991B1B',
+  },
+  toastMessage: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
+  toastDismiss: {
+    padding: 4,
+    marginLeft: 8,
   },
 });

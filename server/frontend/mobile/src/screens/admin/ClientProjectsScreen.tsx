@@ -1,20 +1,51 @@
 import React, { useState, useLayoutEffect, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  TextInput,
+  Image,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
+// ── Design constants ────────────────────────────────────────────────
+const FONTS = {
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
+};
+
+const COLORS = {
+  bg: '#F5F6FA',
+  surface: '#FFFFFF',
+  accent: '#877ED2',
+  accentLight: '#8E97F0',
+  textPrimary: '#1A1A1A',
+  textSecondary: '#6A6D73',
+  textMuted: '#999999',
+  border: '#E5E6EB',
+  green: '#4CAF50',
+  greenLight: '#66BB6A',
+  red: '#EF5350',
+  blueGray: '#7986CB',
+};
+
+// ── Component ───────────────────────────────────────────────────────
 export default function ClientProjectsScreen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
   const { client, projects } = route.params || { client: {}, projects: [] };
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredProjects, setFilteredProjects] = useState(projects);
+  const [clientExpanded, setClientExpanded] = useState(true);
 
   // Hide the default navigation header
   useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
+    navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
   // Filter projects based on search query
@@ -22,120 +53,151 @@ export default function ClientProjectsScreen() {
     if (searchQuery.trim() === '') {
       setFilteredProjects(projects);
     } else {
-      const query = searchQuery.toLowerCase();
-      const filtered = projects.filter((project: any) =>
-        project.name?.toLowerCase().includes(query) ||
-        project.location?.toLowerCase().includes(query) ||
-        project.status?.toLowerCase().includes(query) ||
-        project.description?.toLowerCase().includes(query)
+      const q = searchQuery.toLowerCase();
+      const filtered = projects.filter(
+        (p: any) =>
+          p.name?.toLowerCase().includes(q) ||
+          p.location?.toLowerCase().includes(q) ||
+          p.status?.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q),
       );
       setFilteredProjects(filtered);
     }
   }, [searchQuery, projects]);
 
-  // Calculate stats
-  const totalProjects = filteredProjects.length;
-  const activeProjects = filteredProjects.filter((p: any) => p.status?.toLowerCase() === 'in progress').length;
-  const completedProjects = filteredProjects.filter((p: any) => p.status?.toLowerCase() === 'completed').length;
+  // Stats – use full project list, not filtered
+  const totalProjects = projects.length;
+  const activeProjects = projects.filter((p: any) => {
+    const s = (p.status || '').toLowerCase();
+    return s === 'active' || s === 'in progress';
+  }).length;
+  const inactiveProjects = projects.filter((p: any) => {
+    const s = (p.status || '').toLowerCase();
+    return s === 'completed' || s === 'cancelled' || s === 'on hold';
+  }).length;
 
+  // ── Helpers ─────────────────────────────────────────────────────
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const d = new Date(dateString);
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const getProgressInfo = (project: any) => {
-    const status = project.status?.toLowerCase() || 'in progress';
-    const isCompleted = status.includes('completed');
-    const isOverdue = status.includes('overdue');
-    
-    if (isCompleted) {
-      return {
-        label: 'Completed',
-        color: '#7986CB',
-        progress: 100,
-        days: null
-      };
-    } else if (isOverdue) {
-      return {
-        label: 'Over due',
-        color: '#EF5350',
-        progress: 100,
-        days: '2d'
-      };
-    } else {
-      return {
-        label: 'In Progress',
-        color: '#81C784',
-        progress: 70,
-        days: '5d'
-      };
+    const status = (project.status || 'in progress').toLowerCase();
+    const now = new Date();
+    const endDate = project.end_date ? new Date(project.end_date) : null;
+    const startDate = project.start_date ? new Date(project.start_date) : null;
+    const isOverdue = endDate && endDate < now && !status.includes('completed');
+
+    if (status.includes('completed')) {
+      return { label: 'Completed', color: COLORS.blueGray, progress: 100, days: null };
     }
+    if (isOverdue || status.includes('overdue')) {
+      const diff = endDate ? Math.ceil((now.getTime() - endDate.getTime()) / 86400000) : 0;
+      return { label: 'Over due', color: COLORS.red, progress: 100, days: `${diff}d` };
+    }
+    // In‑progress
+    let progress = 50;
+    if (startDate && endDate) {
+      const total = endDate.getTime() - startDate.getTime();
+      const elapsed = now.getTime() - startDate.getTime();
+      progress = Math.min(Math.max(Math.round((elapsed / total) * 100), 5), 95);
+    }
+    const remaining = endDate ? Math.max(Math.ceil((endDate.getTime() - now.getTime()) / 86400000), 0) : 0;
+    return { label: 'In Progress', color: COLORS.greenLight, progress, days: `${remaining}d` };
   };
 
+  const getBadge = (status: string) => {
+    const s = (status || '').toLowerCase();
+    if (s.includes('completed')) return { bg: COLORS.blueGray, label: 'Completed' };
+    if (s.includes('overdue')) return { bg: COLORS.red, label: 'Over due' };
+    if (s === 'to do' || s === 'new') return { bg: '#90CAF9', label: 'New' };
+    return { bg: COLORS.accent, label: status || 'In Progress' };
+  };
+
+  // ── Project card ────────────────────────────────────────────────
   const renderProjectCard = ({ item }: any) => {
-    const progressInfo = getProgressInfo(item);
-    const statusBadgeColor = item.status?.toLowerCase().includes('completed') ? '#8E97F0' : item.status?.toLowerCase().includes('overdue') ? '#EF5350' : '#8E97F0';
+    const progress = getProgressInfo(item);
+    const badge = getBadge(item.status);
+
+    // deterministic avatar ids from project id
+    const id = Number(item.id) || 1;
+    const avatarIds = [(id * 3) % 70 + 1, (id * 7) % 70 + 1, (id * 11) % 70 + 1];
 
     return (
       <View style={styles.projectCard}>
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: statusBadgeColor }]}>
-          <Text style={styles.statusBadgeText}>{item.status || 'In Progress'}</Text>
-        </View>
+        {/* Left accent bar */}
+        <View style={styles.cardAccent} />
 
-        {/* Location */}
-        <Text style={styles.projectLocation}>{item.location || 'Yelahanka, Bangalore'}</Text>
-
-        {/* Project Info Row */}
-        <View style={styles.projectMainRow}>
-          <View style={styles.projectInfo}>
-            <Text style={styles.projectName}>{item.name}</Text>
+        <View style={styles.cardContent}>
+          {/* Status badge */}
+          <View style={[styles.badge, { backgroundColor: badge.bg }]}>  
+            <Text style={styles.badgeText}>{badge.label}</Text>
           </View>
-          
-          {/* Avatar with Plus Button */}
-          <View style={styles.avatarGroup}>
-            <Image 
-              source={{ uri: 'https://i.pravatar.cc/150?img=' + (item.id || 1) }} 
-              style={styles.avatar} 
-            />
-            <TouchableOpacity style={styles.plusButton}>
-              <Ionicons name="add" size={14} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* Footer: Dates and Progress */}
-        <View style={styles.projectFooter}>
-          <View style={styles.datesContainer}>
-            <View style={styles.dateColumn}>
+          {/* Location */}
+          <Text style={styles.projectLocation}>
+            {item.location || 'Yelahanka, Bangalore'}
+          </Text>
+
+          {/* Name + avatar row */}
+          <View style={styles.nameRow}>
+            <Text style={styles.projectName} numberOfLines={2}>
+              {item.name}
+            </Text>
+
+            {/* Overlapping avatars + green plus */}
+            <View style={styles.avatarGroup}>
+              {avatarIds.map((aid: number, i: number) => (
+                <Image
+                  key={i}
+                  source={{ uri: `https://i.pravatar.cc/150?img=${aid}` }}
+                  style={[
+                    styles.avatar,
+                    { zIndex: 10 - i, marginLeft: i === 0 ? 0 : -10 },
+                  ]}
+                />
+              ))}
+              <TouchableOpacity
+                style={styles.plusBtn}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={14} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Footer – dates + progress */}
+          <View style={styles.footer}>
+            <View style={styles.dateCol}>
               <Text style={styles.dateLabel}>Start</Text>
               <Text style={styles.dateValue}>{formatDate(item.start_date)}</Text>
             </View>
-            <View style={styles.dateColumn}>
+            <View style={styles.dateCol}>
               <Text style={styles.dateLabel}>End</Text>
               <Text style={styles.dateValue}>{formatDate(item.end_date)}</Text>
             </View>
-          </View>
-          
-          <View style={styles.progressContainer}>
-            <View style={styles.progressHeader}>
-              <Text style={[styles.progressLabel, { color: progressInfo.color }]}>
-                {progressInfo.label}
-              </Text>
-              {progressInfo.days && (
-                <Text style={[styles.daysText, { color: progressInfo.color }]}>
-                  {progressInfo.days}
+
+            <View style={styles.progressWrap}>
+              <View style={styles.progressLabelRow}>
+                <Text style={[styles.progressLabel, { color: progress.color }]}>
+                  {progress.label}
                 </Text>
-              )}
-            </View>
-            <View style={styles.progressBarBg}>
-              <View 
-                style={[
-                  styles.progressBarFill, 
-                  { width: `${progressInfo.progress}%`, backgroundColor: progressInfo.color }
-                ]} 
-              />
+                {progress.days !== null && (
+                  <Text style={[styles.progressDays, { color: progress.color }]}>
+                    {progress.days}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${progress.progress}%`, backgroundColor: progress.color },
+                  ]}
+                />
+              </View>
             </View>
           </View>
         </View>
@@ -143,12 +205,17 @@ export default function ClientProjectsScreen() {
     );
   };
 
+  // ── Render ──────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="#101010" />
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="chevron-back" size={26} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Clients</Text>
       </View>
@@ -158,91 +225,118 @@ export default function ClientProjectsScreen() {
         keyExtractor={(item) => String(item.id)}
         renderItem={renderProjectCard}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View>
-            {/* Search Bar */}
+            {/* Search bar */}
             <View style={styles.searchBar}>
-              <TextInput 
-                placeholder="Search" 
+              <TextInput
+                placeholder="Search"
                 style={styles.searchInput}
-                placeholderTextColor="#999"
+                placeholderTextColor={COLORS.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
-              <Ionicons name="search-outline" size={22} color="#6B5CE7" />
+              <Ionicons name="search-outline" size={22} color={COLORS.accent} />
             </View>
 
-            {/* Summary Stats */}
+            {/* Stats row */}
             <View style={styles.statsRow}>
               <Text style={styles.statText}>
                 Total: <Text style={styles.statBold}>{totalProjects}</Text>
               </Text>
-              <View style={styles.divider} />
+              <View style={styles.statDivider} />
               <Text style={styles.statPurple}>Active: {activeProjects}</Text>
-              <View style={styles.divider} />
-              <Text style={styles.statPurple}>Inactive: {completedProjects}</Text>
+              <View style={styles.statDivider} />
+              <Text style={styles.statPurple}>Inactive: {inactiveProjects}</Text>
             </View>
 
-            {/* Client Detail Card */}
+            {/* ── Client detail card ─────────────────────────── */}
             <View style={styles.clientCard}>
-              {/* Client Header */}
-              <View style={styles.clientHeader}>
-                <Text style={styles.clientName}>{client.name || 'Shriram Properties Ltd'}</Text>
-                <Ionicons name="chevron-up" size={24} color="#8E97F0" />
-              </View>
-              <Text style={styles.clientSubtitle}>
-                {client.client_type || 'Residential properties developer'} | {client.location || 'Bangalore'}
-              </Text>
-              
-              {/* Status */}
-              <View style={styles.statusRow}>
-                <Text style={styles.label}>Status:</Text>
-                <View style={styles.activeStatusBadge}>
-                  <Text style={styles.activeStatusText}>Active</Text>
-                </View>
-              </View>
+              {/* Left accent */}
+              <View style={styles.clientAccent} />
 
-              {/* Address */}
-              <Text style={styles.label}>Address:</Text>
-              <Text style={styles.infoValue}>
-                {client.address || '17/1, Campbell Road, Bangalore – 560 047'}
-              </Text>
-
-              {/* Mobile & Email Row */}
-              <View style={styles.twoColumnRow}>
-                <View style={styles.column}>
-                  <Text style={styles.label}>Mobile:</Text>
-                  <Text style={styles.infoValue}>{client.phone || '+91 98868 51817'}</Text>
-                </View>
-                <View style={styles.column}>
-                  <Text style={styles.label}>Email:</Text>
-                  <Text style={styles.infoValue}>{client.email || 'sales@shriramprop.in'}</Text>
-                </View>
-              </View>
-
-              {/* Onboard Date & Projects Row */}
-              <View style={styles.twoColumnRow}>
-                <View style={styles.column}>
-                  <Text style={styles.label}>Onboard Date:</Text>
-                  <Text style={styles.infoValue}>
-                    {client.onboard_date 
-                      ? formatDate(client.onboard_date)
-                      : '12 May 2020'}
+              <View style={styles.clientInner}>
+                {/* Header row – tap to expand / collapse */}
+                <TouchableOpacity
+                  style={styles.clientHeaderRow}
+                  onPress={() => setClientExpanded((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.clientName}>
+                    {client.name || 'Shriram Properties Ltd'}
                   </Text>
-                </View>
-                <View style={styles.column}>
-                  <Text style={styles.label}>Number of Projects:</Text>
-                  <Text style={styles.infoValue}>{projects.length}</Text>
-                </View>
+                  <Ionicons
+                    name={clientExpanded ? 'chevron-up' : 'chevron-down'}
+                    size={22}
+                    color={COLORS.accent}
+                  />
+                </TouchableOpacity>
+
+                <Text style={styles.clientSub}>
+                  {client.client_type || 'Residential properties developer'} |{' '}
+                  {client.location || 'Bangalore'}
+                </Text>
+
+                {clientExpanded && (
+                  <View>
+                    {/* Status */}
+                    <View style={styles.statusRow}>
+                      <Text style={styles.fieldLabel}>Status:</Text>
+                      <View style={styles.activeBadge}>
+                        <Text style={styles.activeBadgeText}>Active</Text>
+                      </View>
+                    </View>
+
+                    {/* Address */}
+                    <Text style={styles.fieldLabel}>Address:</Text>
+                    <Text style={styles.fieldValue}>
+                      {client.address || '17/1, Campbell Road, Bangalore – 560 047'}
+                    </Text>
+
+                    {/* Mobile & Email */}
+                    <View style={styles.twoCol}>
+                      <View style={styles.col}>
+                        <Text style={styles.fieldLabel}>Mobile:</Text>
+                        <Text style={styles.fieldValue}>
+                          {client.phone || '+91 98868 51817'}
+                        </Text>
+                      </View>
+                      <View style={styles.col}>
+                        <Text style={styles.fieldLabel}>Email:</Text>
+                        <Text style={styles.fieldValue}>
+                          {client.email || 'sales@shriramprop.in'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Onboard date & projects count */}
+                    <View style={styles.twoCol}>
+                      <View style={styles.col}>
+                        <Text style={styles.fieldLabel}>Onboard Date:</Text>
+                        <Text style={styles.fieldValue}>
+                          {client.onboard_date
+                            ? formatDate(client.onboard_date)
+                            : '12 May 2020'}
+                        </Text>
+                      </View>
+                      <View style={styles.col}>
+                        <Text style={styles.fieldLabel}>Number of Projects:</Text>
+                        <Text style={styles.fieldValue}>{projects.length}</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
               </View>
             </View>
 
-            {/* Projects Section Title */}
-            <Text style={styles.projectsTitle}>Projects</Text>
+            {/* Section title */}
+            <Text style={styles.sectionTitle}>Projects</Text>
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
+          <View style={styles.emptyWrap}>
+            <Ionicons name="folder-open-outline" size={48} color="#CCC" />
             <Text style={styles.emptyText}>No projects found</Text>
           </View>
         }
@@ -251,54 +345,60 @@ export default function ClientProjectsScreen() {
   );
 }
 
+// ── Styles ──────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  // ─ Layout ─
   container: {
     flex: 1,
-    backgroundColor: '#F6F6F6',
+    backgroundColor: COLORS.bg,
   },
+
+  // ─ Header ─
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 30,
-    paddingBottom: 16,
-    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 12,
+    paddingTop: 48,
+    paddingBottom: 14,
+    backgroundColor: COLORS.bg,
   },
-  backButton: {
+  backBtn: {
     padding: 4,
-    marginRight: 8,
+    marginRight: 6,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '400',
-    fontFamily: 'Inter_400Regular',
-    color: '#000000',
+    fontFamily: FONTS.regular,
+    color: COLORS.textPrimary,
   },
+
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 30,
+    paddingBottom: 32,
   },
-  
-  // Search Bar
+
+  // ─ Search ─
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    marginBottom: 12,
+    borderColor: COLORS.border,
+    marginBottom: 14,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#1a1a1a',
+    fontSize: 15,
+    fontFamily: FONTS.regular,
+    color: COLORS.textPrimary,
     padding: 0,
   },
-  
-  // Summary Stats
+
+  // ─ Stats row ─
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -306,224 +406,268 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontSize: 14,
-    color: '#666666',
+    fontFamily: FONTS.regular,
+    color: COLORS.textSecondary,
   },
   statBold: {
     fontWeight: '600',
-    color: '#1a1a1a',
+    fontFamily: FONTS.semibold,
+    color: COLORS.textPrimary,
   },
   statPurple: {
     fontSize: 14,
-    color: '#8E97F0',
+    fontFamily: FONTS.medium,
+    color: COLORS.accent,
     fontWeight: '500',
   },
-  divider: {
+  statDivider: {
     width: 1,
     height: 14,
-    backgroundColor: '#DDDDDD',
+    backgroundColor: '#D0D0D0',
     marginHorizontal: 10,
   },
-  
-  // Client Card
+
+  // ─ Client card ─
   clientCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    marginBottom: 22,
+    overflow: 'hidden',
+    flexDirection: 'row',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  clientHeader: {
+  clientAccent: {
+    width: 4,
+    backgroundColor: COLORS.accent,
+  },
+  clientInner: {
+    flex: 1,
+    padding: 16,
+  },
+  clientHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   clientName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
+    fontFamily: FONTS.semibold,
+    color: COLORS.textPrimary,
+    flex: 1,
+    marginRight: 8,
   },
-  clientSubtitle: {
+  clientSub: {
     fontSize: 12,
-    color: '#999999',
-    marginBottom: 12,
+    fontFamily: FONTS.regular,
+    color: COLORS.textMuted,
+    marginBottom: 10,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+    marginTop: 2,
   },
-  activeStatusBadge: {
-    backgroundColor: '#81C784',
-    paddingHorizontal: 12,
+  activeBadge: {
+    backgroundColor: COLORS.green,
+    paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: 12,
     marginLeft: 10,
   },
-  activeStatusText: {
-    color: '#FFFFFF',
+  activeBadgeText: {
+    color: '#FFF',
     fontSize: 12,
+    fontFamily: FONTS.semibold,
     fontWeight: '600',
   },
-  label: {
+  fieldLabel: {
     fontSize: 12,
+    fontFamily: FONTS.regular,
     color: '#AAAAAA',
     marginTop: 8,
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  infoValue: {
+  fieldValue: {
     fontSize: 14,
+    fontFamily: FONTS.regular,
     color: '#444444',
-    fontWeight: '400',
   },
-  twoColumnRow: {
+  twoCol: {
     flexDirection: 'row',
     gap: 16,
-    marginTop: 4,
+    marginTop: 2,
   },
-  column: {
+  col: {
     flex: 1,
   },
-  
-  // Projects Section
-  projectsTitle: {
+
+  // ─ Section title ─
+  sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 16,
+    fontFamily: FONTS.semibold,
+    color: COLORS.textPrimary,
+    marginBottom: 14,
   },
-  
-  // Project Card
+
+  // ─ Project card ─
   projectCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
     marginBottom: 16,
+    overflow: 'hidden',
+    flexDirection: 'row',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  statusBadge: {
+  cardAccent: {
+    width: 4,
+    backgroundColor: COLORS.accent,
+  },
+  cardContent: {
+    flex: 1,
+    padding: 16,
+  },
+
+  // Badge
+  badge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 14,
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  statusBadgeText: {
-    color: '#FFFFFF',
+  badgeText: {
+    color: '#FFF',
     fontSize: 11,
+    fontFamily: FONTS.semibold,
     fontWeight: '600',
   },
-  projectMainRow: {
+
+  // Location
+  projectLocation: {
+    fontSize: 11,
+    fontFamily: FONTS.regular,
+    color: COLORS.textMuted,
+    marginBottom: 4,
+  },
+
+  // Name row
+  nameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 8,
-  },
-  projectInfo: {
-    flex: 1,
-  },
-  projectLocation: {
-    fontSize: 11,
-    color: '#999999',
-    marginBottom: 6,
+    marginBottom: 14,
+    marginTop: 2,
   },
   projectName: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#1a1a1a',
+    fontFamily: FONTS.semibold,
+    color: COLORS.textPrimary,
+    flex: 1,
+    marginRight: 12,
   },
+
+  // Avatars
   avatarGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative',
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: COLORS.surface,
     backgroundColor: '#E0E0E0',
   },
-  plusButton: {
+  plusBtn: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#666666',
+    backgroundColor: COLORS.green,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: -8,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: COLORS.surface,
   },
-  projectFooter: {
+
+  // Footer
+  footer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
+    alignItems: 'flex-end',
+    marginTop: 4,
   },
-  datesContainer: {
-    flexDirection: 'row',
-    gap: 24,
-  },
-  dateColumn: {
-    minWidth: 70,
+  dateCol: {
+    marginRight: 20,
   },
   dateLabel: {
     fontSize: 10,
-    color: '#999999',
-    marginBottom: 4,
+    fontFamily: FONTS.regular,
+    color: COLORS.textMuted,
+    marginBottom: 3,
   },
   dateValue: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
+    fontFamily: FONTS.medium,
     color: '#333333',
   },
-  progressContainer: {
+
+  // Progress
+  progressWrap: {
     flex: 1,
-    maxWidth: 180,
     alignItems: 'flex-end',
   },
-  progressHeader: {
+  progressLabelRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 6,
     alignItems: 'center',
+    gap: 8,
+    marginBottom: 5,
   },
   progressLabel: {
     fontSize: 11,
+    fontFamily: FONTS.semibold,
     fontWeight: '600',
   },
-  daysText: {
+  progressDays: {
     fontSize: 11,
+    fontFamily: FONTS.semibold,
     fontWeight: '600',
   },
-  progressBarBg: {
+  progressTrack: {
     width: '100%',
-    height: 6,
-    backgroundColor: '#F0F0F0',
+    height: 5,
+    backgroundColor: '#EEEEEE',
     borderRadius: 3,
     overflow: 'hidden',
   },
-  progressBarFill: {
+  progressFill: {
     height: '100%',
     borderRadius: 3,
   },
-  
-  // Empty State
-  emptyState: {
+
+  // ─ Empty state ─
+  emptyWrap: {
     alignItems: 'center',
     paddingVertical: 60,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#999999',
+    fontSize: 15,
+    fontFamily: FONTS.regular,
+    color: COLORS.textMuted,
+    marginTop: 12,
   },
 });
