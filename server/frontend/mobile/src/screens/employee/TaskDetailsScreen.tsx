@@ -63,7 +63,7 @@ export default function TaskDetailsScreen() {
   const [loading, setLoading] = useState(false);
   const route = useRoute<any>();
   const { taskId } = route.params || {};
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   // Timer and related state declarations
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
@@ -464,15 +464,12 @@ interface Photo {
     setCalculatedHours(hours);
   }, [liveStartTime, liveEndTime]);
 
-  // Real-time update for live timer
+  // Real-time update for live end time display
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isTimerRunning && timerStartTime) {
       interval = setInterval(() => {
-        const now = new Date();
-        const elapsed = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000);
-        setElapsedTime(elapsed);
-        setLiveEndTime(now); // Update end time in real-time
+        setLiveEndTime(new Date()); // Update end time in real-time
       }, 1000);
     }
     return () => clearInterval(interval);
@@ -974,23 +971,32 @@ interface Photo {
     const photo = photos.find(p => p.id === photoId);
     if (!photo) return;
 
-    Alert.prompt(
-      'Edit Photo Notes',
-      'Add or edit notes for this photo:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Save',
-          onPress: (notes: string | undefined) => {
-            setPhotos(prev => prev.map(p => 
-              p.id === photoId ? { ...p, notes: notes || '' } : p
-            ));
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Edit Photo Notes',
+        'Add or edit notes for this photo:',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Save',
+            onPress: (notes: string | undefined) => {
+              setPhotos(prev => prev.map(p => 
+                p.id === photoId ? { ...p, notes: notes || '' } : p
+              ));
+            }
           }
-        }
-      ],
-      'plain-text',
-      photo.notes || ''
-    );
+        ],
+        'plain-text',
+        photo.notes || ''
+      );
+    } else {
+      // Android doesn't support Alert.prompt - show a simple alert
+      Alert.alert(
+        'Photo Notes',
+        photo.notes || 'No notes yet',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const showPhotoOptions = (photo: Photo) => {
@@ -1265,6 +1271,7 @@ interface Photo {
             year: 'numeric',
             weekday: 'short'
           }).replace(/\//g, '-'),
+          workDate: entry.work_date,
           startTime: startTime.toLocaleTimeString('en-US', { 
             hour: 'numeric', 
             minute: '2-digit',
@@ -1275,6 +1282,12 @@ interface Photo {
             minute: '2-digit',
             hour12: true 
           }),
+          originalStartTime: entry.original_start_time 
+            ? new Date(entry.original_start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+            : undefined,
+          originalEndTime: entry.original_end_time
+            ? new Date(entry.original_end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+            : undefined,
           duration: durationStr,
           durationSeconds: durationMinutes * 60,
           project: entry.task_title || taskDetails.title,
@@ -2066,8 +2079,8 @@ interface Photo {
             {/* Task Details Card */}
             <View style={[styles.card, styles.firstCard]}>
           <View style={[styles.cardHeader, styles.firstCardHeader]}>
-            <View style={[styles.statusBadge]}>
-              <Text style={styles.statusBadgeText}>In Progress</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(taskDetails.status) }]}>
+              <Text style={styles.statusBadgeText}>{getStatusText(taskDetails.status)}</Text>
             </View>
           </View>
           
@@ -2080,7 +2093,7 @@ interface Photo {
           <View style={styles.taskDescriptionContainer}>
             {isDescriptionExpanded && (
               <Text style={styles.taskDescription}>
-                {taskDetails.description || 'Full-height wardrobe for the master bedroom with hanging space, shelves, drawers and loft storage. Spec details is added. Contact Akash for light fittings.'}
+                {taskDetails.description || 'No description available'}
               </Text>
             )}
           </View>

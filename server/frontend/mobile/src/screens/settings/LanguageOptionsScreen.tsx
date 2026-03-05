@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
   TouchableOpacity,
-  Alert 
+  TouchableWithoutFeedback,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import { changeLanguage } from '../../i18n';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -20,297 +20,214 @@ interface Language {
   code: string;
   name: string;
   nativeName: string;
-  flag: string;
 }
 
+const languages: Language[] = [
+  { code: 'en', name: 'English', nativeName: 'English' },
+  { code: 'hi', name: 'Hindi', nativeName: 'हिंदी' },
+  { code: 'te', name: 'Telugu', nativeName: 'తెలుగు' },
+  { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்' },
+  { code: 'kn', name: 'Kannada', nativeName: 'ಕನ್ನಡ' },
+  { code: 'ml', name: 'Malayalam', nativeName: 'മലയാളം' },
+];
+
 export default function LanguageOptionsScreen() {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const navigation = useNavigation<any>();
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language);
 
-  const languages: Language[] = [
-    {
-      code: 'en',
-      name: 'English',
-      nativeName: 'English',
-      flag: '🇬🇧',
-    },
-    {
-      code: 'hi',
-      name: 'Hindi',
-      nativeName: 'हिंदी',
-      flag: '🇮🇳',
-    },
-    {
-      code: 'te',
-      name: 'Telugu',
-      nativeName: 'తెలుగు',
-      flag: '🇮🇳',
-    },
-    {
-      code: 'ta',
-      name: 'Tamil',
-      nativeName: 'தமிழ்',
-      flag: '🇮🇳',
-    },
-    {
-      code: 'kn',
-      name: 'Kannada',
-      nativeName: 'ಕನ್ನಡ',
-      flag: '🇮🇳',
-    },
-    {
-      code: 'ml',
-      name: 'Malayalam',
-      nativeName: 'മലയാളം',
-      flag: '🇮🇳',
-    },
-  ];
-
   useEffect(() => {
-    // Load the current language preference
     const loadLanguage = async () => {
       try {
         const storedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
-        if (storedLanguage) {
-          setSelectedLanguage(storedLanguage);
-        }
+        if (storedLanguage) setSelectedLanguage(storedLanguage);
       } catch (error) {
-        console.error('Error loading language preference:', error);
+        console.error('Error loading language:', error);
       }
     };
     loadLanguage();
   }, []);
 
-  const handleLanguageSelect = async (languageCode: string) => {
+  const handleChange = async () => {
     try {
-      await changeLanguage(languageCode);
-      setSelectedLanguage(languageCode);
-      
-      Alert.alert(
-        'Language Changed',
-        'Your language preference has been updated successfully.',
-        [
-          { 
-            text: 'OK', 
-            onPress: () => navigation.goBack() 
-          }
-        ]
-      );
+      await changeLanguage(selectedLanguage);
+      navigation.goBack();
     } catch (error) {
       console.error('Error changing language:', error);
-      Alert.alert('Error', 'Failed to change language. Please try again.');
     }
   };
 
+  const handleClose = () => navigation.goBack();
+
   return (
-    <SafeAreaWrapper backgroundColor="#F5F5F5">
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={24} color="#000000" />
+    <View style={styles.overlay}>
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <View style={styles.backdrop} />
+      </TouchableWithoutFeedback>
+
+      {/* Floating close button */}
+      <View style={styles.closeButtonRow}>
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.8}>
+          <Ionicons name="close" size={18} color="#555555" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Language Option</Text>
       </View>
 
-      <ScrollView 
-        style={styles.container}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Description */}
-        <View style={styles.descriptionContainer}>
-          <Text style={styles.descriptionText}>
-            Select your preferred language for the app
-          </Text>
-        </View>
+      {/* Bottom sheet */}
+      <View style={styles.sheet}>
+        <Text style={styles.title}>Change Language</Text>
 
-        {/* Language List */}
-        <View style={styles.languageListContainer}>
-          {languages.map((language, index) => {
-            const isSelected = selectedLanguage === language.code;
-            return (
-              <TouchableOpacity
-                key={language.code}
-                style={[
-                  styles.languageItem,
-                  index < languages.length - 1 && styles.languageItemBorder,
-                  isSelected && styles.languageItemSelected,
-                ]}
-                onPress={() => handleLanguageSelect(language.code)}
-                activeOpacity={0.6}
-              >
-                <View style={styles.languageInfo}>
-                  <View style={styles.languageFlagContainer}>
-                    <Text style={styles.languageFlag}>{language.flag}</Text>
-                  </View>
-                  <View style={styles.languageTextContainer}>
-                    <Text style={[styles.languageName, isSelected && styles.languageNameSelected]}>
-                      {language.name}
+        <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+          <View style={styles.languageList}>
+            {languages.map((lang) => {
+              const isSelected = selectedLanguage === lang.code;
+              return (
+                <TouchableOpacity
+                  key={lang.code}
+                  style={[styles.languageRow, isSelected && styles.languageRowSelected]}
+                  onPress={() => setSelectedLanguage(lang.code)}
+                  activeOpacity={0.7}
+                >
+                  {isSelected && <View style={styles.leftAccent} />}
+                  <View style={[styles.languageTexts, !isSelected && styles.languageTextsNoAccent]}>
+                    <Text style={[styles.nativeName, isSelected && styles.nativeNameSelected]}>
+                      {lang.nativeName}
                     </Text>
-                    <Text style={[styles.languageNativeName, isSelected && styles.languageNativeNameSelected]}>
-                      {language.nativeName}
-                    </Text>
+                    <Text style={styles.englishName}>{lang.name}</Text>
                   </View>
-                </View>
-
-                {isSelected && (
-                  <View style={styles.selectedIndicator}>
-                    <Ionicons name="checkmark-circle" size={24} color="#877ED2" />
+                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                    {isSelected && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
                   </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
 
-        {/* Current Language Info */}
-        <View style={styles.infoContainer}>
-          <Ionicons name="information-circle-outline" size={18} color="#877ED2" />
-          <Text style={styles.infoText}>
-            Changes will take effect immediately
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaWrapper>
+        <TouchableOpacity style={styles.changeButton} onPress={handleChange} activeOpacity={0.8}>
+          <Text style={styles.changeButtonText}>Change</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    justifyContent: 'flex-end',
   },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F5F5F5',
-  },
-  backButton: {
-    width: 32,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '400',
-    color: '#000000',
-    marginLeft: 4,
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
 
-  // Description
-  descriptionContainer: {
-    marginTop: 8,
-    marginHorizontal: 16,
-    marginBottom: 16,
+  /* Floating X */
+  closeButtonRow: {
+    alignItems: 'flex-end',
+    paddingRight: 24,
+    marginBottom: -20,
+    zIndex: 10,
   },
-  descriptionText: {
-    fontSize: 14,
-    color: '#666666',
-    lineHeight: 20,
-    fontWeight: '400',
-  },
-
-  // Language List
-  languageListContainer: {
-    marginHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  languageItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    minHeight: 72,
-  },
-  languageItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  languageItemSelected: {
-    backgroundColor: '#F8F7FC',
-  },
-  languageInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  languageFlagContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F5F5F5',
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ECECEC',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  languageFlag: {
-    fontSize: 28,
-  },
-  languageTextContainer: {
-    flex: 1,
-  },
-  languageName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
-    marginBottom: 4,
-  },
-  languageNameSelected: {
-    color: '#877ED2',
-    fontWeight: '600',
-  },
-  languageNativeName: {
-    fontSize: 13,
-    color: '#666666',
-    fontWeight: '400',
-  },
-  languageNativeNameSelected: {
-    color: '#877ED2',
-  },
-  selectedIndicator: {
-    marginLeft: 12,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 3 },
+      android: { elevation: 3 },
+    }),
   },
 
-  // Info
-  infoContainer: {
+  /* Sheet */
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 28,
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 28,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 20,
+  },
+
+  /* Language list */
+  languageList: {
+    gap: 12,
+  },
+  languageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
-    marginHorizontal: 16,
-    padding: 12,
-    backgroundColor: '#F8F7FC',
-    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E8E5F5',
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
   },
-  infoText: {
-    fontSize: 13,
-    color: '#666666',
-    marginLeft: 8,
+  languageRowSelected: {
+    borderColor: '#E5E5E5',
+  },
+  leftAccent: {
+    width: 4,
+    alignSelf: 'stretch',
+    backgroundColor: '#877ED2',
+  },
+  languageTexts: {
     flex: 1,
-    lineHeight: 18,
+    paddingVertical: 15,
+    paddingLeft: 14,
+  },
+  languageTextsNoAccent: {
+    paddingLeft: 18,
+  },
+  nativeName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  nativeNameSelected: {
+    color: '#574ABF',
+  },
+  englishName: {
+    fontSize: 13,
     fontWeight: '400',
+    color: '#999999',
+    marginTop: 3,
+  },
+
+  /* Checkbox */
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#D0D0D0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  checkboxSelected: {
+    backgroundColor: '#6C63AC',
+    borderColor: '#6C63AC',
+  },
+
+  /* Change Button */
+  changeButton: {
+    backgroundColor: '#877ED2',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 22,
+  },
+  changeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

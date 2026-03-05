@@ -645,7 +645,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Employees" component={AdminEmployeesTabNavigator} options={{ headerShown: false }} />
             <Stack.Screen name="EmployeeInfo" component={AdminEmployeeInfoScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Permissions" component={AdminPermissionsScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="LanguageOptions" component={LanguageOptionsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="LanguageOptions" component={LanguageOptionsScreen} options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }} />
             <Stack.Screen name="Profile" component={AdminProfileScreen} options={{ headerShown: false }} />
             {/* Proof of Work */}
             <Stack.Screen name="ProofOfWorkCapture" component={ProofOfWorkCaptureScreen} options={{ headerShown: true, title: 'Proof of Work' }} />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Modal, Alert, Platform, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,37 +25,22 @@ export default function LanguageSwitcher({ renderTrigger }: LanguageSwitcherProp
   const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
-  // Use i18n.language directly to always reflect current language
   const currentLanguage = i18n.language || 'en';
 
-  // Sync with i18n language changes
   useEffect(() => {
-    // This will cause re-render when language changes
-    const handleLanguageChanged = () => {
-      // Force re-render by updating component
-    };
+    const handleLanguageChanged = () => {};
     i18n.on('languageChanged', handleLanguageChanged);
-    return () => {
-      i18n.off('languageChanged', handleLanguageChanged);
-    };
+    return () => { i18n.off('languageChanged', handleLanguageChanged); };
   }, [i18n]);
 
-  // Reset selected language when modal opens
   useEffect(() => {
-    if (modalVisible) {
-      setSelectedLanguage(currentLanguage);
-    }
+    if (modalVisible) setSelectedLanguage(currentLanguage);
   }, [modalVisible, currentLanguage]);
-
-  const handleLanguageSelect = (languageCode: string) => {
-    setSelectedLanguage(languageCode);
-  };
 
   const handleConfirm = async () => {
     try {
       await changeLanguage(selectedLanguage);
       setModalVisible(false);
-      // Language change will trigger re-render via useTranslation hook
     } catch (error) {
       console.error('Error changing language:', error);
       Alert.alert(t('common.error'), 'Failed to change language. Please try again.');
@@ -63,21 +48,18 @@ export default function LanguageSwitcher({ renderTrigger }: LanguageSwitcherProp
   };
 
   const currentLang = languages.find(lang => lang.code === currentLanguage) || languages[0];
-
   const openModal = () => setModalVisible(true);
+  const closeModal = () => setModalVisible(false);
 
   return (
     <>
       {renderTrigger ? (
         renderTrigger(openModal)
       ) : (
-        <TouchableOpacity
-          style={styles.switcherButton}
-          onPress={openModal}
-        >
-          <Ionicons name="language" size={20} color="#007AFF" />
+        <TouchableOpacity style={styles.switcherButton} onPress={openModal}>
+          <Ionicons name="language" size={20} color="#877ED2" />
           <Text style={styles.switcherText}>{currentLang.nativeName}</Text>
-          <Ionicons name="chevron-down" size={16} color="#007AFF" />
+          <Ionicons name="chevron-down" size={16} color="#877ED2" />
         </TouchableOpacity>
       )}
 
@@ -85,55 +67,52 @@ export default function LanguageSwitcher({ renderTrigger }: LanguageSwitcherProp
         visible={modalVisible}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={closeModal}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity 
-            style={styles.modalBackdrop} 
-            activeOpacity={1} 
-            onPress={() => setModalVisible(false)}
-          />
-          <View style={[styles.bottomSheet, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
-            {/* Header */}
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Change Language</Text>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <View style={styles.closeCircle}>
-                  <Ionicons name="close" size={18} color="#666" />
-                </View>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.overlay}>
+          <TouchableWithoutFeedback onPress={closeModal}>
+            <View style={styles.backdrop} />
+          </TouchableWithoutFeedback>
 
-            {/* Language Options */}
-            <View style={styles.languageList}>
-              {languages.map((language) => (
-                <TouchableOpacity
-                  key={language.code}
-                  style={styles.languageItem}
-                  onPress={() => handleLanguageSelect(language.code)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.languageItemContent}>
-                    <Text style={styles.languageNative}>{language.nativeName}</Text>
-                    <Text style={styles.languageName}>{language.name}</Text>
-                  </View>
-                  <View style={[
-                    styles.checkbox,
-                    selectedLanguage === language.code && styles.checkboxSelected
-                  ]}>
-                    {selectedLanguage === language.code && (
-                      <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+          {/* Floating close button */}
+          <View style={styles.closeButtonRow}>
+            <TouchableOpacity style={styles.closeButton} onPress={closeModal} activeOpacity={0.8}>
+              <Ionicons name="close" size={18} color="#555555" />
+            </TouchableOpacity>
+          </View>
 
-            {/* Change Button */}
-            <TouchableOpacity style={styles.changeButton} onPress={handleConfirm}>
+          {/* Bottom sheet */}
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 20) + 8 }]}>
+            <Text style={styles.title}>Change Language</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+              <View style={styles.languageList}>
+                {languages.map((lang) => {
+                  const isSelected = selectedLanguage === lang.code;
+                  return (
+                    <TouchableOpacity
+                      key={lang.code}
+                      style={[styles.languageRow, isSelected && styles.languageRowSelected]}
+                      onPress={() => setSelectedLanguage(lang.code)}
+                      activeOpacity={0.7}
+                    >
+                      {isSelected && <View style={styles.leftAccent} />}
+                      <View style={[styles.languageTexts, !isSelected && styles.languageTextsNoAccent]}>
+                        <Text style={[styles.nativeName, isSelected && styles.nativeNameSelected]}>
+                          {lang.nativeName}
+                        </Text>
+                        <Text style={styles.englishName}>{lang.name}</Text>
+                      </View>
+                      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                        {isSelected && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.changeButton} onPress={handleConfirm} activeOpacity={0.8}>
               <Text style={styles.changeButtonText}>Change</Text>
             </TouchableOpacity>
           </View>
@@ -156,103 +135,127 @@ const styles = StyleSheet.create({
   switcherText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#877ED2',
   },
-  modalOverlay: {
+
+  /* Overlay */
+  overlay: {
     flex: 1,
     justifyContent: 'flex-end',
   },
-  modalBackdrop: {
+  backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
-  bottomSheet: {
+
+  /* Floating X */
+  closeButtonRow: {
+    alignItems: 'flex-end',
+    paddingRight: 24,
+    marginBottom: -20,
+    zIndex: 10,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ECECEC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 3 },
+      android: { elevation: 3 },
+    }),
+  },
+
+  /* Sheet */
+  sheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 34,
-    maxHeight: '80%',
+    paddingTop: 28,
+    paddingHorizontal: 24,
+    paddingBottom: 28,
   },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1A1A1A',
     marginBottom: 20,
   },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    fontFamily: 'Inter_600SemiBold',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  closeCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+
+  /* Language list */
   languageList: {
-    marginBottom: 20,
+    gap: 12,
   },
-  languageItem: {
+  languageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E5E5',
     borderRadius: 12,
-    marginBottom: 10,
+    overflow: 'hidden',
     backgroundColor: '#FFFFFF',
   },
-  languageItemContent: {
+  languageRowSelected: {
+    borderColor: '#E5E5E5',
+  },
+  leftAccent: {
+    width: 4,
+    alignSelf: 'stretch',
+    backgroundColor: '#877ED2',
+  },
+  languageTexts: {
     flex: 1,
+    paddingVertical: 15,
+    paddingLeft: 14,
   },
-  languageNative: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1a1a1a',
-    fontFamily: 'Inter_500Medium',
+  languageTextsNoAccent: {
+    paddingLeft: 18,
   },
-  languageName: {
+  nativeName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  nativeNameSelected: {
+    color: '#574ABF',
+  },
+  englishName: {
     fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
+    fontWeight: '400',
+    color: '#999999',
+    marginTop: 3,
   },
+
+  /* Checkbox */
   checkbox: {
     width: 24,
     height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#D0D0D0',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    marginRight: 16,
   },
   checkboxSelected: {
-    backgroundColor: '#877ED2',
-    borderColor: '#877ED2',
+    backgroundColor: '#6C63AC',
+    borderColor: '#6C63AC',
   },
+
+  /* Change Button */
   changeButton: {
     backgroundColor: '#877ED2',
+    borderRadius: 12,
     paddingVertical: 16,
-    borderRadius: 10,
     alignItems: 'center',
+    marginTop: 22,
   },
   changeButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    fontFamily: 'Inter_600SemiBold',
   },
 });
 

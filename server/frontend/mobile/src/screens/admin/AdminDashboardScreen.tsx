@@ -7,7 +7,6 @@ import {
   ScrollView, 
   TouchableOpacity, 
   RefreshControl,
-  Image,
   Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -136,12 +135,10 @@ export default function AdminDashboardScreen() {
       activeOpacity={onCardPress ? 0.7 : 1}
       disabled={!onCardPress}
     >
-      {/* Background watermark image */}
-      {/* <Image
-        source={require('../../../assets/card-icons/projects-bg.png')}
-        style={styles.statCardWatermark}
-        resizeMode="contain"
-      /> */}
+      {/* Background watermark icon */}
+      <View style={styles.watermarkContainer}>
+        <Ionicons name={iconName as any} size={90} color="#C8956C" style={styles.watermarkIcon} />
+      </View>
       
       <Text style={styles.statCardTitle}>{title}</Text>
       <Text style={styles.statCardValue}>{value}</Text>
@@ -189,7 +186,7 @@ export default function AdminDashboardScreen() {
               <StatCard
                 title="Clients"
                 value={overview?.totalClients || 0}
-                iconName="handshake-outline"
+                iconName="documents-outline"
                 buttonText="Add New Client"
                 onCardPress={() => navigation.navigate('Clients')}
                 onButtonPress={() => navigation.navigate('AddClient')}
@@ -197,7 +194,7 @@ export default function AdminDashboardScreen() {
               <StatCard
                 title="Projects"
                 value={overview?.totalProjects || overview?.activeProjects || 0}
-                iconName="clipboard-outline"
+                iconName="chatbubble-ellipses-outline"
                 buttonText="Add New Projects"
                 onCardPress={() => navigation.navigate('Projects')}
                 onButtonPress={() => {}}
@@ -215,7 +212,7 @@ export default function AdminDashboardScreen() {
               <StatCard
                 title="Task"
                 value={0} //{overview?.totalActiveTasks || 0}
-                iconName="list-outline"
+                iconName="clipboard-outline"
                 buttonText="Add New Task"
                 onButtonPress={() => {}}
               />
@@ -383,14 +380,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'space-between',
   },
-  statCardWatermark: {
+  watermarkContainer: {
     position: 'absolute',
-    right: -18,
-    bottom: -18,
-    width: 96,
-    height: 96,
-    opacity: 0.98,
+    right: 8,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 0,
+  },
+  watermarkIcon: {
+    opacity: 0.15,
   },
   statCardTitle: {
     fontSize: 16,
