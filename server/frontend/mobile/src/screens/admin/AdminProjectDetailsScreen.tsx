@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, RefreshControl, Linking, BackHandler, Image, Modal, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, RefreshControl, Linking, BackHandler, Image, Modal, FlatList, Alert, StatusBar } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
@@ -259,7 +259,14 @@ export default function AdminProjectDetailsScreen() {
   };
 
   const getStatusColor = (status: string, dueDate?: string) => {
-    const statusLower = status?.toLowerCase() || '';
+    // Check if task is delayed (overdue and not completed)
+    if (dueDate && status !== 'Completed') {
+      const now = new Date();
+      const due = new Date(dueDate);
+      if (due < now) {
+        return '#FF3B30'; // Red for delayed
+      }
+    }
     
     switch (status) {
       case 'Completed':
@@ -291,9 +298,9 @@ export default function AdminProjectDetailsScreen() {
     
     switch (status) {
       case 'Completed':
-        return 'Completed';
+        return 'Complete';
       case 'Active':
-        return 'Active';
+        return 'In Process';
       case 'Cancelled':
         return 'Cancelled';
       case 'On Hold':
@@ -306,14 +313,26 @@ export default function AdminProjectDetailsScreen() {
   };
 
   const getProjectStatus = () => {
-    if (!project?.status) return 'Active';
+    if (!project?.status) return 'In Progress';
     const status = project.status;
     if (status === 'To Do') return 'To Do';
-    if (status === 'Active') return 'Active';
+    if (status === 'Active') return 'In Progress';
     if (status === 'Completed') return 'Completed';
     if (status === 'On Hold') return 'On Hold';
     if (status === 'Cancelled') return 'Cancelled';
-    return 'Active';
+    return 'In Progress';
+  };
+
+  const getProjectStatusColor = () => {
+    const status = getProjectStatus();
+    switch (status) {
+      case 'In Progress': return '#34C759';
+      case 'Completed': return '#34C759';
+      case 'On Hold': return '#FF9500';
+      case 'Cancelled': return '#FF3B30';
+      case 'To Do': return '#8E8E93';
+      default: return '#34C759';
+    }
   };
 
   const displayedTasks = showMoreTasks ? tasks : tasks.slice(0, 4);
@@ -540,7 +559,8 @@ export default function AdminProjectDetailsScreen() {
   }
 
   return (
-    <SafeAreaWrapper backgroundColor="#F5F6FA">
+    <SafeAreaWrapper backgroundColor="#877ED2">
+      <StatusBar barStyle="light-content" backgroundColor="#877ED2" />
       <View style={styles.container}>
         {/* Fixed Header */}
         <View style={styles.fixedHeader}>
@@ -610,7 +630,7 @@ export default function AdminProjectDetailsScreen() {
             <View style={styles.statusCard}>
               <View style={styles.statusHeader}>
                 <Text style={styles.statusTitle}>Status</Text>
-                <View style={styles.statusPill}>
+                <View style={[styles.statusPill, { backgroundColor: getProjectStatusColor() }]}>
                   <Text style={styles.statusPillText}>{getProjectStatus()}</Text>
                 </View>
               </View>
@@ -732,9 +752,9 @@ export default function AdminProjectDetailsScreen() {
                     const getTaskStatusText = (status: string) => {
                       switch (status) {
                         case 'Completed':
-                          return 'Completed';
+                          return 'Complete';
                         case 'Active':
-                          return 'Active';
+                          return 'In Process';
                         case 'Cancelled':
                           return 'Cancelled';
                         case 'On Hold':
@@ -808,12 +828,12 @@ export default function AdminProjectDetailsScreen() {
             </View>
 
             {/* View All Tasks Button */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.viewTasksButton}
               onPress={() => navigation.navigate('ProjectTasks', { projectId: id, projectName: project?.name })}
             >
               <Text style={styles.viewTasksText}>View All Tasks →</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {/* Productivity Section */}
             <View style={styles.productivitySection}>
@@ -895,6 +915,7 @@ export default function AdminProjectDetailsScreen() {
                       <Ionicons name="chevron-back" size={20} color="#000000" />
                     </TouchableOpacity>
                     <View style={styles.productivityWeekNavText}>
+                      <Text style={styles.productivityWeekLabel}>{productivityView === 'week' ? 'Week' : 'Month'}</Text>
                       <Text style={styles.productivityWeekRange}>{getProductivityWeekRange()}</Text>
                     </View>
                     <TouchableOpacity onPress={() => navigateWeek('next')} style={styles.productivityNavButton}>
@@ -963,15 +984,26 @@ export default function AdminProjectDetailsScreen() {
               </View>
             </View>
 
-            {/* Team Section - Admin can manage team */}
+            {/* Expense Section */}
+            <View style={styles.expenseSection}>
+              <Text style={styles.sectionTitle}>Expense</Text>
+              <View style={styles.expenseCard}>
+                <Text style={styles.expenseAmount}>₹ 0</Text>
+                <Text style={styles.expenseDateRange}>
+                  {formatDate(project.start_date)} - {formatDate(project.end_date)}
+                </Text>
+                <TouchableOpacity style={styles.recordExpenseButton}>
+                  <Text style={styles.recordExpenseText}>Record Expense</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Team Section */}
             <View style={styles.teamSection}>
+              <Text style={styles.sectionTitle}>Team</Text>
               <View style={styles.teamCard}>
-                <View style={styles.teamCardHeader}>
-                  <Text style={styles.teamCardTitle}>Team</Text>
-                  <TouchableOpacity onPress={handleAddMember} style={styles.addMemberButton}>
-                    <Ionicons name="add" size={20} color="#877ED2" />
-                    <Text style={styles.addMemberText}>Add</Text>
-                  </TouchableOpacity>
+                <View style={styles.teamTimeHeader}>
+                  <Text style={styles.totalTimeLabel}>Total Time</Text>
                 </View>
                 {teamMembersWithTime.map((member) => {
                   const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.employee_id || 'Unknown';
@@ -992,23 +1024,19 @@ export default function AdminProjectDetailsScreen() {
                         <Text style={styles.teamMemberName}>{memberName}</Text>
                         <Text style={styles.teamMemberRole}>{memberRole}</Text>
                       </View>
-                      <View style={styles.teamMemberActions}>
-                        <Text style={styles.teamMemberTime}>
-                          {formatTime(member.hours || 0, member.minutes || 0)}
-                        </Text>
-                        <TouchableOpacity 
-                          style={styles.removeMemberButton}
-                          onPress={() => handleRemoveMember(member.id, memberName)}
-                        >
-                          <Ionicons name="close" size={16} color="#FF3B30" />
-                        </TouchableOpacity>
-                      </View>
+                      <Text style={styles.teamMemberTime}>
+                        {formatTime(member.hours || 0, member.minutes || 0)}
+                      </Text>
                     </View>
                   );
                 })}
                 {teamMembersWithTime.length === 0 && (
                   <Text style={styles.noTeamText}>No team members assigned</Text>
                 )}
+                <TouchableOpacity style={styles.manageTeamButton} onPress={handleAddMember}>
+                  <Ionicons name="settings-outline" size={16} color="#8E8E93" />
+                  <Text style={styles.manageTeamText}>Manage Team</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -1855,6 +1883,81 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 16,
     fontWeight: '400',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 16,
+  },
+  expenseSection: {
+    marginTop: 24,
+    paddingHorizontal: 0,
+    paddingBottom: 20,
+  },
+  expenseCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  expenseAmount: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  expenseDateRange: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginBottom: 20,
+    fontWeight: '400',
+  },
+  recordExpenseButton: {
+    backgroundColor: '#877ED2',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    alignSelf: 'flex-end',
+  },
+  recordExpenseText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  teamTimeHeader: {
+    alignItems: 'flex-end',
+    marginBottom: 12,
+  },
+  totalTimeLabel: {
+    fontSize: 13,
+    color: '#8E8E93',
+    fontWeight: '400',
+  },
+  manageTeamButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F6FA',
+    marginTop: 4,
+  },
+  manageTeamText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  productivityWeekLabel: {
+    fontSize: 13,
+    color: '#8E8E93',
+    fontWeight: '400',
+    marginBottom: 2,
   },
   attachmentsSection: {
     marginTop: 24,

@@ -11,6 +11,7 @@ import { RoleProvider } from './src/context/RoleContext';
 import { ActivityProvider } from './src/context/ActivityContext';
 import { PermissionsProvider } from './src/context/PermissionsContext';
 import { ThemeProvider } from './src/theme'; // ✅ New unified theme system
+import { ErrorBoundary } from './src/components/shared/ErrorBoundary';
 import SplashScreen from './src/screens/SplashScreen';
 import ThemeTestScreen from './src/screens/ThemeTestScreen';
 // Keep the native splash screen visible while we fetch resources
@@ -49,21 +50,23 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <RoleProvider>
-            <PermissionsProvider>
-              <TimerProvider>
-                <ActivityProvider>
-                  <RootNavigator />
-                </ActivityProvider>
-              </TimerProvider>
-            </PermissionsProvider>
-          </RoleProvider>
-        </AuthProvider>
-      </ThemeProvider>
-      <StatusBar style="dark" />
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <RoleProvider>
+              <PermissionsProvider>
+                <TimerProvider>
+                  <ActivityProvider>
+                    <RootNavigator />
+                  </ActivityProvider>
+                </TimerProvider>
+              </PermissionsProvider>
+            </RoleProvider>
+          </AuthProvider>
+        </ThemeProvider>
+        <StatusBar style="dark" />
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

@@ -259,6 +259,18 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
   // Progress calculation (must be at top level for hooks)
   const progressWidth = useMemo(() => (step / 3) * 100, [step]);
 
+  // Country to phone code mapping
+  const countryPhoneCodes: Record<string, { code: string; maxDigits: number }> = {
+    'India': { code: '+91', maxDigits: 10 },
+    'United States': { code: '+1', maxDigits: 10 },
+    'United Kingdom': { code: '+44', maxDigits: 10 },
+    'Singapore': { code: '+65', maxDigits: 8 },
+    'Other': { code: '+1', maxDigits: 15 },
+  };
+
+  const selectedPhoneCode = countryPhoneCodes[country]?.code || '+91';
+  const selectedMaxDigits = countryPhoneCodes[country]?.maxDigits || 10;
+
   // Country to States mapping
   const countryStates: Record<string, string[]> = {
     'India': ['Telangana', 'Karnataka', 'Maharashtra', 'Tamil Nadu', 'Gujarat', 'Rajasthan', 'Uttar Pradesh', 'West Bengal', 'Punjab', 'Haryana', 'Other'],
@@ -268,7 +280,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
     'Other': ['Other'],
   };
 
-  // Reset state when country changes
+  // Reset state and trim phone when country changes
   useEffect(() => {
     if (country && stateProvince) {
       const statesForCountry = countryStates[country] || [];
@@ -276,6 +288,13 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
         setStateProvince('');
       }
     }
+    // Trim phone number if it exceeds new country's max digits
+    const maxDigits = countryPhoneCodes[country]?.maxDigits || 10;
+    if (adminPhone.length > maxDigits) {
+      setAdminPhone(adminPhone.slice(0, maxDigits));
+    }
+    // Reset phone verification when country changes
+    setPhoneVerified(false);
   }, [country]);
 
   // Utils
@@ -355,7 +374,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
         max_employees: parseInt(maxEmployees),
         licence_type: plan,
         admin_email: adminEmail.trim(),
-        admin_phone: `+91${adminPhone.trim()}`,
+        admin_phone: `${selectedPhoneCode}${adminPhone.trim()}`,
         admin_password: adminPassword,
       });
       const code = res.organization.join_code;
@@ -506,8 +525,8 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
         Alert.alert('Error', 'Please enter phone number');
         return;
       }
-      if (adminPhone.trim().length !== 10) {
-        Alert.alert('Error', 'Please enter a valid 10-digit phone number');
+      if (adminPhone.trim().length < 7 || adminPhone.trim().length > selectedMaxDigits) {
+        Alert.alert('Error', `Please enter a valid phone number (${selectedMaxDigits} digits for ${country || 'selected country'})`);
         return;
       }
       
@@ -522,7 +541,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
         if (res.otp) {
           setPhoneOtpGenerated(res.otp);
           console.log('========================================');
-          console.log(`[PHONE OTP] Code for +91 ${adminPhone}: ${res.otp}`);
+          console.log(`[PHONE OTP] Code for ${selectedPhoneCode} ${adminPhone}: ${res.otp}`);
           console.log('========================================');
         }
         // OTP sent successfully - modal is already open
@@ -788,7 +807,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
               </View>
 
               {emailVerified && (
-                <View style={styles.verifiedBadge}>
+                <View style={[styles.verifiedBadge, { marginBottom: 8 }]}>
                   <Ionicons name="checkmark-circle" size={16} color="#25D366" />
                   <Text style={styles.verifiedText}>Email verified</Text>
                 </View>
@@ -813,15 +832,15 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
               <View style={styles.phoneRow}>
                 <View style={styles.phoneInputContainer}>
                   <View style={styles.countryCodePrefix}>
-                    <Text style={styles.countryCodeText}>+91</Text>
+                    <Text style={styles.countryCodeText}>{selectedPhoneCode}</Text>
                   </View>
                   <View style={styles.phoneInputField}>
                     <FloatingLabelInput
                       label="Phone*"
                       value={adminPhone}
-                      onChangeText={(t) => { setAdminPhone(t); setPhoneVerified(false); }}
+                      onChangeText={(t) => { setAdminPhone(t.replace(/[^0-9]/g, '')); setPhoneVerified(false); }}
                       keyboardType="phone-pad"
-                      maxLength={10}
+                      maxLength={selectedMaxDigits}
                     />
                   </View>
                 </View>
@@ -831,7 +850,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
               </View>
 
               {phoneVerified && (
-                <View style={styles.verifiedBadge}>
+                <View style={[styles.verifiedBadge, { marginBottom: 8 }]}>
                   <Ionicons name="checkmark-circle" size={16} color="#25D366" />
                   <Text style={styles.verifiedText}>Phone verified</Text>
                 </View>
@@ -1409,7 +1428,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
   },
   floatingContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
     position: 'relative',
     paddingTop: 0,
   },
@@ -1480,7 +1499,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    marginBottom: 20,
     gap: 12,
   },
   emailInputWrapper: {
@@ -1490,7 +1509,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    marginBottom: 20,
     gap: 12,
   },
   phoneInputContainer: {
@@ -1749,7 +1768,7 @@ const styles = StyleSheet.create({
   },
   passwordFieldWithStrength: {
     position: 'relative',
-    marginBottom: 18,
+    marginBottom: 20,
   },
   passwordStrength: {
     alignSelf: 'flex-end',

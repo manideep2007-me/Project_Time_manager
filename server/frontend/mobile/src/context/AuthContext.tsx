@@ -13,6 +13,7 @@ type AuthUser = {
   jobTitle?: string;
   salaryMonthly?: number;
   token?: string;
+  photoUrl?: string;
 };
 
 // Normalize backend roles to app roles
@@ -97,12 +98,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: normalizeRole(backendUser.role),
           jobTitle: backendUser.jobTitle || backendUser.job_title || undefined,
           salaryMonthly: backendUser.salaryMonthly || backendUser.salary_monthly || undefined,
+          photoUrl: backendUser.photo_url || backendUser.photoUrl || backendUser.photograph || undefined,
         };
         setUser(normalized);
         console.log('✅ User set:', normalized);
       }
     } catch (error) {
-      console.error('Login error:', error);
       throw error;
     }
   }, []);
@@ -155,16 +156,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: normalizeRole(backendUser.role),
             jobTitle: backendUser.jobTitle || backendUser.job_title || undefined,
             salaryMonthly: backendUser.salaryMonthly || backendUser.salary_monthly || undefined,
+            photoUrl: backendUser.photo_url || backendUser.photoUrl || backendUser.photograph || undefined,
           };
           setUser(normalized);
           console.log('✅ User set:', normalized);
         }
       } catch (apiError) {
-        console.error('❌ API authentication failed:', (apiError as Error).message);
         throw apiError; // Don't use offline mode - require real authentication
       }
     } catch (error) {
-      console.error('User login error:', error);
       throw error;
     }
   }, []);
@@ -192,8 +192,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = useCallback(async () => {
     const res = await fetchProfile();
-    const normalized = res?.user ? { ...res.user, role: normalizeRole(res.user.role) } : null;
-    if (normalized) setUser(normalized as AuthUser);
+    if (res?.user) {
+      const backendUser = res.user;
+      const normalized: AuthUser = {
+        id: backendUser.id,
+        email: backendUser.email,
+        firstName: backendUser.first_name || backendUser.firstName,
+        lastName: backendUser.last_name || backendUser.lastName,
+        name: backendUser.name || `${backendUser.first_name || ''} ${backendUser.last_name || ''}`.trim(),
+        role: normalizeRole(backendUser.role),
+        jobTitle: backendUser.jobTitle || backendUser.job_title || undefined,
+        salaryMonthly: backendUser.salaryMonthly || backendUser.salary_monthly || undefined,
+        photoUrl: backendUser.photo_url || backendUser.photoUrl || backendUser.photograph || undefined,
+      };
+      setUser(normalized);
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({ user, token, loading, login, loginWithUser, register, logout, refreshProfile }), [user, token, loading, login, loginWithUser, register, logout, refreshProfile]);

@@ -38,6 +38,7 @@ import AdminTimeTrackingScreen from '../screens/admin/AdminTimeTrackingScreen';
 import AdminProjectsScreen from '../screens/admin/ProjectsScreen';
 import AdminProjectDetailsScreen from '../screens/admin/AdminProjectDetailsScreen';
 import AdminPermissionsScreen from '../screens/admin/AdminPermissionsScreen';
+import PendingApprovalsScreen from '../screens/admin/PendingApprovalsScreen';
 import AdminEmployeeInfoScreen from '../screens/admin/EmployeeInfoScreen';
 import LanguageOptionsScreen from '../screens/settings/LanguageOptionsScreen';
 
@@ -143,12 +144,7 @@ function AdminEmployeesTabNavigator() {
       />
       <EmployeesTab.Screen
         name="Notifications"
-        component={AdminPermissionsScreen}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-          },
-        }}
+        component={PendingApprovalsScreen}
         options={{
           tabBarLabel: 'Notifications',
           tabBarIcon: ({ color, focused, size }) => (
@@ -353,12 +349,7 @@ function AppTabs() {
         />
         <Tab.Screen 
           name="Notifications" 
-          component={AdminDashboardScreen}
-          listeners={{
-            tabPress: (e) => {
-              e.preventDefault();
-            },
-          }}
+          component={PendingApprovalsScreen}
           options={{
             tabBarLabel: 'Notifications',
             tabBarIcon: ({ focused }) => (
@@ -632,11 +623,11 @@ export default function RootNavigator() {
             <Stack.Screen name="EmployeeAllTasks" component={EmployeeAllTasksScreen} options={{ headerShown: false }} />
             <Stack.Screen name="OverdueTasks" component={OverdueTasksScreen} options={{ headerShown: true, title: 'Overdue Tasks' }} />
             <Stack.Screen name="AllTasks" component={AllTasksScreen} options={{ headerShown: true, title: 'All Tasks' }} />
-            <Stack.Screen name="ProjectTasks" component={ProjectTasksScreenWrapper} options={{ headerShown: true, title: 'Project Tasks' }} />
+            <Stack.Screen name="ProjectTasks" component={ProjectTasksScreenWrapper} options={{ headerShown: false }} />
             <Stack.Screen name="TaskView" component={TaskViewScreen} options={{ headerShown: false }} />
             <Stack.Screen name="AddClient" component={AddClientScreen} options={{ headerShown: false, title: 'Add Client' }} />
             <Stack.Screen name="EditClient" component={AddClientScreen} options={{ headerShown: false, title: 'Edit Client' }} />
-            <Stack.Screen name="AddProject" component={AddProjectScreen} options={{ headerShown: true, title: 'Create Project' }} />
+            <Stack.Screen name="AddProject" component={AddProjectScreen} options={{ headerShown: false }} />
             <Stack.Screen name="AddEmployee" component={AddEmployeeScreen} options={{ headerShown: false }} />
             {/* Admin screens without bottom tabs */}
             <Stack.Screen name="Clients" component={AdminClientsScreen} options={{ headerShown: false }} />
@@ -645,10 +636,11 @@ export default function RootNavigator() {
             <Stack.Screen name="Employees" component={AdminEmployeesTabNavigator} options={{ headerShown: false }} />
             <Stack.Screen name="EmployeeInfo" component={AdminEmployeeInfoScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Permissions" component={AdminPermissionsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="PendingApprovals" component={PendingApprovalsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="LanguageOptions" component={LanguageOptionsScreen} options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }} />
             <Stack.Screen name="Profile" component={AdminProfileScreen} options={{ headerShown: false }} />
             {/* Proof of Work */}
-            <Stack.Screen name="ProofOfWorkCapture" component={ProofOfWorkCaptureScreen} options={{ headerShown: true, title: 'Proof of Work' }} />
+            <Stack.Screen name="ProofOfWorkCapture" component={ProofOfWorkCaptureScreen} options={{ headerShown: false }} />
           </>
         ) : (
           // Show onboarding first, then login

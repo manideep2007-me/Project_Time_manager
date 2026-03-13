@@ -2,7 +2,31 @@ import { api } from './client';
 
 // Types
 export type LoginPayload = { email: string; password: string };
-export type RegisterPayload = { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationCode?: string; role?: string };
+export type RegisterPayload = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  organizationCode?: string;
+  role?: string;
+  salutation?: string;
+  dateOfBirth?: string;
+  designationId?: string;
+  address?: string;
+  countryId?: string;
+  stateId?: string;
+  city?: string;
+  zipCode?: string;
+  aadhaarNumber?: string;
+  joiningDate?: string;
+  employmentType?: string;
+  salaryType?: string;
+  salaryAmount?: number;
+  overtimeRate?: number;
+  gender?: string;
+  age?: number;
+};
 export type PaginatedParams = { page?: number; limit?: number } & Record<string, any>;
 
 // Auth
@@ -13,7 +37,7 @@ export async function login(payload: LoginPayload) {
 
 export async function register(payload: RegisterPayload) {
   const res = await api.post('/api/auth/register', payload);
-  return res.data as { message: string; user: any; token: string };
+  return res.data as { message: string; user?: any; token?: string; pending?: boolean; organizationName?: string };
 }
 
 export async function fetchProfile() {
@@ -291,9 +315,20 @@ export async function assignTask(taskId: string, assignedTo: string) {
 export type PermissionMatrixRow = { 
   id: string; 
   name: string; 
-  description?: string; 
+  description?: string;
+  category?: string;
   access: { admin: boolean; manager: boolean; employee: boolean } 
 };
+
+export type UserPermissionRow = {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  hasAccess: boolean;
+  isOverride: boolean;
+};
+
 export async function getPermissionsMatrix() {
   const res = await api.get('/api/permissions');
   return res.data as { roles: Array<'admin'|'manager'|'employee'>; permissions: PermissionMatrixRow[] };
@@ -301,6 +336,16 @@ export async function getPermissionsMatrix() {
 
 export async function updatePermissions(updates: Array<{ role: 'admin'|'manager'|'employee'; permissionId: string; hasAccess: boolean }>) {
   const res = await api.post('/api/permissions/update', { updates });
+  return res.data as { message: string };
+}
+
+export async function getUserPermissions(userId: string) {
+  const res = await api.get(`/api/permissions/user/${userId}`);
+  return res.data as { userId: string; userRole: string; permissions: UserPermissionRow[] };
+}
+
+export async function updateUserPermissions(userId: string, updates: Array<{ permissionId: string; hasAccess: boolean; clearOverride?: boolean }>) {
+  const res = await api.post(`/api/permissions/user/${userId}`, { updates });
   return res.data as { message: string };
 }
 

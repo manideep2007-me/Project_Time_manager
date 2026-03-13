@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+﻿import React, { useState, useEffect, useLayoutEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -9,17 +9,17 @@ import {
   Alert,
   Modal,
   Platform,
+  Switch,
+  StatusBar,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../../context/AuthContext';
 import { dashboardApi, Project } from '../../api/dashboard';
 import { createProjectTask, listEmployees } from '../../api/endpoints';
-import Card from '../../components/shared/Card';
-import Button from '../../components/shared/Button';
-import AppHeader from '../../components/shared/AppHeader';
-import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import VoiceToTextButton from '../../components/shared/VoiceToTextButton';
 
 type TaskStatus = 'To Do' | 'Active' | 'Completed' | 'Cancelled' | 'On Hold';
@@ -55,14 +55,19 @@ interface EmployeeItem {
 export default function CreateTaskScreen() {
   const navigation = useNavigation<any>();
   const { user } = useContext(AuthContext);
-  
+  const insets = useSafeAreaInsets();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   // State
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Task form state
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
@@ -71,12 +76,18 @@ export default function CreateTaskScreen() {
   const [showTaskStartDatePicker, setShowTaskStartDatePicker] = useState(false);
   const [showTaskEndDatePicker, setShowTaskEndDatePicker] = useState(false);
 
-  // Assignees state (Manager can assign to multiple employees)
+  // Priority & extras
+  const [highPriority, setHighPriority] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [attachments, setAttachments] = useState<string[]>([]);
+
+  // Assignees state
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [assigneeSearch, setAssigneeSearch] = useState('');
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   const [showAssigneeModal, setShowAssigneeModal] = useState(false);
-  
+
   // Time tracking state
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [totalTrackedTime, setTotalTrackedTime] = useState('0h 0m');
@@ -89,8 +100,8 @@ export default function CreateTaskScreen() {
   const [showTimeEntryDatePicker, setShowTimeEntryDatePicker] = useState(false);
   const [timeEntryStartTime, setTimeEntryStartTime] = useState<Date | null>(null);
   const [timeEntryEndTime, setTimeEntryEndTime] = useState<Date | null>(null);
-    const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-    const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   // Timer effect
   useEffect(() => {
@@ -105,11 +116,9 @@ export default function CreateTaskScreen() {
       if (interval) clearInterval(interval);
     };
   }, [isTimerRunning, timerStartTime]);
-  
-  // Load projects on component mount
+
   useEffect(() => {
     loadProjects();
-    // Prefetch employees list for assignment (supports manager multi-assign)
     loadEmployees();
   }, []);
 
@@ -118,8 +127,6 @@ export default function CreateTaskScreen() {
       setLoading(true);
       const response = await dashboardApi.getAssignedProjects();
       setProjects(response);
-      
-      // Auto-select first project if available
       if (response.length > 0) {
         setSelectedProject(response[0]);
       }
@@ -134,12 +141,15 @@ export default function CreateTaskScreen() {
   const loadEmployees = async () => {
     try {
       const res = await listEmployees({ page: 1, limit: 200, active: 'all' as any });
-      // Some endpoints return { employees, pagination }
       const list = (res as any).employees ?? [];
       setEmployees(list);
     } catch (err) {
       console.error('Error loading employees:', err);
     }
+  };
+
+  const handleAddAttachment = () => {
+    Alert.alert('Attach File', 'File picker will be available soon.');
   };
 
   const handleProjectSelect = (project: Project) => {
@@ -149,16 +159,12 @@ export default function CreateTaskScreen() {
 
   const handleStartDateChange = (event: any, selectedDate?: Date) => {
     setShowTaskStartDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setTaskStartDate(selectedDate);
-    }
+    if (selectedDate) setTaskStartDate(selectedDate);
   };
 
   const handleEndDateChange = (event: any, selectedDate?: Date) => {
     setShowTaskEndDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setTaskEndDate(selectedDate);
-    }
+    if (selectedDate) setTaskEndDate(selectedDate);
   };
 
   const toggleAssignee = (id: string) => {
@@ -167,24 +173,15 @@ export default function CreateTaskScreen() {
     );
   };
 
-  // Time tracking functions
   const calculateTotalTime = (entries: TimeEntry[]): string => {
     let totalMinutes = 0;
     entries.forEach(entry => {
       const match = entry.duration.match(/(\d+)h\s*(\d+)m/);
       if (match) {
-        const hours = parseInt(match[1]);
-        const minutes = parseInt(match[2]);
-        totalMinutes += hours * 60 + minutes;
+        totalMinutes += parseInt(match[1]) * 60 + parseInt(match[2]);
       }
     });
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours}h ${minutes}m`;
-  };
-
-  const handleOpenTimeTracking = () => {
-    setShowTimeTrackingModal(true);
+    return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
   };
 
   const handleStartTimer = () => {
@@ -195,12 +192,10 @@ export default function CreateTaskScreen() {
 
   const handleStopTimer = () => {
     if (!timerStartTime) return;
-    
     const endTime = new Date();
     const durationMs = endTime.getTime() - timerStartTime.getTime();
     const hours = Math.floor(durationMs / (1000 * 60 * 60));
     const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-    
     const newEntry: TimeEntry = {
       id: Date.now().toString(),
       userName: 'Current User',
@@ -209,11 +204,9 @@ export default function CreateTaskScreen() {
       endTime: endTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
       date: timeEntryDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
     };
-
     const updatedEntries = [...timeEntries, newEntry];
     setTimeEntries(updatedEntries);
     setTotalTrackedTime(calculateTotalTime(updatedEntries));
-    
     setIsTimerRunning(false);
     setTimerStartTime(null);
     setTimerElapsed(0);
@@ -224,19 +217,14 @@ export default function CreateTaskScreen() {
       Alert.alert('Error', 'Please fill in all time entry fields');
       return;
     }
-
     const match = timeEntryInput.match(/(\d+)h\s*(\d+)m/);
     if (!match) {
       Alert.alert('Error', 'Please enter time in format: Xh Ym (e.g., 2h 30m)');
       return;
     }
-
-    const now = new Date();
     let durationLabel = timeEntryInput.trim();
     if (!durationLabel.includes('h')) durationLabel = '0h ' + durationLabel;
     if (!durationLabel.includes('m')) durationLabel = durationLabel + ' 0m';
-    if (!durationLabel) durationLabel = '0h 0m';
-
     const newEntry: TimeEntry = {
       id: Date.now().toString(),
       userName: 'Current User',
@@ -245,11 +233,9 @@ export default function CreateTaskScreen() {
       endTime: timeEntryEndTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
       date: timeEntryDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
     };
-
     const updatedEntries = [...timeEntries, newEntry];
     setTimeEntries(updatedEntries);
     setTotalTrackedTime(calculateTotalTime(updatedEntries));
-
     setTimeEntryInput('');
     setTimeEntryStartTime(null);
     setTimeEntryEndTime(null);
@@ -262,18 +248,10 @@ export default function CreateTaskScreen() {
   };
 
   const validateForm = (): string | null => {
-    if (!taskTitle.trim()) {
-      return 'Task title is required';
-    }
-    if (!taskDescription.trim()) {
-      return 'Task description is required';
-    }
-    if (!selectedProject) {
-      return 'Please select a project';
-    }
-    if (taskEndDate < taskStartDate) {
-      return 'End date cannot be before start date';
-    }
+    if (!taskTitle.trim()) return 'Task title is required';
+    if (!taskDescription.trim()) return 'Task description is required';
+    if (!selectedProject) return 'Please select a project';
+    if (taskEndDate < taskStartDate) return 'End date cannot be before start date';
     return null;
   };
 
@@ -283,63 +261,43 @@ export default function CreateTaskScreen() {
       Alert.alert('Validation Error', validationError);
       return;
     }
-
     if (!selectedProject) {
       Alert.alert('Error', 'Please select a project');
       return;
     }
-
     setSubmitting(true);
-    
     try {
-      // If manager selected multiple assignees, create one task per assignee (backend is single-assignee)
       const assignees = selectedAssigneeIds.length > 0 ? selectedAssigneeIds : [user?.id || ''];
-
-      // If no user id (edge case) and no selected assignees, create unassigned task
       const makeUnassignedToo = assignees.length === 1 && assignees[0] === '';
-
       if (makeUnassignedToo) {
-        await createProjectTask(selectedProject.id, {
-          title: taskTitle.trim(),
-          status: 'todo',
-        });
+        await createProjectTask(selectedProject.id, { title: taskTitle.trim(), status: 'todo' });
       } else {
-        // Filter any empty ids just in case
         const validAssignees = assignees.filter(Boolean);
         await Promise.all(
           validAssignees.map(empId =>
-            createProjectTask(selectedProject.id, {
-              title: taskTitle.trim(),
-              status: 'todo',
-              assignedTo: empId,
-            })
+            createProjectTask(selectedProject.id, { title: taskTitle.trim(), status: 'todo', assignedTo: empId })
           )
         );
       }
-
-      const createdCount = selectedAssigneeIds.length || (makeUnassignedToo ? 1 : 1);
       Alert.alert(
         'Success',
         selectedAssigneeIds.length > 1
           ? `Created ${selectedAssigneeIds.length} tasks (one per assignee) in "${selectedProject.name}"`
           : `Task "${taskTitle}" has been created in project "${selectedProject.name}"`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Reset form
-              setTaskTitle('');
-              setTaskDescription('');
-              setTaskStartDate(new Date());
-              setTaskEndDate(new Date());
-              setTimeEntries([]);
-              setTotalTrackedTime('0h 0m');
-              setSelectedAssigneeIds([]);
-              setSelectedProject(projects.length > 0 ? projects[0] : null);
-              navigation.goBack();
-            },
+        [{
+          text: 'OK',
+          onPress: () => {
+            setTaskTitle('');
+            setTaskDescription('');
+            setTaskStartDate(new Date());
+            setTaskEndDate(new Date());
+            setTimeEntries([]);
+            setTotalTrackedTime('0h 0m');
+            setSelectedAssigneeIds([]);
+            setSelectedProject(projects.length > 0 ? projects[0] : null);
+            navigation.goBack();
           },
-        ]
+        }]
       );
     } catch (error) {
       console.error('Error creating task:', error);
@@ -349,236 +307,237 @@ export default function CreateTaskScreen() {
     }
   };
 
+  const AVATAR_COLORS = ['#6366F1', '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+
+  // ─── Loading ───
   if (loading) {
     return (
-      <SafeAreaWrapper>
-        <AppHeader />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading projects...</Text>
+      <View style={s.root}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+        <View style={[s.headerBar, { paddingTop: insets.top }]}>
+          <View style={s.headerSide} />
+          <Text style={s.headerText}>Create New Task</Text>
+          <View style={s.headerSide} />
         </View>
-      </SafeAreaWrapper>
+        <View style={s.centered}>
+          <Text style={s.loadingText}>Loading projects...</Text>
+        </View>
+      </View>
     );
   }
 
+  // ─── Empty state ───
   if (projects.length === 0) {
     return (
-      <SafeAreaWrapper>
-        <AppHeader />
-        <View style={styles.emptyContainer}>
-          <Ionicons name="folder-outline" size={64} color="#8E8E93" />
-          <Text style={styles.emptyTitle}>No Projects Available</Text>
-          <Text style={styles.emptyMessage}>
-            You are not assigned to any projects yet. Please contact your manager to get assigned to a project.
-          </Text>
-          <Button
-            title="Go Back"
-            onPress={() => navigation.goBack()}
-          />
+      <View style={s.root}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+        <View style={[s.headerBar, { paddingTop: insets.top }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={s.headerSide}>
+            <Ionicons name="chevron-back" size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text style={s.headerText}>Create New Task</Text>
+          <View style={s.headerSide} />
         </View>
-      </SafeAreaWrapper>
+        <View style={s.centered}>
+          <Ionicons name="folder-outline" size={64} color="#8E8E93" />
+          <Text style={s.emptyTitle}>No Projects Available</Text>
+          <Text style={s.emptyMsg}>You are not assigned to any projects yet.</Text>
+        </View>
+      </View>
     );
   }
 
+  // ─── Main form ───
   return (
-    <SafeAreaWrapper>
-      <AppHeader 
-        leftAction={{
-          icon: '←',
-          onPress: () => navigation.goBack(),
-          iconStyle: { fontSize: 34 }
-        }}
-      />
-      
-      
-      <ScrollView style={styles.container}>
-        {/* Project Selection */}
-        <Card style={styles.card}>
-          <Text style={styles.label}>Project *</Text>
-          <View>
-            <TouchableOpacity
-              style={styles.projectSelector}
-              onPress={() => {
-                console.log('Project dropdown toggled:', !showProjectDropdown);
-                setShowProjectDropdown(!showProjectDropdown);
-              }}
-            >
-              <View style={styles.projectInfo}>
-                <Text style={styles.projectName}>
-                  {selectedProject ? selectedProject.name : 'Select a project'}
-                </Text>
-                {selectedProject && (
-                  <Text style={styles.projectClient}>
-                    Client: {selectedProject.client_name}
-                  </Text>
-                )}
-              </View>
-              <Ionicons 
-                name={showProjectDropdown ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color="#666" 
-              />
-            </TouchableOpacity>
-            
-          </View>
-        </Card>
+    <View style={s.root}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
 
-        {/* Assign To (optional, supports multiple) - show for managers only */}
-        {user?.role === 'manager' && (
-          <Card style={styles.card}>
-            <Text style={styles.label}>Assign to</Text>
-            {selectedAssigneeIds.length > 0 ? (
-              <View style={styles.selectedChipsContainer}>
-                {selectedAssigneeIds.map(id => {
-                  const emp = employees.find(e => e.id === id);
-                  const label = emp ? `${emp.first_name} ${emp.last_name}` : 'Unknown';
-                  return (
-                    <View key={id} style={styles.chip}>
-                      <Text style={styles.chipText}>{label}</Text>
-                      <TouchableOpacity onPress={() => toggleAssignee(id)}>
-                        <Text style={styles.chipRemove}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={styles.hintText}>No assignees selected</Text>
-            )}
-            <TouchableOpacity style={styles.selectAssigneesButton} onPress={() => setShowAssigneeModal(true)}>
-              <Text style={styles.selectAssigneesButtonText}>
-                {selectedAssigneeIds.length > 0 ? 'Edit assignees' : 'Select assignees'}
-              </Text>
-            </TouchableOpacity>
-          </Card>
-        )}
+      {/* ── Header ── */}
+      <View style={[s.headerBar, { paddingTop: insets.top }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={s.headerSide}>
+          <Ionicons name="chevron-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
+        <Text style={s.headerText}>Create New Task</Text>
+        <TouchableOpacity style={s.headerSide}>
+          <Ionicons name="ellipsis-vertical" size={20} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
 
-        {/* Task Title */}
-        <Card style={styles.card}>
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Task Title *</Text>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── High Priority ── */}
+        <View style={s.priorityRow}>
+          <Text style={s.priorityLabel}>High Priority</Text>
+          <Switch
+            value={highPriority}
+            onValueChange={setHighPriority}
+            trackColor={{ false: '#D1D5DB', true: '#6D28D9' }}
+            thumbColor="#fff"
+            ios_backgroundColor="#D1D5DB"
+          />
+        </View>
+
+        {/* ── Select Project ── */}
+        <TouchableOpacity style={s.field} onPress={() => setShowProjectDropdown(true)}>
+          <Text style={selectedProject ? s.fieldValue : s.fieldPlaceholder}>
+            {selectedProject ? selectedProject.name : 'Select Project*'}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        {/* ── Task Title ── */}
+        <View style={s.fieldWithIcon}>
+          <TextInput
+            style={s.fieldTextInput}
+            value={taskTitle}
+            onChangeText={setTaskTitle}
+            placeholder="Task Title"
+            placeholderTextColor="#9CA3AF"
+          />
+          <View style={s.micBtn}>
             <VoiceToTextButton
               onResult={(text) => setTaskTitle(prev => prev ? `${prev} ${text}` : text)}
               size="small"
+              color="#7C3AED"
             />
           </View>
-          <TextInput
-            style={styles.textInput}
-            value={taskTitle}
-            onChangeText={setTaskTitle}
-            placeholder="Enter task title..."
-            maxLength={100}
-          />
-          <Text style={styles.characterCount}>{taskTitle.length}/100</Text>
-        </Card>
+        </View>
 
-        {/* Task Description */}
-        <Card style={styles.card}>
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Description *</Text>
+        {/* ── Description ── */}
+        <View style={[s.fieldWithIcon, s.fieldDescWrap]}>
+          <TextInput
+            style={[s.fieldTextInput, s.fieldDescInput]}
+            value={taskDescription}
+            onChangeText={setTaskDescription}
+            placeholder="Description*"
+            placeholderTextColor="#9CA3AF"
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+          <View style={[s.micBtn, { alignSelf: 'flex-end', marginBottom: 12 }]}>
             <VoiceToTextButton
               onResult={(text) => setTaskDescription(prev => prev ? `${prev} ${text}` : text)}
               size="small"
+              color="#7C3AED"
             />
           </View>
-          <TextInput
-            style={styles.textArea}
-            value={taskDescription}
-            onChangeText={setTaskDescription}
-            placeholder="Describe the task in detail..."
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            maxLength={500}
-          />
-          <Text style={styles.characterCount}>{taskDescription.length}/500</Text>
-        </Card>
-
-        {/* Time Tracking */}
-        <Card style={styles.card}>
-          <Text style={styles.label}>Time Tracking</Text>
-          <TouchableOpacity
-            style={styles.timeTrackingButton}
-            onPress={handleOpenTimeTracking}
-          >
-            <View style={styles.timeTrackingButtonLeft}>
-              <Text style={styles.timeTrackingIcon}>⏱️</Text>
-              <Text style={styles.timeTrackingLabel}>Track Time</Text>
-            </View>
-            <Text style={styles.timeTrackingValue}>
-              {totalTrackedTime}
-            </Text>
-          </TouchableOpacity>
-        </Card>
-
-        {/* Start and End Dates */}
-        <Card style={styles.card}>
-          <Text style={styles.label}>Dates</Text>
-          {/* Start Date */}
-          <TouchableOpacity
-            style={[styles.dateSelector, { marginBottom: 12 }]}
-            onPress={() => setShowTaskStartDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#007AFF" />
-            <Text style={styles.dateText}>
-              Start: {taskStartDate.toLocaleDateString('en-IN', {
-                day: '2-digit', month: '2-digit', year: 'numeric'
-              })}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color="#666" />
-          </TouchableOpacity>
-
-          {/* End Date */}
-          <TouchableOpacity
-            style={styles.dateSelector}
-            onPress={() => setShowTaskEndDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#34C759" />
-            <Text style={styles.dateText}>
-              End: {taskEndDate.toLocaleDateString('en-IN', {
-                day: '2-digit', month: '2-digit', year: 'numeric'
-              })}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color="#666" />
-          </TouchableOpacity>
-        </Card>
-
-        {/* Submit Button */}
-        <View style={styles.submitSection}>
-          <Button
-            title={submitting ? 'Creating Task...' : 'Create Task'}
-            onPress={handleSubmit}
-            disabled={submitting}
-            loading={submitting}
-          />
         </View>
+
+        {/* ── Start / End ── */}
+        <View style={s.dateRow}>
+          <TouchableOpacity style={s.dateField} onPress={() => setShowTaskStartDatePicker(true)}>
+            <Text style={s.dateValue}>
+              {taskStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </Text>
+            <Ionicons name="calendar-outline" size={16} color="#7C3AED" />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.dateField} onPress={() => setShowTaskEndDatePicker(true)}>
+            <Text style={s.dateValue}>
+              {taskEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </Text>
+            <Ionicons name="calendar-outline" size={16} color="#7C3AED" />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Location ── */}
+        <TouchableOpacity style={s.field} onPress={() => setShowLocationDropdown(true)}>
+          <Text style={selectedLocation ? s.fieldValue : s.fieldPlaceholder}>
+            {selectedLocation || 'Location'}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        {/* ── Team ── */}
+        <View style={s.section}>
+          <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Team ({selectedAssigneeIds.length})</Text>
+            <TouchableOpacity style={s.addCircle} onPress={() => setShowAssigneeModal(true)}>
+              <Ionicons name="add" size={18} color="#7C3AED" />
+            </TouchableOpacity>
+          </View>
+          {selectedAssigneeIds.map((id, idx) => {
+            const emp = employees.find(e => e.id === id);
+            const name = emp ? `${emp.first_name} ${emp.last_name}` : 'Unknown';
+            const role = emp?.department || '';
+            const initials = emp
+              ? `${emp.first_name.charAt(0)}${emp.last_name.charAt(0)}`
+              : '?';
+            return (
+              <View key={id} style={s.memberRow}>
+                <View style={[s.avatar, { backgroundColor: AVATAR_COLORS[idx % AVATAR_COLORS.length] }]}>
+                  <Text style={s.avatarText}>{initials}</Text>
+                </View>
+                <View style={s.memberInfo}>
+                  <Text style={s.memberName}>{name}</Text>
+                  {role ? <Text style={s.memberRole}>{role}</Text> : null}
+                </View>
+                <TouchableOpacity
+                  onPress={() => toggleAssignee(id)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text style={s.removeX}>×</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* ── Attachment ── */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Attachment ({attachments.length})</Text>
+          {attachments.length > 0 && (
+            <View style={s.thumbRow}>
+              {attachments.map((uri, i) => (
+                <Image key={i} source={{ uri }} style={s.thumb} />
+              ))}
+            </View>
+          )}
+          <View style={s.attachRow}>
+            <Text style={s.attachPlaceholder}>Add files</Text>
+            <TouchableOpacity onPress={handleAddAttachment}>
+              <Text style={s.attachLink}>Attach</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ── Create Task ── */}
+        <TouchableOpacity
+          style={[s.createBtn, submitting && { opacity: 0.6 }]}
+          onPress={handleSubmit}
+          disabled={submitting}
+          activeOpacity={0.8}
+        >
+          <Text style={s.createBtnText}>{submitting ? 'Creating...' : 'Create Task'}</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* Assignee Multi-select Modal */}
-      <Modal
-        visible={showAssigneeModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAssigneeModal(false)}
-      >
-        <View style={styles.assigneeModalOverlay}>
-          <View style={styles.assigneeModalContent}>
-            <View style={styles.assigneeHeader}>
-              <Text style={styles.assigneeTitle}>Select Assignees</Text>
+      {/* ══════ Modals ══════ */}
+
+      {/* Assignee Modal */}
+      <Modal visible={showAssigneeModal} transparent animationType="fade" onRequestClose={() => setShowAssigneeModal(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <View style={s.modalHead}>
+              <Text style={s.modalHeadTitle}>Select Team Members</Text>
               <TouchableOpacity onPress={() => setShowAssigneeModal(false)}>
-                <Text style={styles.assigneeClose}>✕</Text>
+                <Ionicons name="close" size={22} color="#6B7280" />
               </TouchableOpacity>
             </View>
-
-            <View style={styles.assigneeSearchRow}>
-              <Ionicons name="search" size={18} color="#666" />
+            <View style={s.searchRow}>
+              <Ionicons name="search" size={16} color="#9CA3AF" />
               <TextInput
-                style={styles.assigneeSearchInput}
+                style={s.searchInput}
                 placeholder="Search employees..."
+                placeholderTextColor="#9CA3AF"
                 value={assigneeSearch}
                 onChangeText={setAssigneeSearch}
               />
             </View>
-
             <ScrollView style={{ maxHeight: 320 }}>
               {employees
                 .filter(e => {
@@ -590,75 +549,77 @@ export default function CreateTaskScreen() {
                 .map(e => {
                   const checked = selectedAssigneeIds.includes(e.id);
                   return (
-                    <TouchableOpacity
-                      key={e.id}
-                      style={styles.assigneeRow}
-                      onPress={() => toggleAssignee(e.id)}
-                    >
-                      <Text style={styles.assigneeName}>{e.first_name} {e.last_name}</Text>
-                      <Text style={[styles.checkbox, checked ? styles.checkboxChecked : undefined]}>
-                        {checked ? '✓' : ''}
-                      </Text>
+                    <TouchableOpacity key={e.id} style={s.optionRow} onPress={() => toggleAssignee(e.id)}>
+                      <Text style={s.optionName}>{e.first_name} {e.last_name}</Text>
+                      <View style={[s.checkBox, checked && s.checkBoxOn]}>
+                        {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
+                      </View>
                     </TouchableOpacity>
                   );
                 })}
             </ScrollView>
-
-            <View style={styles.assigneeFooter}>
-              <TouchableOpacity style={styles.assigneeCancelBtn} onPress={() => setShowAssigneeModal(false)}>
-                <Text style={styles.assigneeCancelText}>Cancel</Text>
+            <View style={s.modalFooter}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => setShowAssigneeModal(false)}>
+                <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.assigneeApplyBtn} onPress={() => setShowAssigneeModal(false)}>
-                <Text style={styles.assigneeApplyText}>Apply</Text>
+              <TouchableOpacity style={s.applyBtn} onPress={() => setShowAssigneeModal(false)}>
+                <Text style={s.applyBtnText}>Apply</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-
-      {/* Project Selection Modal */}
-      <Modal
-        visible={showProjectDropdown}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowProjectDropdown(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowProjectDropdown(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Project</Text>
-              <TouchableOpacity onPress={() => setShowProjectDropdown(false)}>
-                <Ionicons name="close" size={24} color="#666" />
+      {/* Location Modal */}
+      <Modal visible={showLocationDropdown} transparent animationType="fade" onRequestClose={() => setShowLocationDropdown(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowLocationDropdown(false)}>
+          <View style={s.modalCard}>
+            <View style={s.modalHead}>
+              <Text style={s.modalHeadTitle}>Select Location</Text>
+              <TouchableOpacity onPress={() => setShowLocationDropdown(false)}>
+                <Ionicons name="close" size={22} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            
-            <ScrollView style={styles.modalContent}>
-              {projects.map((project) => (
+            {['Office', 'Remote', 'Client Site', 'Hybrid'].map(loc => (
+              <TouchableOpacity
+                key={loc}
+                style={s.optionRow}
+                onPress={() => { setSelectedLocation(loc); setShowLocationDropdown(false); }}
+              >
+                <Text style={[s.optionName, selectedLocation === loc && { color: '#7C3AED', fontWeight: '600' }]}>
+                  {loc}
+                </Text>
+                {selectedLocation === loc && <Ionicons name="checkmark" size={18} color="#7C3AED" />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Project Modal */}
+      <Modal visible={showProjectDropdown} transparent animationType="fade" onRequestClose={() => setShowProjectDropdown(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowProjectDropdown(false)}>
+          <View style={s.modalCard}>
+            <View style={s.modalHead}>
+              <Text style={s.modalHeadTitle}>Select Project</Text>
+              <TouchableOpacity onPress={() => setShowProjectDropdown(false)}>
+                <Ionicons name="close" size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 380 }}>
+              {projects.map(project => (
                 <TouchableOpacity
                   key={project.id}
-                  style={[
-                    styles.projectItem,
-                    selectedProject?.id === project.id && styles.projectItemSelected
-                  ]}
+                  style={[s.optionRow, selectedProject?.id === project.id && { backgroundColor: '#F5F3FF' }]}
                   onPress={() => handleProjectSelect(project)}
                 >
-                  <View style={styles.projectItemInfo}>
-                    <Text style={styles.projectItemName}>{project.name}</Text>
-                    <Text style={styles.projectItemClient}>
-                      Client: {project.client_name}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.optionName, selectedProject?.id === project.id && { color: '#7C3AED', fontWeight: '600' }]}>
+                      {project.name}
                     </Text>
-                    <Text style={styles.projectItemStatus}>
-                      Status: {project.status}
-                    </Text>
+                    <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>{project.client_name}</Text>
                   </View>
-                  {selectedProject?.id === project.id && (
-                    <Ionicons name="checkmark-circle" size={24} color="#007AFF" />
-                  )}
+                  {selectedProject?.id === project.id && <Ionicons name="checkmark" size={18} color="#7C3AED" />}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -666,195 +627,91 @@ export default function CreateTaskScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Task Start Date Picker */}
+      {/* Date Pickers */}
       {showTaskStartDatePicker && (
-        <DateTimePicker
-          value={taskStartDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleStartDateChange}
-          minimumDate={new Date('2000-01-01')}
-        />
+        <DateTimePicker value={taskStartDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={handleStartDateChange} />
       )}
-
-      {/* Task End Date Picker */}
       {showTaskEndDatePicker && (
-        <DateTimePicker
-          value={taskEndDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleEndDateChange}
-          minimumDate={new Date('2000-01-01')}
-        />
+        <DateTimePicker value={taskEndDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={handleEndDateChange} />
       )}
-
-      {/* Time Entry Date Picker */}
       {showTimeEntryDatePicker && (
-        <DateTimePicker
-          value={timeEntryDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event, selectedDate) => {
-            setShowTimeEntryDatePicker(false);
-            if (selectedDate) setTimeEntryDate(selectedDate);
-          }}
-        />
+        <DateTimePicker value={timeEntryDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={(e, d) => { setShowTimeEntryDatePicker(false); if (d) setTimeEntryDate(d); }} />
       )}
-
-        {/* Start Time Picker */}
-        {showStartTimePicker && (
-          <DateTimePicker
-            value={timeEntryStartTime || new Date()}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={(event, selectedTime) => {
-              setShowStartTimePicker(false);
-              if (selectedTime) setTimeEntryStartTime(selectedTime);
-            }}
-          />
-        )}
-
-        {/* End Time Picker */}
-        {showEndTimePicker && (
-          <DateTimePicker
-            value={timeEntryEndTime || new Date()}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={(event, selectedTime) => {
-              setShowEndTimePicker(false);
-              if (selectedTime) setTimeEntryEndTime(selectedTime);
-            }}
-          />
-        )}
+      {showStartTimePicker && (
+        <DateTimePicker value={timeEntryStartTime || new Date()} mode="time" display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={(e, t) => { setShowStartTimePicker(false); if (t) setTimeEntryStartTime(t); }} />
+      )}
+      {showEndTimePicker && (
+        <DateTimePicker value={timeEntryEndTime || new Date()} mode="time" display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={(e, t) => { setShowEndTimePicker(false); if (t) setTimeEntryEndTime(t); }} />
+      )}
 
       {/* Time Tracking Modal */}
-      <Modal
-        visible={showTimeTrackingModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowTimeTrackingModal(false)}
-      >
-        <View style={styles.timeModalOverlay}>
-          <View style={styles.timeModalContent}>
-            <View style={styles.timeModalHeader}>
-              <Text style={styles.timeModalTitle}>Track Time</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setShowTimeTrackingModal(false)}
-              >
-                <Text style={styles.modalCloseIcon}>✕</Text>
+      <Modal visible={showTimeTrackingModal} animationType="slide" transparent onRequestClose={() => setShowTimeTrackingModal(false)}>
+        <View style={s.sheetOverlay}>
+          <View style={s.sheetContent}>
+            <View style={s.sheetHead}>
+              <Text style={s.sheetTitle}>Track Time</Text>
+              <TouchableOpacity onPress={() => setShowTimeTrackingModal(false)}>
+                <Ionicons name="close" size={22} color="#6B7280" />
               </TouchableOpacity>
             </View>
-
-            <ScrollView style={styles.timeModalScrollView}>
-              {/* Total Time Display */}
-              <View style={styles.totalTimeSection}>
-                <Text style={styles.totalTimeLabel}>Total time tracked</Text>
-                <Text style={styles.totalTimeValue}>{totalTrackedTime}</Text>
+            <ScrollView style={{ padding: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                <Text style={{ fontSize: 14, color: '#6B7280' }}>Total time tracked</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1F2937' }}>{totalTrackedTime}</Text>
               </View>
-
-              {/* Time Entry Input */}
-              <View style={styles.timeInputSection}>
-                <View style={styles.timeInputWrapper}>
-                  <TextInput
-                    style={styles.timeInput}
-                    value={isTimerRunning 
-                      ? `${Math.floor(timerElapsed / (1000 * 60 * 60))}h ${Math.floor((timerElapsed % (1000 * 60 * 60)) / (1000 * 60))}m`
-                      : timeEntryInput}
-                    onChangeText={setTimeEntryInput}
-                    placeholder="e.g., 2h 30m"
-                    placeholderTextColor="#999"
-                    editable={!isTimerRunning}
-                  />
-                  <TouchableOpacity
-                    style={styles.timerButton}
-                    onPress={isTimerRunning ? handleStopTimer : handleStartTimer}
-                  >
-                    <Text style={styles.timerButtonIcon}>
-                      {isTimerRunning ? '⏸' : '▶'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                <TextInput
+                  style={{ flex: 1, borderWidth: 2, borderColor: '#7C3AED', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 }}
+                  value={isTimerRunning ? `${Math.floor(timerElapsed / 3600000)}h ${Math.floor((timerElapsed % 3600000) / 60000)}m` : timeEntryInput}
+                  onChangeText={setTimeEntryInput}
+                  placeholder="e.g., 2h 30m"
+                  placeholderTextColor="#9CA3AF"
+                  editable={!isTimerRunning}
+                />
+                <TouchableOpacity
+                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#7C3AED', justifyContent: 'center', alignItems: 'center' }}
+                  onPress={isTimerRunning ? handleStopTimer : handleStartTimer}
+                >
+                  <Ionicons name={isTimerRunning ? 'pause' : 'play'} size={18} color="#fff" />
+                </TouchableOpacity>
               </View>
-
-              {/* Date Selection */}
-              <TouchableOpacity
-                style={styles.timeDetailRow}
-                onPress={() => setShowTimeEntryDatePicker(true)}
-              >
-                <Text style={styles.timeDetailIcon}>📅</Text>
-                <Text style={styles.timeDetailText}>Date</Text>
-                <Text style={styles.timeDetailInput}>
-                  {timeEntryDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                </Text>
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }} onPress={() => setShowTimeEntryDatePicker(true)}>
+                <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                <Text style={{ flex: 1, marginLeft: 8, fontSize: 14, color: '#6B7280' }}>Date</Text>
+                <Text style={{ fontSize: 14, color: '#1F2937' }}>{timeEntryDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</Text>
               </TouchableOpacity>
-
-              {/* Time Range Selection */}
-              <View style={styles.timeTrackingRow}>
-                <View style={styles.timeInputContainer}>
-                  <Text style={styles.timeInputLabel}>Start Time</Text>
-                  <TouchableOpacity
-                    style={styles.timeChip}
-                      onPress={() => setShowStartTimePicker(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.timeChipText}>
-                      {timeEntryStartTime
-                        ? timeEntryStartTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-                        : 'Start time'}
-                    </Text>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6 }}>Start Time</Text>
+                  <TouchableOpacity style={{ backgroundColor: '#F3F4F6', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }} onPress={() => setShowStartTimePicker(true)}>
+                    <Text style={{ fontSize: 14, color: '#1F2937' }}>{timeEntryStartTime ? timeEntryStartTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'Start time'}</Text>
                   </TouchableOpacity>
                 </View>
-
-                <View style={styles.timeInputContainer}>
-                  <Text style={styles.timeInputLabel}>End Time</Text>
-                  <TouchableOpacity
-                    style={styles.timeChip}
-                      onPress={() => setShowEndTimePicker(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.timeChipText}>
-                      {timeEntryEndTime
-                        ? timeEntryEndTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-                        : 'End time'}
-                    </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 6 }}>End Time</Text>
+                  <TouchableOpacity style={{ backgroundColor: '#F3F4F6', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }} onPress={() => setShowEndTimePicker(true)}>
+                    <Text style={{ fontSize: 14, color: '#1F2937' }}>{timeEntryEndTime ? timeEntryEndTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'End time'}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-
-              {/* Save Button */}
-              <TouchableOpacity
-                style={styles.saveTimeButton}
-                onPress={handleAddManualTime}
-              >
-                <Text style={styles.saveTimeButtonText}>Save</Text>
+              <TouchableOpacity style={{ backgroundColor: '#7C3AED', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 16 }} onPress={handleAddManualTime}>
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>Save</Text>
               </TouchableOpacity>
-
-              {/* Time Entries List */}
               {timeEntries.length > 0 && (
-                <View style={styles.timeEntriesSection}>
-                  <Text style={styles.timeEntriesTitle}>Time Entries</Text>
-                  {timeEntries.map((entry) => (
-                    <View key={entry.id} style={styles.timeEntryItem}>
-                      <View style={styles.timeEntryLeft}>
-                        <View style={styles.timeEntryAvatar}>
-                          <Text style={styles.timeEntryAvatarText}>
-                            {entry.userName.substring(0, 1)}
-                          </Text>
-                        </View>
-                        <View style={styles.timeEntryDetails}>
-                          <Text style={styles.timeEntryDuration}>{entry.duration}</Text>
-                          <Text style={styles.timeEntryTime}>
-                            {entry.startTime} - {entry.endTime}
-                          </Text>
-                          <Text style={styles.timeEntryDate}>{entry.date}</Text>
-                        </View>
+                <View style={{ marginTop: 20 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', marginBottom: 8 }}>Time Entries</Text>
+                  {timeEntries.map(entry => (
+                    <View key={entry.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#7C3AED', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                        <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{entry.userName.charAt(0)}</Text>
                       </View>
-                      <TouchableOpacity
-                        style={styles.timeEntryDeleteButton}
-                        onPress={() => handleDeleteTimeEntry(entry.id)}
-                      >
-                        <Text style={styles.timeEntryDeleteIcon}>🗑️</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#1F2937' }}>{entry.duration}</Text>
+                        <Text style={{ fontSize: 13, color: '#6B7280' }}>{entry.startTime} - {entry.endTime}</Text>
+                        <Text style={{ fontSize: 12, color: '#9CA3AF' }}>{entry.date}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => handleDeleteTimeEntry(entry.id)}>
+                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -864,606 +721,431 @@ export default function CreateTaskScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaWrapper>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+/* ═══════════════════════════════════════════════════
+   StyleSheet — pixel-matched to the Figma design
+   ═══════════════════════════════════════════════════ */
+
+const s = StyleSheet.create({
+  // ── Root ──
+  root: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F9FAFB',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 12,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    padding: 32,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyMessage: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  backButton: {
-    marginTop: 16,
-  },
-  card: {
-    margin: 16,
-    marginBottom: 0,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    flex: 1,
-  },
-  projectSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-  },
-  projectInfo: {
-    flex: 1,
-  },
-  projectName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1a1a1a',
-  },
-  projectClient: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1a1a1a',
-    backgroundColor: '#f8f9fa',
-  },
-  textArea: {
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1a1a1a',
-    backgroundColor: '#f8f9fa',
-    minHeight: 100,
-  },
-  characterCount: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  priorityContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  priorityButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  priorityButtonSelected: {
-    backgroundColor: '#f0f8ff',
-  },
-  priorityIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  priorityText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  priorityTextSelected: {
-    color: '#007AFF',
-  },
-  dateSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-  },
-  dateText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1a1a1a',
-    marginLeft: 12,
-  },
-  submitSection: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
+
+  // ── Header ──
+  headerBar: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    margin: 20,
-    maxHeight: '80%',
-    width: '90%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  modalContent: {
-    maxHeight: 400,
-  },
-  projectItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  projectItemSelected: {
-    backgroundColor: '#f0f8ff',
-  },
-  projectItemInfo: {
-    flex: 1,
-  },
-  projectItemName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1a1a1a',
-  },
-  projectItemClient: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  projectItemStatus: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginTop: 2,
-  },
-  // Time Tracking Button Styles
-  timeTrackingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f8f9fa',
-  },
-  timeTrackingButtonLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  timeTrackingIcon: {
-    fontSize: 18,
-  },
-  timeTrackingLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  timeTrackingValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  // Time Tracking Modal Styles
-  timeModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  timeModalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    paddingBottom: 20,
-  },
-  timeModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
+    borderBottomColor: '#E5E7EB',
   },
-  timeModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  modalCloseIcon: {
-    fontSize: 24,
-    color: '#666',
-    fontWeight: '300',
-  },
-  timeModalScrollView: {
-    padding: 20,
-  },
-  totalTimeSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  totalTimeLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  totalTimeValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  timeInputSection: {
-    marginBottom: 20,
-  },
-  timeInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  timeInput: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#1a1a1a',
-    backgroundColor: '#fff',
-  },
-  timerButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timerButtonIcon: {
-    fontSize: 20,
-  },
-  timeDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f2f5',
-    gap: 12,
-  },
-  timeDetailIcon: {
-    fontSize: 18,
-    width: 24,
-    textAlign: 'center',
-  },
-  timeDetailText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#666',
-  },
-  timeDetailInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1a1a1a',
-    paddingVertical: 0,
-  },
-  timeTrackingRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  timeInputContainer: {
-    flex: 1,
-  },
-  timeInputLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#666',
-    marginBottom: 8,
-  },
-  timeChip: {
-    backgroundColor: '#f0f2f5',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-  },
-  timeChipText: {
-    fontSize: 14,
-    color: '#1a1a1a',
-    fontWeight: '500',
-  },
-  saveTimeButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  saveTimeButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  timeEntriesSection: {
-    marginTop: 20,
-  },
-  timeEntriesTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-  },
-  timeEntryItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f2f5',
-  },
-  timeEntryLeft: {
-    flexDirection: 'row',
-    gap: 12,
-    flex: 1,
-  },
-  timeEntryAvatar: {
+  headerSide: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  timeEntryAvatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  timeEntryDetails: {
-    flex: 1,
-  },
-  timeEntryDuration: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  timeEntryTime: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  timeEntryDate: {
-    fontSize: 12,
-    color: '#999',
-  },
-  timeEntryDeleteButton: {
-    padding: 4,
-  },
-  timeEntryDeleteIcon: {
-    fontSize: 20,
-  },
-  // Assignee UI styles
-  selectedChipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  chip: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EAF2FF',
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginRight: 8,
-    marginBottom: 8,
   },
-  chipText: {
-    color: '#007AFF',
-    fontSize: 13,
-    marginRight: 6,
-  },
-  chipRemove: {
-    color: '#007AFF',
+  headerText: {
+    fontSize: 16,
     fontWeight: '700',
-  },
-  selectAssigneesButton: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  selectAssigneesButtonText: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  hintText: {
-    color: '#8E8E93',
-    fontSize: 13,
-    marginTop: 6,
-  },
-  assigneeModalOverlay: {
+    color: '#1F2937',
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    textAlign: 'center',
+  },
+
+  // ── Scroll ──
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
+  },
+
+  // ── Loading / Empty ──
+  centered: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
   },
-  assigneeModalContent: {
-    backgroundColor: '#fff',
-    width: '85%',
-    maxWidth: 420,
-    borderRadius: 14,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+  loadingText: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginTop: 8,
   },
-  assigneeHeader: {
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginTop: 16,
+  },
+  emptyMsg: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 32,
+  },
+
+  // ── Priority ──
+  priorityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    paddingVertical: 16,
   },
-  assigneeTitle: {
+  priorityLabel: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#374151',
+  },
+
+  // ── Generic field (dropdown) ──
+  field: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    marginBottom: 12,
+  },
+  fieldValue: {
+    fontSize: 14,
+    color: '#1F2937',
+    flex: 1,
+  },
+  fieldPlaceholder: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    flex: 1,
+  },
+
+  // ── Field with icon (title / desc) ──
+  fieldWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    marginBottom: 12,
+    paddingRight: 4,
+  },
+  fieldDescWrap: {
+    alignItems: 'flex-start',
+    minHeight: 80,
+  },
+  fieldTextInput: {
+    flex: 1,
+    height: 48,
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  fieldDescInput: {
+    height: undefined,
+    minHeight: 72,
+    textAlignVertical: 'top',
+    paddingTop: 14,
+    paddingBottom: 14,
+  },
+  micBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // ── Dates row ──
+  dateRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  dateField: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+  },
+  datePlaceholder: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  dateValue: {
+    fontSize: 14,
+    color: '#1F2937',
+  },
+
+  // ── Section (Team / Attachment) ──
+  section: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  addCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#C4B5FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // ── Team member row ──
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    lineHeight: 18,
+  },
+  memberRole: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 1,
+    lineHeight: 16,
+  },
+  removeX: {
+    fontSize: 20,
+    color: '#9CA3AF',
+    fontWeight: '300',
+    paddingHorizontal: 6,
+  },
+
+  // ── Attachment ──
+  thumbRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  thumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: '#E5E7EB',
+  },
+  attachRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    marginTop: 8,
+  },
+  attachPlaceholder: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  attachLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#7C3AED',
+  },
+
+  // ── Create button ──
+  createBtn: {
+    backgroundColor: '#7C3AED',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  createBtnText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '700',
-    color: '#111',
   },
-  assigneeClose: {
-    fontSize: 18,
-    color: '#333',
+
+  // ── Modal shared ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  assigneeSearchRow: {
+  modalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '85%',
+    maxWidth: 400,
+    paddingBottom: 8,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+  },
+  modalHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalHeadTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F3F4F6',
     borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    marginBottom: 10,
   },
-  assigneeSearchInput: {
+  searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#111',
+    color: '#1F2937',
+    padding: 0,
   },
-  assigneeRow: {
+  optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: '#F3F4F6',
   },
-  assigneeName: {
-    fontSize: 15,
-    color: '#111',
+  optionName: {
+    fontSize: 14,
+    color: '#1F2937',
   },
-  checkbox: {
+  checkBox: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#C7C7CC',
-    alignItems: 'center',
+    borderColor: '#D1D5DB',
     justifyContent: 'center',
-    color: '#fff',
+    alignItems: 'center',
   },
-  checkboxChecked: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-    color: '#fff',
+  checkBoxOn: {
+    backgroundColor: '#7C3AED',
+    borderColor: '#7C3AED',
   },
-  assigneeFooter: {
+  modalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 12,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  assigneeCancelBtn: {
-    paddingVertical: 10,
+  cancelBtn: {
+    paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F3F4F6',
   },
-  assigneeCancelText: {
-    color: '#111',
+  cancelBtnText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#374151',
   },
-  assigneeApplyBtn: {
-    paddingVertical: 10,
+  applyBtn: {
+    paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#7C3AED',
   },
-  assigneeApplyText: {
+  applyBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#fff',
+  },
+
+  // ── Bottom sheet (time tracking) ──
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheetContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: '90%',
+    paddingBottom: 24,
+  },
+  sheetHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  sheetTitle: {
+    fontSize: 16,
     fontWeight: '700',
+    color: '#1F2937',
   },
 });

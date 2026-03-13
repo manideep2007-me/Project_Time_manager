@@ -483,6 +483,7 @@ interface Photo {
 
   // Fetch task details and time entries on component mount
   useEffect(() => {
+    let isMounted = true;
     const fetchTaskData = async () => {
       if (!taskId) return;
       
@@ -492,6 +493,10 @@ interface Photo {
         // Fetch task details
         const taskData = await dashboardApi.getTaskDetails(taskId);
         console.log('Task data:', taskData);
+        
+        if (!taskData) {
+          throw new Error('Task not found');
+        }
         
         // Format dates for display (e.g. "02 Nov 2025")
         const formatDisplayDate = (dateStr: string) => {
@@ -505,16 +510,17 @@ interface Photo {
         };
 
         // Calculate if overdue
-        const dueDate = new Date(taskData.due_date);
+        const dueDate = taskData.due_date ? new Date(taskData.due_date) : new Date();
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         dueDate.setHours(0, 0, 0, 0);
-        const isOverdue = taskData.status !== 'Completed' && dueDate < today;
+        const isOverdue = taskData.status !== 'Completed' && taskData.due_date && dueDate < today;
         const delayDays = isOverdue ? Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
         const remainingDays = !isOverdue 
           ? Math.max(0, Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
           : 0;
 
+        if (!isMounted) return;
         setTaskDetails({
           id: taskData.id,
           title: taskData.title || 'Untitled Task',
@@ -610,6 +616,7 @@ interface Photo {
           };
         });
         
+        if (!isMounted) return;
         setTimeEntries(formattedEntries);
 
         // Fetch project team members
@@ -620,8 +627,9 @@ interface Photo {
             
             // Get time entries for each team member for this task
             const today = new Date().toISOString().split('T')[0];
+            const teamMembers = teamData?.teamMembers || [];
             const teamWithTime = await Promise.all(
-              teamData.teamMembers.map(async (member: any) => {
+              teamMembers.map(async (member: any) => {
                 try {
                   // Get time entries for today (for timeToday)
                   const memberTimeEntriesToday = await dashboardApi.getTimeEntries({
@@ -630,7 +638,7 @@ interface Photo {
                     endDate: today,
                   });
                   
-                  const totalSecondsToday = memberTimeEntriesToday.timeEntries.reduce(
+                  const totalSecondsToday = (memberTimeEntriesToday?.timeEntries || []).reduce(
                     (sum: number, entry: any) => sum + (entry.duration_minutes || 0) * 60,
                     0
                   );
@@ -641,7 +649,7 @@ interface Photo {
                     taskId: taskId,
                   });
                   
-                  const totalSecondsForTask = memberTimeEntriesForTask.timeEntries.reduce(
+                  const totalSecondsForTask = (memberTimeEntriesForTask?.timeEntries || []).reduce(
                     (sum: number, entry: any) => sum + (entry.duration_minutes || 0) * 60,
                     0
                   );
@@ -666,12 +674,12 @@ interface Photo {
               })
             );
             
-            setTeamMembersData(teamWithTime);
+            if (isMounted) setTeamMembersData(teamWithTime);
             
             // Fetch recent activity logs for this task
             try {
               const activityLogs = await dashboardApi.getTaskActivityLogs(taskId, 10);
-              setRecentActivity(activityLogs);
+              if (isMounted) setRecentActivity(activityLogs);
             } catch (error) {
               console.error('Error fetching activity logs:', error);
             }
@@ -684,7 +692,7 @@ interface Photo {
         try {
           const taskAttachments = await dashboardApi.getTaskAttachments(taskId);
           // Only update if we got attachments from API, otherwise keep dummy data for testing
-          if (taskAttachments && taskAttachments.length > 0) {
+          if (taskAttachments && taskAttachments.length > 0 && isMounted) {
             setAttachments(taskAttachments);
           }
         } catch (error) {
@@ -692,15 +700,18 @@ interface Photo {
           // Keep dummy data on error
         }
         
-        setLoading(false);
+        if (isMounted) setLoading(false);
       } catch (error) {
         console.error('Error fetching task data:', error);
-        Alert.alert('Error', 'Failed to load task details');
-        setLoading(false);
+        if (isMounted) {
+          Alert.alert('Error', 'Failed to load task details');
+          setLoading(false);
+        }
       }
     };
 
     fetchTaskData();
+    return () => { isMounted = false; };
   }, [taskId]);
 
   const requestPermissions = async () => {
@@ -1305,11 +1316,12 @@ interface Photo {
       if (taskDetails.id && taskDetails.projectName) {
         try {
           const taskData = await dashboardApi.getTaskDetails(taskDetails.id);
-          if (taskData.project_id) {
+          if (taskData?.project_id) {
             const teamData = await dashboardApi.getProjectTeam(taskData.project_id.toString());
             const today = new Date().toISOString().split('T')[0];
+            const refreshTeamMembers = teamData?.teamMembers || [];
             const teamWithTime = await Promise.all(
-              teamData.teamMembers.map(async (member: any) => {
+              refreshTeamMembers.map(async (member: any) => {
                 try {
                   const memberTimeEntriesToday = await dashboardApi.getTimeEntries({
                     employeeId: member.id.toString(),
@@ -1317,7 +1329,7 @@ interface Photo {
                     endDate: today,
                   });
                   
-                  const totalSecondsToday = memberTimeEntriesToday.timeEntries.reduce(
+                  const totalSecondsToday = (memberTimeEntriesToday?.timeEntries || []).reduce(
                     (sum: number, entry: any) => sum + (entry.duration_minutes || 0) * 60,
                     0
                   );
@@ -1327,7 +1339,7 @@ interface Photo {
                     taskId: taskId,
                   });
                   
-                  const totalSecondsForTask = memberTimeEntriesForTask.timeEntries.reduce(
+                  const totalSecondsForTask = (memberTimeEntriesForTask?.timeEntries || []).reduce(
                     (sum: number, entry: any) => sum + (entry.duration_minutes || 0) * 60,
                     0
                   );
@@ -2206,7 +2218,7 @@ interface Photo {
             <View style={styles.teamMembersList}>
               {teamMembersData.length > 1 ? (
                 teamMembersData.slice(1).map((member, index) => {
-                  const initials = member.name
+                  const initials = (member?.name || 'NA')
                     .split(' ')
                     .map(n => n[0])
                     .join('')

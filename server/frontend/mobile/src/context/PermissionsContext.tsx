@@ -22,13 +22,44 @@ export const PermissionsContext = createContext<PermissionsContextValue>(default
 
 // Whitelist only actual, implemented permissions in the app
 const KNOWN_PERMISSION_IDS = new Set<string>([
-  'clients.add',     // Show "+ Add Client" on Clients screen
-  'projects.add',    // Show "+ Add Project" on Projects screen
-  'tasks.add',       // Show "+ Add Task" on Tasks screen
-  'employees.add',   // Show "+ Add Employee" on Employees screen
-  'clients.delete',  // Show delete button on Client cards
-  'projects.delete', // Show delete button on Project cards
-  'tasks.delete',    // Show delete button on Task cards
+  // Client permissions
+  'clients.view',
+  'clients.add',
+  'clients.edit',
+  'clients.delete',
+  
+  // Project permissions
+  'projects.view',
+  'projects.add',
+  'projects.edit',
+  'projects.delete',
+  
+  // Task permissions
+  'tasks.view',
+  'tasks.add',
+  'tasks.edit',
+  'tasks.delete',
+  'tasks.priority',
+  
+  // Employee permissions
+  'employees.view',
+  'employees.add',
+  'employees.edit',
+  'employees.delete',
+  
+  // Attachments permissions
+  'attachments.view',
+  'attachments.add',
+  'attachments.edit',
+  'attachments.delete',
+  
+  // Expenses permissions
+  'expenses.view',
+  'expenses.approve',
+  
+  // Attendance permissions
+  'attendance.view',
+  'attendance.approve',
 ]);
 
 export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

@@ -315,3 +315,22 @@ CREATE INDEX IF NOT EXISTS idx_time_entries_employee_id ON public.time_entries U
 CREATE INDEX IF NOT EXISTS idx_time_entries_start_time ON public.time_entries USING btree (start_time);
 CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON public.time_entries USING btree (task_id);
 CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON public.time_entries USING btree (work_date);
+
+-- Table: proof_of_work
+CREATE TABLE IF NOT EXISTS proof_of_work (
+  id SERIAL PRIMARY KEY,
+  user_id VARCHAR(255) NOT NULL,
+  user_role VARCHAR(20) DEFAULT 'employee',
+  photo_url TEXT NOT NULL,
+  verified_timestamp TIMESTAMPTZ NOT NULL,
+  latitude NUMERIC(10, 8) NOT NULL,
+  longitude NUMERIC(11, 8) NOT NULL,
+  accuracy NUMERIC(8, 2) DEFAULT 0,
+  integrity_hash CHAR(64) UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_proof_user_id ON proof_of_work(user_id);
+CREATE INDEX IF NOT EXISTS idx_proof_timestamp ON proof_of_work(verified_timestamp);
+CREATE INDEX IF NOT EXISTS idx_proof_location ON proof_of_work(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_proof_of_work_user_role ON proof_of_work(user_id, user_role);

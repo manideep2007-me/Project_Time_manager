@@ -1,10 +1,11 @@
 import React, { useState, useContext } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
+  Modal,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,9 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import { MOCK_DATA, User } from '../../data/mockData';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
-import AppText from '../../components/shared/AppText';
 import otpService from '../../services/otpService';
-import { useTheme } from '../../theme';
 
 type LoginMethod = 'email' | 'phone';
 
@@ -28,35 +27,27 @@ interface FloatingLabelInputProps extends TextInputProps {
 }
 
 function FloatingLabelInput({ label, style, ...rest }: FloatingLabelInputProps) {
-  const { theme } = useTheme();
-  const localVars = getLocalVars(theme);
-  
   const [isFocused, setIsFocused] = useState(false);
   const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
   const showFloatingLabel = isFocused || hasValue;
   const basePlaceholder = (rest.placeholder as string) || label;
-  const placeholderColor = rest.placeholderTextColor ?? localVars.placeholderColor;
+  const placeholderColor = rest.placeholderTextColor ?? '#727272';
 
   return (
     <View style={styles.floatingContainer}>
       {showFloatingLabel && (
-        <AppText 
-          style={[
-            styles.floatingLabel(localVars), 
-            styles.floatingLabelActive(localVars)
-          ]}
-        >
+        <Text style={[styles.floatingLabel, styles.floatingLabelActive]}>
           {label}
-        </AppText>
+        </Text>
       )}
       <TextInput
         {...rest}
         placeholder={showFloatingLabel ? '' : basePlaceholder}
         placeholderTextColor={placeholderColor}
         style={[
-          styles.floatingInput(localVars),
+          styles.floatingInput,
           showFloatingLabel && styles.floatingInputWithLabel,
-          isFocused && styles.floatingInputFocused(localVars),
+          isFocused && styles.floatingInputFocused,
           style,
         ]}
         onFocus={(e) => {
@@ -86,30 +77,22 @@ function FloatingLabelPasswordInput({
   style, 
   ...rest 
 }: FloatingLabelPasswordInputProps) {
-  const { theme } = useTheme();
-  const localVars = getLocalVars(theme);
-  
   const [isFocused, setIsFocused] = useState(false);
   const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
   const showFloatingLabel = isFocused || hasValue;
   const basePlaceholder = (rest.placeholder as string) || label;
-  const placeholderColor = rest.placeholderTextColor ?? localVars.placeholderColor;
+  const placeholderColor = rest.placeholderTextColor ?? '#727272';
 
   return (
     <View style={styles.floatingContainer}>
       {showFloatingLabel && (
-        <AppText 
-          style={[
-            styles.floatingLabel(localVars), 
-            styles.floatingLabelActive(localVars)
-          ]}
-        >
+        <Text style={[styles.floatingLabel, styles.floatingLabelActive]}>
           {label}
-        </AppText>
+        </Text>
       )}
       <View style={[
-        styles.floatingPasswordWrapper(localVars),
-        isFocused && styles.floatingInputFocused(localVars),
+        styles.floatingPasswordWrapper,
+        isFocused && styles.floatingInputFocused,
       ]}>
         <TextInput
           {...rest}
@@ -117,7 +100,7 @@ function FloatingLabelPasswordInput({
           placeholderTextColor={placeholderColor}
           secureTextEntry={!showPassword}
           style={[
-            styles.floatingPasswordInput(localVars),
+            styles.floatingPasswordInput,
             showFloatingLabel && styles.floatingPasswordInputWithLabel,
             style,
           ]}
@@ -138,7 +121,7 @@ function FloatingLabelPasswordInput({
           <Ionicons 
             name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
             size={22} 
-            color={localVars.primaryColor} 
+            color="#877ED2" 
           />
         </TouchableOpacity>
       </View>
@@ -152,42 +135,34 @@ interface FloatingLabelPhoneInputProps extends TextInputProps {
 }
 
 function FloatingLabelPhoneInput({ label, style, ...rest }: FloatingLabelPhoneInputProps) {
-  const { theme } = useTheme();
-  const localVars = getLocalVars(theme);
-  
   const [isFocused, setIsFocused] = useState(false);
   const hasValue = typeof rest.value === 'string' ? rest.value.trim().length > 0 : !!rest.value;
   const showFloatingLabel = isFocused || hasValue;
   const basePlaceholder = (rest.placeholder as string) || label;
-  const placeholderColor = rest.placeholderTextColor ?? localVars.placeholderColor;
+  const placeholderColor = rest.placeholderTextColor ?? '#727272';
 
   return (
     <View style={styles.floatingContainer}>
       {showFloatingLabel && (
-        <AppText 
-          style={[
-            styles.floatingLabel(localVars), 
-            styles.floatingLabelActive(localVars)
-          ]}
-        >
+        <Text style={[styles.floatingLabel, styles.floatingLabelActive]}>
           {label}
-        </AppText>
+        </Text>
       )}
       <View style={[
-        styles.floatingPhoneWrapper(localVars),
-        isFocused && styles.floatingInputFocused(localVars),
+        styles.floatingPhoneWrapper,
+        isFocused && styles.floatingInputFocused,
       ]}>
-        <View style={styles.floatingCountryCodeContainer(localVars)}>
-          <AppText style={styles.floatingFlagIcon}>🇮🇳</AppText>
-          <AppText style={styles.floatingCountryCode(localVars)}>+91</AppText>
+        <View style={styles.floatingCountryCodeContainer}>
+          <Text style={styles.floatingFlagIcon}>🇮🇳</Text>
+          <Text style={styles.floatingCountryCode}>+91</Text>
         </View>
-        <View style={styles.floatingPhoneDivider(localVars)} />
+        <View style={styles.floatingPhoneDivider} />
         <TextInput
           {...rest}
           placeholder={showFloatingLabel ? '' : basePlaceholder}
           placeholderTextColor={placeholderColor}
           style={[
-            styles.floatingPhoneInput(localVars),
+            styles.floatingPhoneInput,
             showFloatingLabel && styles.floatingPhoneInputWithLabel,
             style,
           ]}
@@ -205,81 +180,17 @@ function FloatingLabelPhoneInput({ label, style, ...rest }: FloatingLabelPhoneIn
   );
 }
 
-// Local Variables Mapper - Maps global theme tokens to local component scope
-const getLocalVars = (theme: any) => ({
-  // Primary Colors - Using secondary (#877ED2) to match app-wide visual identity
-  primaryColor: theme.colors.secondary || '#877ED2',
-  primaryDark: theme.colors.primaryDark || '#6B5CA5',
-  primaryLight: theme.colors.primaryLight || '#E9E7FF',
-  
-  // Background Colors - Match dashboard (#f8f9fa)
-  bgPrimary: theme.colors.background || '#F5F6FA',
-  bgSurface: theme.colors.surface || '#FFFFFF',
-  bgInput: theme.colors.surface || '#FFFFFF',
-  bgCountryCode: theme.colors.elevated || theme.colors.card || '#F8F9FA',
-  
-  // Text Colors - Match app text hierarchy
-  textPrimary: theme.colors.text || '#1A1A1A',
-  textSecondary: theme.colors.textSecondary || '#6A6D73',
-  textMuted: theme.colors.textSecondary || '#6A6D73',
-  textPlaceholder: theme.colors.textTertiary || '#8E8E93',
-  textInverse: '#FFFFFF',
-  textAccent: theme.colors.secondary || '#877ED2',
-  
-  // Border Colors
-  borderDefault: theme.colors.border || '#E5E6EB',
-  borderFocused: theme.colors.secondary || '#877ED2',
-  borderDivider: theme.colors.border || '#E5E6EB',
-  
-  // Status Colors
-  errorColor: theme.colors.error || '#FF3B30',
-  
-  // Spacing - Use theme spacing tokens
-  spacingXs: theme.spacing?.xs || 4,
-  spacingSm: theme.spacing?.sm || 8,
-  spacingMd: theme.spacing?.md || 12,
-  spacingLg: theme.spacing?.lg || 20,
-  spacingXl: theme.spacing?.xl || 24,
-  
-  // Border Radius - Use theme border radius tokens
-  radiusSm: theme.borderRadius?.sm || 4,
-  radiusMd: theme.borderRadius?.md || 8,
-  radiusLg: theme.borderRadius?.lg || 12,
-  radiusXl: theme.borderRadius?.xl || 16,
-  
-  // Typography - Font Sizes
-  fontSizeXs: theme.typography?.fontSizes?.xs || 10,
-  fontSizeSm: theme.typography?.fontSizes?.sm || 12,
-  fontSizeBase: theme.typography?.fontSizes?.base || 14,
-  fontSizeMd: theme.typography?.fontSizes?.md || 16,
-  fontSizeLg: theme.typography?.fontSizes?.lg || 18,
-  fontSizeXl: theme.typography?.fontSizes?.xl || 20,
-  fontSizeXxl: theme.typography?.fontSizes?.xxl || 24,
-  fontSizeXxxl: theme.typography?.fontSizes?.xxxl || 32,
-  
-  // Typography - Font Weights
-  fontWeightNormal: theme.typography?.weights?.regular || '400',
-  fontWeightMedium: theme.typography?.weights?.medium || '500',
-  fontWeightSemibold: theme.typography?.weights?.semibold || '600',
-  fontWeightBold: theme.typography?.weights?.bold || '700',
-  
-  // Typography - Font Families
-  fontFamilyRegular: theme.typography?.families?.regular || 'Inter_400Regular',
-  fontFamilyMedium: theme.typography?.families?.medium || 'Inter_500Medium',
-  fontFamilySemibold: theme.typography?.families?.semibold || 'Inter_600SemiBold',
-  fontFamilyBold: theme.typography?.families?.bold || 'Inter_700Bold',
-  
-  // Component-specific
-  placeholderColor: theme.colors.placeholder || '#9CA3AF',
-  shadowColor: '#877ED2',
-});
+// Theme colors
+const PRIMARY_PURPLE = '#7C6AC8';
+const LIGHT_PURPLE = '#877ED2';
+const BG_PURPLE = '#F0EEF8';
+const TEXT_DARK = '#333333';
+const TEXT_MUTED = '#8E8E93';
 
 export default function NewLoginScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { loginWithUser, login } = useContext(AuthContext);
-  const { theme } = useTheme();
-  const localVars = getLocalVars(theme);
   
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [loading, setLoading] = useState(false);
@@ -299,6 +210,15 @@ export default function NewLoginScreen() {
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+
+  const showThemedAlert = (title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertVisible(true);
+  };
 
   const validateEmailForm = () => {
     const newErrors: Record<string, string> = {};
@@ -383,11 +303,6 @@ export default function NewLoginScreen() {
       console.log('Login successful');
       return;
     } catch (e: any) {
-      console.error('Login error details:', e);
-      console.error('Error response:', e.response);
-      console.error('Error message:', e.message);
-      console.error('Error code:', e.code);
-      
       let errorMessage = 'Login failed. Please try again.';
       
       if (e.response?.data?.error) {
@@ -402,7 +317,7 @@ export default function NewLoginScreen() {
         errorMessage = 'Network error. Please check if the backend server is running.';
       }
       
-      Alert.alert('Login Failed', errorMessage);
+      showThemedAlert('Login Failed', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -425,13 +340,26 @@ export default function NewLoginScreen() {
           userRole: 'employee' // Default role, can be determined based on phone number
         });
       } else {
-        Alert.alert('Failed', result.message);
+        showThemedAlert('Failed', result.message);
       }
     } catch (error) {
       console.error('Send OTP error:', error);
-      Alert.alert('Error', 'Failed to send OTP. Please try again.');
+      showThemedAlert('Error', 'Failed to send OTP. Please try again.');
     } finally {
       setOtpLoading(false);
+    }
+  };
+
+
+  const formatPhoneNumber = (text: string) => {
+    // Remove all non-digit characters
+    const cleaned = text.replace(/\D/g, '');
+    
+    // Format as XXXXX XXXXX (5 digits space 5 digits)
+    if (cleaned.length <= 5) {
+      return cleaned;
+    } else {
+      return `${cleaned.slice(0, 5)} ${cleaned.slice(5, 10)}`;
     }
   };
 
@@ -450,269 +378,274 @@ export default function NewLoginScreen() {
     setPhoneForm({ phoneNumber: formatted });
   };
 
+
   return (
-    <SafeAreaWrapper backgroundColor={localVars.bgPrimary}>
+    <SafeAreaWrapper backgroundColor={BG_PURPLE}>
       <KeyboardAvoidingView 
         style={styles.keyboardContainer} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.content(localVars)}>
-            {/* Header with Logo */}
-            <View style={styles.header(localVars)}>
-              <View style={styles.logoContainer(localVars)}>
-                <View style={styles.logoIcon(localVars)}>
-                  <Ionicons name="checkmark" size={45} color={localVars.textInverse} />
-                </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          {/* Header with Logo */}
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoIcon}>
+                <Ionicons name="checkmark" size={40} color="#FFFFFF" />
               </View>
-              <AppText style={styles.appName(localVars)}>Taskly</AppText>
-              <AppText style={styles.welcomeText(localVars)}>Welcome to Taskly!</AppText>
-              <AppText style={styles.appTagline(localVars)}>Plan tasks. Track time. Work better</AppText>
             </View>
+            <Text style={styles.appName}>Taskly</Text>
+            <Text style={styles.welcomeText}>Welcome to Taskly!</Text>
+            <Text style={styles.appTagline}>Plan tasks. Track time. Work better</Text>
+          </View>
 
-            {/* Login Method Toggle */}
-            <View style={styles.toggleContainer(localVars)}>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton(localVars),
-                  loginMethod === 'email' && styles.toggleButtonActive(localVars)
-                ]}
-                onPress={() => setLoginMethod('email')}
-              >
-                <Ionicons 
-                  name="mail-outline" 
-                  size={20} 
-                  color={loginMethod === 'email' ? localVars.textInverse : localVars.primaryColor} 
+          {/* Login Method Toggle */}
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                loginMethod === 'email' && styles.toggleButtonActive
+              ]}
+              onPress={() => setLoginMethod('email')}
+            >
+              <Ionicons 
+                name="mail-outline" 
+                size={20} 
+                color={loginMethod === 'email' ? '#FFFFFF' : '#877ED2'} 
+              />
+              <Text style={[
+                styles.toggleButtonText,
+                loginMethod === 'email' && styles.toggleButtonTextActive
+              ]}>
+                Email
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                loginMethod === 'phone' && styles.toggleButtonActive
+              ]}
+              onPress={() => setLoginMethod('phone')}
+            >
+              <Ionicons 
+                name="phone-portrait-outline" 
+                size={20} 
+                color={loginMethod === 'phone' ? '#FFFFFF' : '#877ED2'} 
+              />
+              <Text style={[
+                styles.toggleButtonText,
+                loginMethod === 'phone' && styles.toggleButtonTextActive
+              ]}>
+                Phone
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Email/Password Form */}
+          {loginMethod === 'email' && (
+            <View style={styles.formContainer}>
+              <View style={styles.inputContainer}>
+                <FloatingLabelInput
+                  label="Email"
+                  placeholder="Email"
+                  placeholderTextColor='#727272'
+                  value={emailForm.email}
+                  onChangeText={(text) => setEmailForm({ ...emailForm, email: text })}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
-                <AppText style={[
-                  styles.toggleButtonText(localVars),
-                  loginMethod === 'email' && styles.toggleButtonTextActive(localVars)
-                ]}>
-                  Email
-                </AppText>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton(localVars),
-                  loginMethod === 'phone' && styles.toggleButtonActive(localVars)
-                ]}
-                onPress={() => setLoginMethod('phone')}
-              >
-                <Ionicons 
-                  name="phone-portrait-outline" 
-                  size={20} 
-                  color={loginMethod === 'phone' ? localVars.textInverse : localVars.primaryColor} 
+                {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+              </View>
+
+              <View style={styles.inputContainer}>
+                <FloatingLabelPasswordInput
+                  label="Password"
+                  placeholder="Password"
+                  placeholderTextColor='#727272'
+                  value={emailForm.password}
+                  onChangeText={(text) => setEmailForm({ ...emailForm, password: text })}
+                  showPassword={showPassword}
+                  onTogglePassword={() => setShowPassword(prev => !prev)}
+                  autoCapitalize="none"
                 />
-                <AppText style={[
-                  styles.toggleButtonText(localVars),
-                  loginMethod === 'phone' && styles.toggleButtonTextActive(localVars)
-                ]}>
-                  Phone
-                </AppText>
-              </TouchableOpacity>
-            </View>
+                {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+              </View>
 
-            {/* Email/Password Form */}
-            {loginMethod === 'email' && (
-              <View style={styles.formContainer(localVars)}>
-                <View style={styles.inputContainer(localVars)}>
-                  <FloatingLabelInput
-                    label="Email"
-                    placeholder="Email"
-                    placeholderTextColor={localVars.placeholderColor}
-                    value={emailForm.email}
-                    onChangeText={(text) => setEmailForm({ ...emailForm, email: text })}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  {errors.email && (
-                    <AppText style={styles.errorText(localVars)}>{errors.email}</AppText>
-                  )}
-                </View>
-
-                <View style={styles.inputContainer(localVars)}>
-                  <FloatingLabelPasswordInput
-                    label="Password"
-                    placeholder="Password"
-                    placeholderTextColor={localVars.placeholderColor}
-                    value={emailForm.password}
-                    onChangeText={(text) => setEmailForm({ ...emailForm, password: text })}
-                    showPassword={showPassword}
-                    onTogglePassword={() => setShowPassword(prev => !prev)}
-                    autoCapitalize="none"
-                  />
-                  {errors.password && (
-                    <AppText style={styles.errorText(localVars)}>{errors.password}</AppText>
-                  )}
-                </View>
-
-                {/* Remember me & Forgot password row */}
-                <View style={styles.optionsRow(localVars)}>
-                  <TouchableOpacity 
-                    style={styles.rememberMeContainer}
-                    onPress={() => setRememberMe(prev => !prev)}
-                  >
-                    <View style={[
-                      styles.checkbox(localVars), 
-                      rememberMe && styles.checkboxChecked(localVars)
-                    ]}>
-                      {rememberMe && <Ionicons name="checkmark" size={14} color={localVars.textInverse} />}
-                    </View>
-                    <AppText style={styles.rememberMeText(localVars)}>Remember me</AppText>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity onPress={() => Alert.alert('Forgot Password', 'Password reset functionality coming soon!')}>
-                    <AppText style={styles.forgotPasswordText(localVars)}>Forgot password</AppText>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.loginButton(localVars), 
-                    loading && styles.loginButtonDisabled
-                  ]}
-                  onPress={handleEmailLogin}
-                  disabled={loading}
+              {/* Remember me & Forgot password row */}
+              <View style={styles.optionsRow}>
+                <TouchableOpacity 
+                  style={styles.rememberMeContainer}
+                  onPress={() => setRememberMe(prev => !prev)}
                 >
-                  <AppText style={styles.loginButtonText(localVars)}>
-                    {loading ? 'Signing in...' : 'Login'}
-                  </AppText>
+                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                    {rememberMe && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                  </View>
+                  <Text style={styles.rememberMeText}>Remember me</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity onPress={() => showThemedAlert('Forgot Password', 'Password reset functionality coming soon!')}>
+                  <Text style={styles.forgotPasswordText}>Forgot password</Text>
                 </TouchableOpacity>
               </View>
-            )}
 
-            {/* Phone/OTP Form */}
-            {loginMethod === 'phone' && (
-              <View style={styles.formContainer(localVars)}>
-                <View style={styles.inputContainer(localVars)}>
-                  <FloatingLabelPhoneInput
-                    label="Phone Number"
-                    placeholder="Phone Number"
-                    placeholderTextColor={localVars.textMuted}
-                    value={phoneForm.phoneNumber}
-                    onChangeText={handlePhoneChange}
-                    keyboardType="phone-pad"
-                    maxLength={11}
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                  />
-                  {errors.phoneNumber && (
-                    <AppText style={styles.errorText(localVars)}>{errors.phoneNumber}</AppText>
-                  )}
-                </View>
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                onPress={handleEmailLogin}
+                disabled={loading}
+              >
+                <Text style={styles.loginButtonText}>
+                  {loading ? 'Signing in...' : 'Login'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-                <TouchableOpacity
-                  style={[
-                    styles.loginButton(localVars), 
-                    otpLoading && styles.loginButtonDisabled
-                  ]}
-                  onPress={handlePhoneLogin}
-                  disabled={otpLoading}
-                >
-                  <AppText style={styles.loginButtonText(localVars)}>
-                    {otpLoading ? 'Sending...' : 'Send OTP'}
-                  </AppText>
-                </TouchableOpacity>
-
-                <AppText style={styles.otpInfo(localVars)}>
-                  A verification code will be sent to your phone
-                </AppText>
+          {/* Phone/OTP Form */}
+          {loginMethod === 'phone' && (
+            <View style={styles.formContainer}>
+              <View style={styles.inputContainer}>
+                <FloatingLabelPhoneInput
+                  label="Phone Number"
+                  placeholder="Phone Number"
+                  placeholderTextColor={TEXT_MUTED}
+                  value={phoneForm.phoneNumber}
+                  onChangeText={handlePhoneChange}
+                  keyboardType="phone-pad"
+                  maxLength={11}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+                {errors.phoneNumber && <Text style={styles.errorText}>{errors.phoneNumber}</Text>}
               </View>
-            )}
 
-            {/* Sign Up Link */}
-            <View style={styles.signUpContainer(localVars)}>
-              <AppText style={styles.signUpText(localVars)}>Don't have an account? </AppText>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <AppText style={styles.signUpLink(localVars)}>Sign Up</AppText>
+              <TouchableOpacity
+                style={[styles.loginButton, otpLoading && styles.loginButtonDisabled]}
+                onPress={handlePhoneLogin}
+                disabled={otpLoading}
+              >
+                <Text style={styles.loginButtonText}>
+                  {otpLoading ? 'Sending...' : 'Send OTP'}
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={styles.otpInfo}>
+                A verification code will be sent to your phone
+              </Text>
+            </View>
+          )}
+
+          {/* Sign Up Link */}
+          <View style={styles.signUpContainer}>
+            <Text style={styles.signUpText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.signUpLink}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
+
+        </View>
+      </ScrollView>
+
+      <Modal
+        visible={alertVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAlertVisible(false)}
+      >
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertCard}>
+            <View style={styles.alertHeader}>
+              <View style={styles.alertIconWrap}>
+                <Ionicons name="alert-circle-outline" size={20} color="#FFFFFF" />
+              </View>
+              <Text style={styles.alertTitle}>{alertTitle}</Text>
+            </View>
+            <Text style={styles.alertMessage}>{alertMessage}</Text>
+            <View style={styles.alertFooter}>
+              <TouchableOpacity style={styles.alertButton} onPress={() => setAlertVisible(false)}>
+                <Text style={styles.alertButtonText}>Got it</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </ScrollView>
+        </View>
+      </Modal>
+
       </KeyboardAvoidingView>
     </SafeAreaWrapper>
   );
 }
 
-// Styles using local variables with proper type safety
-const styles = {
+const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
   },
-  content: (vars: ReturnType<typeof getLocalVars>) => ({
+  content: {
     flex: 1,
-    padding: vars.spacingLg,
-    justifyContent: 'center' as const,
-  }),
-  
+    padding: 24,
+    justifyContent: 'center',
+  },
   // Floating Label Input Styles
   floatingContainer: {
-    position: 'relative' as const,
+    position: 'relative',
     paddingTop: 4,
   },
-  floatingLabel: (vars: ReturnType<typeof getLocalVars>) => ({
-    position: 'absolute' as const,
+  floatingLabel: {
+    position: 'absolute',
     left: 12,
     top: 14,
-    fontSize: vars.fontSizeSm,
-    fontFamily: vars.fontFamilyMedium, // ✅ THEME FONT
-    color: vars.textPlaceholder,
+    fontSize: 14,
+    color: '#9CA3AF',
     zIndex: 1,
-    backgroundColor: vars.bgSurface,
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 4,
-  }),
-  floatingLabelActive: (vars: ReturnType<typeof getLocalVars>) => ({
+  },
+  floatingLabelActive: {
     top: -6,
-    fontSize: vars.fontSizeXs,
-    fontFamily: vars.fontFamilyMedium, // ✅ THEME FONT
-    color: vars.primaryColor,
-  }),
-  floatingInput: (vars: ReturnType<typeof getLocalVars>) => ({
-    backgroundColor: vars.bgInput,
+    fontSize: 11,
+    color: '#877ED2',
+  },
+  floatingInput: {
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: vars.borderDefault,
-    borderRadius: vars.radiusLg,
-    paddingHorizontal: vars.spacingMd,
+    borderColor: '#E5E5EA',
+    borderRadius: 10,
+    paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 14,
-    fontSize: vars.fontSizeMd,
-    fontFamily: vars.fontFamilyRegular, // ✅ THEME FONT - CRITICAL FIX
-    color: vars.textPrimary,
+    fontSize: 16,
+    color: TEXT_DARK,
     minHeight: 50,
-  }),
+  },
   floatingInputWithLabel: {
     paddingTop: 18,
     paddingBottom: 10,
   },
-  floatingInputFocused: (vars: ReturnType<typeof getLocalVars>) => ({
-    borderColor: vars.borderFocused,
-  }),
-  
+  floatingInputFocused: {
+    borderColor: '#877ED2',
+  },
   // Floating Password Input Styles
-  floatingPasswordWrapper: (vars: ReturnType<typeof getLocalVars>) => ({
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: vars.bgInput,
+  floatingPasswordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: vars.borderDefault,
-    borderRadius: vars.radiusLg,
+    borderColor: '#E5E5EA',
+    borderRadius: 10,
     paddingRight: 12,
     minHeight: 50,
-  }),
-  floatingPasswordInput: (vars: ReturnType<typeof getLocalVars>) => ({
+  },
+  floatingPasswordInput: {
     flex: 1,
-    paddingHorizontal: vars.spacingMd,
+    paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 14,
-    fontSize: vars.fontSizeMd,
-    fontFamily: vars.fontFamilyRegular, // ✅ THEME FONT - CRITICAL FIX
-    color: vars.textPrimary,
-  }),
+    fontSize: 16,
+    color: TEXT_DARK,
+  },
   floatingPasswordInputWithLabel: {
     paddingTop: 18,
     paddingBottom: 10,
@@ -720,235 +653,348 @@ const styles = {
   floatingPasswordToggle: {
     padding: 4,
   },
-  
   // Floating Phone Input Styles
-  floatingPhoneWrapper: (vars: ReturnType<typeof getLocalVars>) => ({
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: vars.bgInput,
+  floatingPhoneWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: vars.borderDefault,
-    borderRadius: vars.radiusLg,
-    overflow: 'hidden' as const,
+    borderColor: '#E5E5EA',
+    borderRadius: 10,
+    overflow: 'hidden',
     minHeight: 50,
-  }),
-  floatingCountryCodeContainer: (vars: ReturnType<typeof getLocalVars>) => ({
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+  },
+  floatingCountryCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 14,
-    backgroundColor: vars.bgCountryCode,
-  }),
+    backgroundColor: '#F8F9FA',
+  },
   floatingFlagIcon: {
     fontSize: 18,
     marginRight: 6,
   },
-  floatingCountryCode: (vars: ReturnType<typeof getLocalVars>) => ({
-    fontSize: vars.fontSizeMd,
-    fontFamily: vars.fontFamilySemibold, // ✅ THEME FONT
-    fontWeight: vars.fontWeightSemibold as any,
-    color: vars.textPrimary,
-  }),
-  floatingPhoneDivider: (vars: ReturnType<typeof getLocalVars>) => ({
+  floatingCountryCode: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: TEXT_DARK,
+  },
+  floatingPhoneDivider: {
     width: 1,
     height: 24,
-    backgroundColor: vars.borderDivider,
-  }),
-  floatingPhoneInput: (vars: ReturnType<typeof getLocalVars>) => ({
+    backgroundColor: '#E5E5EA',
+  },
+  floatingPhoneInput: {
     flex: 1,
-    fontSize: vars.fontSizeMd,
-    fontFamily: vars.fontFamilyRegular, // ✅ THEME FONT - CRITICAL FIX
-    color: vars.textPrimary,
+    fontSize: 16,
+    color: TEXT_DARK,
     paddingHorizontal: 14,
     paddingVertical: 14,
-  }),
+  },
   floatingPhoneInputWithLabel: {
     paddingTop: 18,
     paddingBottom: 10,
   },
-  
-  // Header Styles
-  header: (vars: ReturnType<typeof getLocalVars>) => ({
-    alignItems: 'center' as const,
-    marginBottom: 40,
-  }),
-  logoContainer: (vars: ReturnType<typeof getLocalVars>) => ({
-    marginBottom: vars.spacingSm,
-  }),
-  logoIcon: (vars: ReturnType<typeof getLocalVars>) => ({
-    width: 80,
-    height: 80,
-    borderRadius: vars.radiusXl,
-    backgroundColor: '#6B5CA5',
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    shadowColor: '#000',
+  header: {
+    alignItems: 'center',
+    marginBottom: 70,
+  },
+  logoContainer: {
+    marginBottom: 8,
+  },
+  logoIcon: {
+    width: 70,
+    height: 70,
+    borderRadius: 16,
+    backgroundColor: PRIMARY_PURPLE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: PRIMARY_PURPLE,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 5,
-  }),
-  appName: (vars: ReturnType<typeof getLocalVars>) => ({
-    fontSize: vars.fontSizeXxxl,
-    fontFamily: vars.fontFamilyBold,
-    fontWeight: vars.fontWeightBold as any,
-    color: vars.primaryColor,
-    marginBottom: vars.spacingMd,
-  }),
-  welcomeText: (vars: ReturnType<typeof getLocalVars>) => ({
-    fontSize: vars.fontSizeXl,
-    fontFamily: vars.fontFamilySemibold, // ✅ THEME FONT
-    fontWeight: vars.fontWeightSemibold as any,
-    color: vars.textPrimary,
-  }),
-  appTagline: (vars: ReturnType<typeof getLocalVars>) => ({
-    fontSize: vars.fontSizeBase,
-    fontFamily: vars.fontFamilyMedium, // ✅ THEME FONT
-    color: vars.textAccent,
-    fontWeight: vars.fontWeightMedium as any,
-  }),
-  
-  // Toggle Styles
-  toggleContainer: (vars: ReturnType<typeof getLocalVars>) => ({
-    flexDirection: 'row' as const,
-    backgroundColor: vars.bgSurface,
-    borderRadius: vars.radiusLg,
+    elevation: 8,
+  },
+  appName: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: PRIMARY_PURPLE,
+    marginBottom: 16,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  welcomeText: {
+    fontSize: 25,
+    fontWeight: '600',
+    color: "#000000",
+    fontFamily: 'Inter_600SemiBold',
+  },
+  appTagline: {
+    fontSize: 14,
+    color: '#6256C4',
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     padding: 4,
     marginBottom: 28,
-    shadowColor: vars.shadowColor,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
-  }),
-  toggleButton: (vars: ReturnType<typeof getLocalVars>) => ({
-    flex: 1,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingVertical: 12,
-    paddingHorizontal: vars.spacingMd,
-    borderRadius: vars.radiusMd,
-  }),
-  toggleButtonActive: (vars: ReturnType<typeof getLocalVars>) => ({
-    backgroundColor: vars.primaryColor,
-  }),
-  toggleButtonText: (vars: ReturnType<typeof getLocalVars>) => ({
-    fontSize: vars.fontSizeMd,
-    fontFamily: vars.fontFamilyMedium, // ✅ THEME FONT
-    fontWeight: vars.fontWeightMedium as any,
-    color: vars.primaryColor,
-    marginLeft: vars.spacingSm,
-  }),
-  toggleButtonTextActive: (vars: ReturnType<typeof getLocalVars>) => ({
-    color: vars.textInverse,
-  }),
-  
-  // Form Styles
-  formContainer: (vars: ReturnType<typeof getLocalVars>) => ({
-    marginBottom: vars.spacingLg,
-  }),
-  inputContainer: (vars: ReturnType<typeof getLocalVars>) => ({
-    marginBottom: vars.spacingMd,
-  }),
-  optionsRow: (vars: ReturnType<typeof getLocalVars>) => ({
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    marginBottom: vars.spacingLg,
-    marginTop: 4,
-  }),
-  rememberMeContainer: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
   },
-  checkbox: (vars: ReturnType<typeof getLocalVars>) => ({
+  toggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  toggleButtonActive: {
+    backgroundColor: '#877ED2',
+  },
+  toggleButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#877ED2',
+    marginLeft: 8,
+  },
+  toggleButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  formContainer: {
+    marginBottom: 24,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  textInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: TEXT_DARK,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    paddingRight: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: TEXT_DARK,
+  },
+  passwordToggle: {
+    padding: 4,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 4,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
     width: 20,
     height: 20,
-    borderRadius: vars.radiusSm,
+    borderRadius: 4,
     borderWidth: 2,
-    borderColor: vars.primaryColor,
-    marginRight: vars.spacingSm,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-  }),
-  checkboxChecked: (vars: ReturnType<typeof getLocalVars>) => ({
-    backgroundColor: vars.primaryColor,
-    borderColor: vars.primaryColor,
-  }),
-  rememberMeText: (vars: ReturnType<typeof getLocalVars>) => ({
-    fontSize: vars.fontSizeSm,
-    fontFamily: vars.fontFamilyMedium, // ✅ THEME FONT
-    color: vars.textMuted,
-    fontWeight: vars.fontWeightMedium as any,
-  }),
-  forgotPasswordText: (vars: ReturnType<typeof getLocalVars>) => ({
-    fontSize: vars.fontSizeSm,
-    fontFamily: vars.fontFamilyMedium, // ✅ THEME FONT
-    color: vars.primaryColor,
-    fontWeight: vars.fontWeightMedium as any,
-  }),
-  
-  // Button Styles
-  loginButton: (vars: ReturnType<typeof getLocalVars>) => ({
-    backgroundColor: vars.primaryColor,
-    borderRadius: vars.radiusMd,
+    borderColor: LIGHT_PURPLE,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: LIGHT_PURPLE,
+    borderColor: LIGHT_PURPLE,
+  },
+  rememberMeText: {
+    fontSize: 14,
+    color: '#8F8F8F',
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: '#877ED2',
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+  },
+  loginButton: {
+    backgroundColor: '#877ED2',
+    borderRadius: 8,
     paddingVertical: 15,
     paddingHorizontal: 20,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    shadowColor: vars.shadowColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#877ED2',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
     marginTop: 48,
     height: 50,
-    width: '100%' as any,
-  }),
+    width: 371,
+  },
   loginButtonDisabled: {
     opacity: 0.7,
   },
-  loginButtonText: (vars: ReturnType<typeof getLocalVars>) => ({
-    color: vars.textInverse,
-    fontSize: vars.fontSizeBase,
-    fontFamily: vars.fontFamilyMedium, // ✅ THEME FONT
-    fontWeight: vars.fontWeightMedium as any,
-  }),
-  
-  // Error & Info Styles
-  errorText: (vars: ReturnType<typeof getLocalVars>) => ({
+  loginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+  },
+  phoneInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    overflow: 'hidden',
+  },
+  countryCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: '#F8F9FA',
+  },
+  flagIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  countryCode: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: TEXT_DARK,
+  },
+  phoneInputDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E5E5EA',
+  },
+  phoneTextInput: {
+    flex: 1,
+    fontSize: 16,
+    color: TEXT_DARK,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  errorText: {
     fontSize: 13,
-    fontFamily: vars.fontFamilyRegular, // ✅ THEME FONT
-    color: vars.errorColor,
+    color: '#FF3B30',
     marginTop: 6,
     marginLeft: 4,
-  }),
-  otpInfo: (vars: ReturnType<typeof getLocalVars>) => ({
-    fontSize: vars.fontSizeSm,
-    fontFamily: vars.fontFamilyRegular, // ✅ THEME FONT
-    color: vars.textMuted,
-    textAlign: 'center' as const,
-    marginTop: vars.spacingMd,
-  }),
-  
-  // Sign Up Styles
-  signUpContainer: (vars: ReturnType<typeof getLocalVars>) => ({
-    flexDirection: 'row' as const,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    marginTop: 'auto' as const,
+  },
+  otpInfo: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  signUpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 'auto',
     paddingTop: 20,
-  }),
-  signUpText: (vars: ReturnType<typeof getLocalVars>) => ({
+  },
+  signUpText: {
     fontSize: 15,
-    fontFamily: vars.fontFamilyRegular, // ✅ THEME FONT
-    color: vars.textMuted,
-  }),
-  signUpLink: (vars: ReturnType<typeof getLocalVars>) => ({
+    color: TEXT_MUTED,
+  },
+  signUpLink: {
     fontSize: 15,
-    fontFamily: vars.fontFamilySemibold, // ✅ THEME FONT
-    color: vars.primaryColor,
-    fontWeight: vars.fontWeightSemibold as any,
-  }),
-};
+    color: LIGHT_PURPLE,
+    fontWeight: '600',
+  },
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(19, 14, 36, 0.52)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  alertCard: {
+    width: '92%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E8E4F6',
+    shadowColor: '#1C1635',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+    transform: [{ translateY: -24 }],
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  alertIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: LIGHT_PURPLE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#2B244A',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  alertMessage: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#4A4562',
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 18,
+  },
+  alertFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#EEEAF8',
+    paddingTop: 14,
+  },
+  alertButton: {
+    width: '100%',
+    backgroundColor: LIGHT_PURPLE,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  alertButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600',
+  },
+});

@@ -232,6 +232,7 @@ app.use('/api/proof-of-work', auditLog, routes.proofOfWork);
 app.use('/api/countries', auditLog, routes.countries);
 app.use('/api/states', auditLog, routes.states);
 app.use('/api/designations', auditLog, routes.designations);
+app.use('/api/pending-registrations', auditLog, routes.pendingRegistrations);
 // Public endpoints for organization onboarding (no auth)
 app.use('/api/organizations', routes.organizations);
 

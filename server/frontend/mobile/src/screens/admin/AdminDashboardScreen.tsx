@@ -219,6 +219,28 @@ export default function AdminDashboardScreen() {
             </View>
           </View>
 
+          {/* Pending Approvals Banner */}
+          {(overview?.pendingRegistrations || 0) > 0 && (
+            <TouchableOpacity
+              style={styles.pendingBanner}
+              onPress={() => navigation.navigate('PendingApprovals')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.pendingBannerLeft}>
+                  <Ionicons name="person-add-outline" size={24} color="#877ED2" />
+                <View style={styles.pendingBannerText}>
+                  <Text style={styles.pendingBannerTitle}>
+                    {overview?.pendingRegistrations} Pending Registration{(overview?.pendingRegistrations || 0) > 1 ? 's' : ''}
+                  </Text>
+                  <Text style={styles.pendingBannerSubtitle}>Tap to review and approve</Text>
+                </View>
+              </View>
+              <View style={styles.pendingBannerBadge}>
+                <Text style={styles.pendingBannerBadgeText}>{overview?.pendingRegistrations}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
           {/* Organization QR Code Section */}
           {organization && (
             <Card style={styles.qrCard}>
@@ -479,5 +501,56 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  // Pending Approvals Banner
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F7F5FF',
+    borderRadius: 14,
+    padding: 16,
+    marginHorizontal: 4,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#B8B0E8',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  pendingBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  pendingBannerText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  pendingBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#5F56A8',
+  },
+  pendingBannerSubtitle: {
+    fontSize: 12,
+    color: '#877ED2',
+    marginTop: 2,
+  },
+  pendingBannerBadge: {
+    backgroundColor: '#877ED2',
+    borderRadius: 14,
+    minWidth: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  pendingBannerBadgeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

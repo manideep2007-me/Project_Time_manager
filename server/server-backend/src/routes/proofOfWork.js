@@ -16,6 +16,38 @@ const router = express.Router();
 // Store this in environment variables in production
 const SECRET_SALT = process.env.PROOF_SECRET_SALT || 'ProofSalt2025_SecureHash_TimeGeo_AntiTamper_ChangeInProduction!';
 
+/**
+ * Ensure proof_of_work table exists in the org database
+ * Handles both new orgs and orgs created before proof feature was added
+ */
+async function ensureProofTable(db) {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS proof_of_work (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL,
+      user_role VARCHAR(20) DEFAULT 'employee',
+      photo_url TEXT NOT NULL,
+      verified_timestamp TIMESTAMPTZ NOT NULL,
+      latitude NUMERIC(10, 8) NOT NULL,
+      longitude NUMERIC(11, 8) NOT NULL,
+      accuracy NUMERIC(8, 2) DEFAULT 0,
+      integrity_hash CHAR(64) UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  // Add user_role column if table existed without it
+  const col = await db.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'proof_of_work' AND column_name = 'user_role';
+  `);
+  if (col.rows.length === 0) {
+    await db.query(`ALTER TABLE proof_of_work ADD COLUMN user_role VARCHAR(20) DEFAULT 'employee';`);
+  }
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_proof_user_id ON proof_of_work(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_proof_timestamp ON proof_of_work(verified_timestamp);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_proof_of_work_user_role ON proof_of_work(user_id, user_role);`);
+}
+
 // Configure multer for file upload
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
@@ -78,6 +110,7 @@ function generateServerHash(latitude, longitude, timestamp, fileHash) {
 router.post('/upload', authenticateToken, upload.single('photo'), async (req, res) => {
   try {
     const db = getDbPool(req);
+    await ensureProofTable(db);
     // Step 4.1: Receive Data
     const {
       latitude,
@@ -296,19 +329,10 @@ router.post('/upload', authenticateToken, upload.single('photo'), async (req, re
 router.get('/history', authenticateToken, async (req, res) => {
   try {
     const db = getDbPool(req);
+    await ensureProofTable(db);
     const userId = req.user.id;
     const userRole = req.user.role;
     const { limit = 50, offset = 0 } = req.query;
-
-    // Real organization users see empty proof history (no dummy data)
-    if (req.user && req.user.source === 'registry') {
-      return res.json({
-        success: true,
-        proofs: [],
-        count: 0,
-        role: userRole,
-      });
-    }
 
     console.log(`\n========== FETCHING PROOF HISTORY ==========`);
     console.log(`👤 User ID: ${userId}`);
@@ -356,6 +380,7 @@ router.get('/history', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const db = getDbPool(req);
+    await ensureProofTable(db);
     const { id } = req.params;
     const userId = req.user.id;
 

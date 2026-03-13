@@ -10,9 +10,11 @@ import {
   TextInput,
   ScrollView,
   Image,
+  Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { api } from '../../api/client';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 
@@ -26,6 +28,7 @@ interface Employee {
   name?: string;
   department: string;
   designation?: string;
+  role?: string;
   is_active: boolean;
   photo_url?: string;
   email?: string;
@@ -53,23 +56,108 @@ export default function EmployeesScreen() {
   const [selectedDepartment, setSelectedDepartment] = useState('All');
   const [departments, setDepartments] = useState<string[]>(['All']);
   const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedEmployeeId(expandedEmployeeId === id ? null : id);
   };
+  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive'>('active');
 
   const handleEditEmployee = (employee: Employee) => {
-    navigation.navigate('EditEmployee', { id: employee.id });
+    // Navigate to AddEmployee screen with employee data for editing
+    navigation.navigate('AddEmployee', { 
+      editEmployee: {
+        id: employee.id,
+        firstName: employee.first_name,
+        lastName: employee.last_name,
+        email: employee.email,
+        phone: employee.phone,
+        designation: employee.designation,
+        department: employee.department,
+        salary: employee.salary,
+        overtimeRate: employee.overtime_rate,
+        address: employee.address,
+        employmentType: employee.employment_type,
+        dateOfBirth: employee.date_of_birth,
+        joiningDate: employee.joining_date,
+        aadhaarNumber: employee.aadhar_number,
+        payCalculation: employee.pay_calculation,
+        isActive: employee.is_active,
+      }
+    });
   };
 
-  const handleDeleteEmployee = async (employee: Employee) => {
-    // TODO: Implement delete confirmation and API call
-    console.log('Delete employee:', employee.id);
+  const handleDeleteEmployee = (employee: Employee) => {
+    setEmployeeToDelete(employee);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!employeeToDelete) return;
+    
+    const name = employeeToDelete.name || `${employeeToDelete.first_name || ''} ${employeeToDelete.last_name || ''}`.trim();
+    setDeleteModalVisible(false);
+    setDeletingId(employeeToDelete.id);
+    
+    try {
+      await api.delete(`/api/employees/${employeeToDelete.id}`);
+      // Remove from local state
+      setEmployees(prev => prev.filter(emp => emp.id !== employeeToDelete.id));
+      setExpandedEmployeeId(null);
+    } catch (error: any) {
+      const msg = error?.response?.data?.error || 'Failed to delete employee';
+      Alert.alert('Error', msg);
+    } finally {
+      setDeletingId(null);
+      setEmployeeToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteModalVisible(false);
+    setEmployeeToDelete(null);
+  };
+
+  const handleToggleEmployeeStatus = async (employee: Employee) => {
+    const nextActive = !employee.is_active;
+    const actionLabel = nextActive ? 'activate' : 'deactivate';
+    const name = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
+
+    Alert.alert(
+      nextActive ? 'Activate Employee' : 'Deactivate Employee',
+      `Are you sure you want to ${actionLabel} ${name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: nextActive ? 'Activate' : 'Deactivate',
+          style: nextActive ? 'default' : 'destructive',
+          onPress: async () => {
+            setStatusUpdatingId(employee.id);
+            try {
+              const res = await api.put(`/api/employees/${employee.id}`, { isActive: nextActive });
+              const updatedActive = res?.data?.employee?.is_active ?? nextActive;
+              setEmployees((prev) => prev.map((emp) => (
+                emp.id === employee.id ? { ...emp, is_active: updatedActive } : emp
+              )));
+            } catch (error: any) {
+              const msg = error?.response?.data?.error || 'Failed to update employee status';
+              Alert.alert('Error', msg);
+            } finally {
+              setStatusUpdatingId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const loadEmployees = async () => {
     try {
-      const res = await api.get('/api/employees', { params: { limit: 100 } });
+      const activeParam = activeFilter === 'active' ? 'true' : 'false';
+      const res = await api.get('/api/employees', { params: { limit: 100, active: activeParam } });
       const list = Array.isArray(res.data?.employees) ? res.data.employees : [];
       setEmployees(list);
       
@@ -104,13 +192,20 @@ export default function EmployeesScreen() {
     setFilteredEmployees(filtered);
   }, []);
 
-  useEffect(() => {
-    loadEmployees().finally(() => setLoading(false));
-  }, []);
+  // Refresh when screen is focused (after editing)
+  useFocusEffect(
+    useCallback(() => {
+      loadEmployees().finally(() => setLoading(false));
+    }, [])
+  );
 
   useEffect(() => {
     filterEmployees(employees, searchQuery, selectedDepartment);
   }, [searchQuery, selectedDepartment, employees, filterEmployees]);
+
+  useEffect(() => {
+    loadEmployees();
+  }, [activeFilter]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -138,10 +233,13 @@ export default function EmployeesScreen() {
     const initials = getInitials(employee.first_name, employee.last_name);
     const avatarColor = getAvatarColor(name);
     const isExpanded = expandedEmployeeId === employee.id;
+    const isDeleting = deletingId === employee.id;
+    const isUpdatingStatus = statusUpdatingId === employee.id;
     
     return (
-      <View style={styles.employeeItemContainer}>
-        <View style={styles.employeeItem}>
+      <View style={styles.cardContainer}>
+        {/* Header Row */}
+        <View style={styles.cardHeader}>
           <TouchableOpacity 
             style={styles.employeeLeft}
             onPress={() => navigation.navigate('EmployeeDetail', { id: employee.id })}
@@ -166,7 +264,7 @@ export default function EmployeesScreen() {
             <Ionicons
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
               size={24}
-              color="#6F67CC"
+              color={PRIMARY_PURPLE}
             />
           </TouchableOpacity>
         </View>
@@ -191,11 +289,11 @@ export default function EmployeesScreen() {
             {/* Salary Row */}
             <View style={styles.detailRow}>
               <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Monthly salary:</Text>
+                <Text style={styles.detailLabel}>Monthly Salary</Text>
                 <Text style={styles.detailValue}>₹{employee.salary?.toLocaleString() || '0'}</Text>
               </View>
               <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Over time rate:</Text>
+                <Text style={styles.detailLabel}>Overtime Rate</Text>
                 <Text style={styles.detailValue}>{employee.overtime_rate || '0'}</Text>
               </View>
             </View>
@@ -203,18 +301,18 @@ export default function EmployeesScreen() {
             {/* Contact Row */}
             <View style={styles.detailRow}>
               <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Mobile:</Text>
+                <Text style={styles.detailLabel}>Mobile</Text>
                 <Text style={styles.detailValue}>{employee.phone || 'N/A'}</Text>
               </View>
               <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Email:</Text>
+                <Text style={styles.detailLabel}>Email</Text>
                 <Text style={styles.detailValue}>{employee.email || 'N/A'}</Text>
               </View>
             </View>
 
             {/* Location Row */}
             <View style={styles.locationRow}>
-              <Text style={styles.detailLabel}>Location: </Text>
+              <Text style={styles.detailLabel}>Location</Text>
               <Text style={styles.detailValue}>{employee.location || 'N/A'}</Text>
             </View>
 
@@ -223,22 +321,49 @@ export default function EmployeesScreen() {
               <TouchableOpacity 
                 style={styles.editButton}
                 onPress={() => handleEditEmployee(employee)}
+                disabled={isDeleting || isUpdatingStatus}
               >
-                <Ionicons name="create-outline" size={16} color="#6F67CC" />
+                <Ionicons name="create-outline" size={16} color="#FFFFFF" />
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.deleteButton}
+                style={[styles.deleteButton, isDeleting && { opacity: 0.6 }]}
                 onPress={() => handleDeleteEmployee(employee)}
+                disabled={isDeleting || isUpdatingStatus}
               >
-                <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.statusToggleButton,
+                  employee.is_active ? styles.deactivateButton : styles.activateButton,
+                  isUpdatingStatus && { opacity: 0.6 },
+                ]}
+                onPress={() => handleToggleEmployeeStatus(employee)}
+                disabled={isDeleting || isUpdatingStatus}
+              >
+                {isUpdatingStatus ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name={employee.is_active ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={16} color="#FFFFFF" />
+                    <Text style={styles.statusToggleButtonText}>{employee.is_active ? 'Inactive' : 'Active'}</Text>
+                  </>
+                )}
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.viewMoreButton}
                 onPress={() => navigation.navigate('EmployeeInfo', { id: employee.id, employeeData: employee })}
+                disabled={isDeleting || isUpdatingStatus}
               >
-                <Ionicons name="eye-outline" size={16} color="#6F67CC" />
+                <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
                 <Text style={styles.viewMoreButtonText}>More</Text>
               </TouchableOpacity>
             </View>
@@ -289,6 +414,27 @@ export default function EmployeesScreen() {
         {/* Department Filter Label */}
         <Text style={styles.filterLabel}>List by department</Text>
 
+        {/* Status Filter Chips */}
+        <View style={styles.statusFilterRow}>
+          {(['active', 'inactive'] as const).map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[
+                styles.statusFilterChip,
+                activeFilter === f && {
+                  borderColor: f === 'active' ? '#58A55C' : '#E55252',
+                  backgroundColor: f === 'active' ? '#EAF5EA' : '#FDEAEA',
+                },
+              ]}
+              onPress={() => setActiveFilter(f)}
+            >
+              <Text style={[styles.statusFilterChipText, activeFilter === f && styles.statusFilterChipTextActive]}>
+                {f === 'active' ? 'Active' : 'Inactive'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Department Filter Chips */}
         <ScrollView 
           horizontal 
@@ -328,25 +474,66 @@ export default function EmployeesScreen() {
         </View>
 
         {/* Employee List */}
-        <View style={styles.listCard}>
-          <FlatList
-            data={filteredEmployees}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={({ item }) => <EmployeeItem employee={item} />}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No employees found</Text>
-              </View>
-            }
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            style={styles.flatList}
-          />
-        </View>
+        <FlatList
+          data={filteredEmployees}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => <EmployeeItem employee={item} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No employees found</Text>
+            </View>
+          }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          style={styles.flatList}
+        />
       </View>
+
+      {/* Custom Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Icon */}
+            <View style={styles.modalIconContainer}>
+              <Ionicons name="trash-outline" size={36} color={PRIMARY_PURPLE} />
+            </View>
+            
+            {/* Title */}
+            <Text style={styles.modalTitle}>Delete Employee</Text>
+            
+            {/* Message */}
+            <Text style={styles.modalMessage}>
+              Are you sure you want to delete{' '}
+              <Text style={styles.modalEmployeeName}>
+                "{employeeToDelete?.name || `${employeeToDelete?.first_name || ''} ${employeeToDelete?.last_name || ''}`.trim()}"
+              </Text>
+              ?
+            </Text>
+            <Text style={styles.modalSubMessage}>
+              This will deactivate the employee account.
+            </Text>
+            
+            {/* Buttons */}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalCancelButton} onPress={cancelDelete}>
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalDeleteButton} onPress={confirmDelete}>
+                <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.modalDeleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaWrapper>
   );
 }
@@ -406,6 +593,35 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     paddingHorizontal: 16,
     marginBottom: 8,
+  },
+  statusFilterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    gap: 8,
+  },
+  statusFilterChip: {
+    paddingHorizontal: 14,
+    height: 30,
+    justifyContent: 'center',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#8F8F8F',
+    backgroundColor: '#FFFFFF',
+  },
+  statusFilterChipActive: {
+    borderColor: '#7166CB',
+    backgroundColor: '#EFEFFC',
+  },
+  statusFilterChipText: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#8F8F8F',
+  },
+  statusFilterChipTextActive: {
+    color: '#101010',
+    fontWeight: '500',
   },
   filterContainer: {
     flexGrow: 0,
@@ -494,37 +710,29 @@ const styles = StyleSheet.create({
   flatList: {
     flex: 1,
   },
-  listCard: {
-    flex: 1,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    overflow: 'hidden',
-    marginTop: 12,
-  },
   listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 16,
   },
-  employeeItemContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+  cardContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  employeeItem: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
   },
   expandedContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingTop: 16,
   },
   statusRow: {
     flexDirection: 'row',
@@ -581,9 +789,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
     color: '#8F8F8F',
     marginBottom: 2,
   },
@@ -594,24 +802,20 @@ const styles = StyleSheet.create({
     color: '#404040',
   },
   locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 16,
-    height: 30,
   },
   actionButtonsRow: {
     flexDirection: 'row',
     gap: 12,
+    flexWrap: 'wrap',
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    backgroundColor: '#6F67CC',
-    borderColor: '#6F67CC',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 25,
+    backgroundColor: PRIMARY_PURPLE,
     gap: 6,
   },
   editButtonText: {
@@ -623,10 +827,10 @@ const styles = StyleSheet.create({
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 25,
-    backgroundColor: '#6F67CC',
+    backgroundColor: PRIMARY_PURPLE,
     gap: 6,
   },
   deleteButtonText: {
@@ -638,12 +842,10 @@ const styles = StyleSheet.create({
   viewMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#6F67CC',
-    backgroundColor: '#6F67CC',
+    backgroundColor: PRIMARY_PURPLE,
     gap: 6,
   },
   viewMoreButtonText: {
@@ -651,7 +853,26 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
     color: '#FFFFFF',
-    marginLeft: 4,
+  },
+  statusToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 25,
+    gap: 6,
+  },
+  deactivateButton: {
+    backgroundColor: '#E55252',
+  },
+  activateButton: {
+    backgroundColor: '#58A55C',
+  },
+  statusToggleButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+    color: '#FFFFFF',
   },
   employeeLeft: {
     flexDirection: 'row',
@@ -680,16 +901,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   employeeName: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     fontFamily: 'Inter_500Medium',
     color: '#404040',
   },
   employeeRole: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
-    color: '#727272',
+    color: '#8F8F8F',
   },
   emptyState: {
     alignItems: 'center',
@@ -698,5 +919,97 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#666',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 360,
+    alignItems: 'center',
+  },
+  modalIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(135, 126, 210, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 15,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  modalEmployeeName: {
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalSubMessage: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 28,
+    lineHeight: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  modalCancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    color: '#666',
+  },
+  modalDeleteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: PRIMARY_PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  modalDeleteButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    color: '#FFFFFF',
   },
 });

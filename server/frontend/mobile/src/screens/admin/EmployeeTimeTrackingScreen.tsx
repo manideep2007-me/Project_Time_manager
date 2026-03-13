@@ -16,7 +16,7 @@ import { listProjects, listTimeEntries } from '../../api/endpoints';
 import { AuthContext } from '../../context/AuthContext';
 import { useTimer } from '../../context/TimerContext';
 import { useActivity } from '../../context/ActivityContext';
-import Card from '../../components/shared/Card';
+import Card from '../../components/shared/Card';              
 import Button from '../../components/shared/Button';
 
 export default function EmployeeTimeTrackingScreen() {

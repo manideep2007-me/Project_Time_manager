@@ -7,6 +7,9 @@ import Card from '../../components/shared/Card';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import { Ionicons } from '@expo/vector-icons';
 
+const PRIMARY_PURPLE = '#877ED2';
+const BG_COLOR = '#F5F5F8';
+
 interface TimeEntry {
   id: string;
   employee_id: string;
@@ -175,38 +178,46 @@ export default function TaskViewScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading task details...</Text>
-      </View>
+      <SafeAreaWrapper backgroundColor={PRIMARY_PURPLE}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={PRIMARY_PURPLE} />
+          <Text style={styles.loadingText}>Loading task details...</Text>
+        </View>
+      </SafeAreaWrapper>
     );
   }
 
   if (!task) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>Task not found</Text>
-      </View>
+      <SafeAreaWrapper backgroundColor={PRIMARY_PURPLE}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>Task not found</Text>
+        </View>
+      </SafeAreaWrapper>
     );
   }
 
   return (
-    <SafeAreaWrapper>
-      <ScrollView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <Text style={styles.headerTitle}>Task view</Text>
-            <TouchableOpacity onPress={handleEdit} style={styles.editButton}>
-              <Ionicons name="pencil" size={20} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.headerInfo}>
-            <Text style={styles.projectLink}>{projectName}</Text>
-            <Text style={styles.headerDivider}>|</Text>
-            <Text style={styles.dueByText}>Due by: {formatDate(task.due_date)}</Text>
+    <SafeAreaWrapper backgroundColor={PRIMARY_PURPLE}>
+      {/* Purple Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Task View</Text>
+          <View style={styles.headerSubRow}>
+            <Text style={styles.projectName}>{projectName}</Text>
+            <Text style={styles.headerDivider}>•</Text>
+            <Text style={styles.dueByText}>Due: {formatDate(task.due_date)}</Text>
           </View>
         </View>
+        <TouchableOpacity onPress={handleEdit} style={styles.editButton}>
+          <Ionicons name="pencil" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
 
         {/* Task Information */}
         <Card style={styles.infoCard}>
@@ -298,111 +309,137 @@ export default function TaskViewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: BG_COLOR,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
+    backgroundColor: BG_COLOR,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#666',
   },
   errorText: {
     fontSize: 18,
-    color: '#FF3B30',
+    color: PRIMARY_PURPLE,
     fontWeight: '600',
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  headerTop: {
+    backgroundColor: PRIMARY_PURPLE,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  headerContent: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#fff',
+  },
+  headerSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 8,
+  },
+  projectName: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
+  },
+  headerDivider: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  dueByText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
   },
   editButton: {
     padding: 8,
-  },
-  headerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 8,
   },
   projectLink: {
     fontSize: 16,
-    color: '#007AFF',
+    color: PRIMARY_PURPLE,
     fontWeight: '600',
   },
-  headerDivider: {
-    fontSize: 16,
-    color: '#E5E5EA',
-  },
-  dueByText: {
-    fontSize: 16,
-    color: '#8E8E93',
-  },
   infoCard: {
-    marginHorizontal: 20,
-    marginVertical: 16,
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 16,
     padding: 16,
+    borderRadius: 16,
   },
   infoRow: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   infoLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 13,
+    color: '#999',
     marginBottom: 4,
+    fontWeight: '500',
   },
   infoValue: {
     fontSize: 16,
-    color: '#1C1C1E',
+    color: '#2B2B2B',
     fontWeight: '600',
   },
   summaryCards: {
     flexDirection: 'row',
     gap: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     marginBottom: 16,
   },
   summaryCard: {
     flex: 1,
     padding: 20,
     alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8E5F5',
   },
   summaryValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: PRIMARY_PURPLE,
     marginBottom: 4,
   },
   summaryLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
+    fontSize: 13,
+    color: '#666',
     fontWeight: '500',
   },
   singleColumnContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingBottom: 20,
   },
   departmentSection: {
     backgroundColor: '#FFFFFF',
     marginBottom: 16,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   departmentHeader: {
     flexDirection: 'row',
@@ -411,12 +448,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: '#F0F0F0',
   },
   departmentName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#2B2B2B',
   },
   departmentTotals: {
     flexDirection: 'row',
@@ -425,7 +462,7 @@ const styles = StyleSheet.create({
   deptTotalText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8E8E93',
+    color: PRIMARY_PURPLE,
   },
   employeeRow: {
     flexDirection: 'row',
@@ -433,11 +470,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
+    borderBottomColor: '#F5F5F5',
   },
   employeeName: {
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    color: '#2B2B2B',
     fontWeight: '500',
   },
   employeeStats: {
@@ -446,43 +483,46 @@ const styles = StyleSheet.create({
   },
   employeeStat: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#666',
     minWidth: 60,
     textAlign: 'right',
   },
   noDataText: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#999',
     textAlign: 'center',
     padding: 40,
+    backgroundColor: '#fff',
+    borderRadius: 16,
   },
   activityCard: {
     padding: 16,
-    marginTop: 16,
+    marginTop: 8,
+    borderRadius: 16,
   },
   activityTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#2B2B2B',
     marginBottom: 16,
   },
   activityItem: {
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
+    borderBottomColor: '#F5F5F5',
   },
   activityText: {
     fontSize: 14,
-    color: '#1C1C1E',
+    color: '#2B2B2B',
     marginBottom: 4,
   },
   activityTime: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: '#999',
   },
   noActivityText: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#999',
     textAlign: 'center',
     padding: 20,
   },

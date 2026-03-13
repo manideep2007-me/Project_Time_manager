@@ -3,6 +3,7 @@ const { body } = require('express-validator');
 const pool = require('../config/database');
 const { authenticateToken, requireRole, getDbPool } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validation');
+const { primary: registryPool, secondary: usersPool } = require('../config/databases');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
@@ -52,12 +53,33 @@ const photoUpload = multer({
 // POST /api/employees/:id/photo - Upload employee photo
 router.post('/:id/photo', photoUpload.single('photo'), async (req, res) => {
   try {
-    const db = getDbPool(req);
     const { id } = req.params;
     if (!req.file) {
       return res.status(400).json({ error: 'Photo file is required' });
     }
     const file = req.file;
+
+    // Check if user is from registry (organization users like Walmart)
+    if (req.user?.source === 'registry' && registryPool) {
+      // Update employees_registry table for organization users
+      const exists = await registryPool.query('SELECT id FROM employees_registry WHERE id = $1', [id]);
+      if (exists.rows.length === 0) {
+        try { fs.unlinkSync(file.path); } catch {}
+        return res.status(404).json({ error: 'User not found in registry' });
+      }
+
+      // Update the photograph column in employees_registry
+      await registryPool.query(
+        `UPDATE employees_registry SET photograph = $1 WHERE id = $2`,
+        [file.path, id]
+      );
+
+      const photoUrl = `${req.protocol}://${req.get('host')}/uploads/employee-photos/${file.filename}`;
+      return res.json({ success: true, fileName: file.filename, photo_url: photoUrl });
+    }
+
+    // Otherwise, update users table (demo/local users)
+    const db = getDbPool(req);
 
     // Ensure user exists
     const exists = await db.query('SELECT user_id FROM users WHERE user_id = $1', [id]);
@@ -81,7 +103,8 @@ router.post('/:id/photo', photoUpload.single('photo'), async (req, res) => {
       [file.path, id]
     );
 
-    res.json({ success: true, documentId: insert.rows[0].id, fileName: file.filename });
+    const photoUrl = `${req.protocol}://${req.get('host')}/uploads/employee-photos/${file.filename}`;
+    res.json({ success: true, documentId: insert.rows[0].id, fileName: file.filename, photo_url: photoUrl });
   } catch (error) {
     console.error('Error uploading employee photo:', error);
     res.status(500).json({ error: 'Failed to upload photo' });
@@ -415,8 +438,8 @@ router.put('/:id', [
     const result = await db.query(
       `UPDATE users SET first_name = COALESCE($1, first_name), last_name = COALESCE($2, last_name), 
        email_id = COALESCE($3, email_id), phone_number = COALESCE($4, phone_number), 
-       department_id = COALESCE($5, department_id), salary_type = COALESCE($6, salary_type), 
-       salary_amount = COALESCE($7, salary_amount), hourly_rate = COALESCE($8, hourly_rate), 
+       department_id = COALESCE($5, department_id), pay_calculation = COALESCE($6, pay_calculation), 
+       amount = COALESCE($7, amount), overtime_rate = COALESCE($8, overtime_rate), 
        is_active = COALESCE($9, is_active), updated_at = CURRENT_TIMESTAMP 
        WHERE user_id = $10 
        RETURNING user_id as id, user_id as employee_id, first_name, last_name, email_id as email, phone_number as phone, department_id as department, is_active, created_at, updated_at`,
@@ -435,17 +458,21 @@ router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
     const db = getDbPool(req);
     const { id } = req.params;
     
-    // Check if user has time entries
+    // Check if user has time entries — cannot hard-delete if history exists
     const timeEntries = await db.query('SELECT COUNT(*) as count FROM time_entries WHERE employee_id = $1', [id]);
     if (parseInt(timeEntries.rows[0].count) > 0) {
-      return res.status(400).json({ error: 'Cannot delete user with time entries' });
+      return res.status(400).json({ error: 'Cannot delete employee with existing time entries' });
     }
 
-    const result = await db.query('UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1 RETURNING user_id', [id]);
+    // Delete salary records first (no cascade defined)
+    await db.query('DELETE FROM salaries WHERE employee_id = $1', [id]);
+
+    // Hard delete — employee_documents cascades automatically
+    const result = await db.query('DELETE FROM users WHERE user_id = $1 RETURNING user_id', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ message: 'User deactivated successfully' });
+    res.json({ message: 'Employee deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }

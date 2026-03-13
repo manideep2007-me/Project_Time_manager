@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../config/database');
 const { authenticateToken, getDbPool } = require('../middleware/auth');
+const { primary: registryPool } = require('../config/databases');
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -14,13 +15,14 @@ router.get('/overview', async (req, res) => {
   try {
     const db = getDbPool(req);
 
-    const [clients, activeProjects, completedProjects, pendingProjects, onHoldProjects, cancelledProjects, activeEmployees, totalTimeEntries] = await Promise.all([
+    const [clients, totalProjects, activeProjects, completedProjects, pendingProjects, onHoldProjects, cancelledProjects, activeEmployees, totalTimeEntries] = await Promise.all([
       db.query('SELECT COUNT(*) as count FROM clients'),
-      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'active'"),
-      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'completed'"),
-      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'pending'"),
-      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'on_hold'"),
-      db.query("SELECT COUNT(*) as count FROM projects WHERE status = 'cancelled'"),
+      db.query('SELECT COUNT(*) as count FROM projects'),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE LOWER(status) IN ('active')"),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE LOWER(status) IN ('completed')"),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE LOWER(status) IN ('pending', 'to do', 'todo')"),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE LOWER(status) IN ('on_hold', 'on hold')"),
+      db.query("SELECT COUNT(*) as count FROM projects WHERE LOWER(status) IN ('cancelled')"),
       db.query("SELECT COUNT(*) as count FROM users WHERE is_active = true AND role != 'admin'"),
       db.query('SELECT COUNT(*) as count FROM time_entries'),
     ]);
@@ -33,11 +35,25 @@ router.get('/overview', async (req, res) => {
        LIMIT 10`
     );
 
+    // Fetch pending registration count for this admin's organization
+    let pendingRegistrations = 0;
+    if (req.user?.organization_id && registryPool) {
+      try {
+        const prResult = await registryPool.query(
+          "SELECT COUNT(*) as count FROM pending_registrations WHERE organization_id = $1 AND status = 'pending'",
+          [req.user.organization_id]
+        );
+        pendingRegistrations = parseInt(prResult.rows[0].count);
+      } catch (prErr) {
+        console.error('Error fetching pending registrations count:', prErr.message);
+      }
+    }
+
     res.json({
       overview: {
         totalClients: parseInt(clients.rows[0].count),
         activeClients: parseInt(clients.rows[0].count),
-        totalProjects: parseInt(activeProjects.rows[0].count) + parseInt(completedProjects.rows[0].count) + parseInt(pendingProjects.rows[0].count) + parseInt(onHoldProjects.rows[0].count) + parseInt(cancelledProjects.rows[0].count),
+        totalProjects: parseInt(totalProjects.rows[0].count),
         activeProjects: parseInt(activeProjects.rows[0].count),
         completedProjects: parseInt(completedProjects.rows[0].count),
         pendingProjects: parseInt(pendingProjects.rows[0].count),
@@ -46,6 +62,7 @@ router.get('/overview', async (req, res) => {
         totalActiveEmployees: parseInt(activeEmployees.rows[0].count),
         totalTimeEntries: parseInt(totalTimeEntries.rows[0].count),
         totalCost: 0,
+        pendingRegistrations,
       },
       recentActivity: recentActivities.rows,
     });

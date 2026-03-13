@@ -37,6 +37,22 @@ const authenticateToken = async (req, res, next) => {
           if (!row.is_active) {
             return res.status(401).json({ error: 'Invalid or inactive user' });
           }
+
+          // Also honor activation status from the organization-specific users table.
+          const orgPool = row.database_name ? getOrgPool(row.database_name) : null;
+          if (orgPool) {
+            try {
+              const orgUser = await orgPool.query(
+                'SELECT is_active FROM users WHERE LOWER(email_id) = LOWER($1) LIMIT 1',
+                [row.email]
+              );
+              if (orgUser.rows.length > 0 && orgUser.rows[0].is_active === false) {
+                return res.status(401).json({ error: 'Your account has been marked inactive by admin. Please contact your administrator.' });
+              }
+            } catch (orgErr) {
+              console.log('Organization user status check failed in middleware:', orgErr.message);
+            }
+          }
           
           // Parse name into first and last name
           const nameParts = (row.employee_name || '').split(' ');
@@ -57,8 +73,8 @@ const authenticateToken = async (req, res, next) => {
           };
           
           // Attach the organization's database pool to the request
-          if (row.database_name) {
-            req.orgPool = getOrgPool(row.database_name);
+          if (orgPool) {
+            req.orgPool = orgPool;
           }
           
           return next();

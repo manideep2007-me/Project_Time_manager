@@ -12,13 +12,12 @@ import {
   TextInput as RNTextInput,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../api/client';
-import Card from '../../components/shared/Card';
+import Input from '../../components/shared/Input';
 import * as DocumentPicker from 'expo-document-picker';
-import AppHeader from '../../components/shared/AppHeader';
 import VoiceToTextButton from '../../components/shared/VoiceToTextButton';
 
 interface TimeEntry {
@@ -29,7 +28,6 @@ interface TimeEntry {
   endTime: string;
   date: string;
 }
-
 interface Task {
   id: string;
   taskName: string;
@@ -450,150 +448,121 @@ export default function AddProjectScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <AppHeader />
-        <View style={styles.header}>
-          <Text style={styles.title}>{t('projects.create_project')}</Text>
-          <Text style={styles.subtitle}>{t('projects.client')}: {clientName || 'Unknown'}</Text>
-        </View>
+    <View style={styles.screenContainer}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={28} color="#101010" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('projects.create_project')}</Text>
+      </View>
 
-        <Card style={styles.formCard}>
-          <View style={styles.form}>
-            {/* Project Name */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>{t('projects.project_name')} *</Text>
-                <VoiceToTextButton
-                  onResult={(text) => setProjectName(prev => prev ? `${prev} ${text}` : text)}
-                  size="small"
-                />
-              </View>
-              <TextInput
-                style={styles.input}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Form Card */}
+        <View style={styles.formCard}>
+          {/* Project Name */}
+          <View style={styles.voiceRow}>
+            <View style={styles.voiceInputFlex}>
+              <Input
+                label={`${t('projects.project_name')} *`}
+                placeholder={t('projects.project_name')}
                 value={projectName}
                 onChangeText={setProjectName}
-                placeholder={t('projects.project_name')}
-                placeholderTextColor="#999"
-                autoCapitalize="words"
-                autoCorrect={false}
-              />
-            </View>
-
-            {/* Client (Hidden/Display Only) */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('projects.client')}</Text>
-              <View style={styles.readOnlyField}>
-                <Text style={styles.readOnlyText}>{clientName || 'Not specified'}</Text>
-              </View>
-            </View>
-
-            {/* Location */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>{t('common.location')}</Text>
-                <VoiceToTextButton
-                  onResult={(text) => setLocation(prev => prev ? `${prev} ${text}` : text)}
-                  size="small"
-                />
-              </View>
-              <TextInput
-                style={styles.input}
-                value={location}
-                onChangeText={setLocation}
-                placeholder={t('common.location')}
-                placeholderTextColor="#999"
                 autoCapitalize="words"
               />
             </View>
+            <VoiceToTextButton
+              onResult={(text) => setProjectName(prev => prev ? `${prev} ${text}` : text)}
+              size="small"
+            />
+          </View>
 
-            {/* Description */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>{t('projects.project_description')}</Text>
-                <VoiceToTextButton
-                  onResult={(text) => setDescription(prev => prev ? `${prev} ${text}` : text)}
-                  size="small"
-                />
-              </View>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={description}
-                onChangeText={setDescription}
-                placeholder={t('projects.project_description')}
-                placeholderTextColor="#999"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
-            {/* Start Date */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Start Date</Text>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowStartDatePicker(true)}
-              >
-                <Text style={styles.dateText}>
-                  {startDate.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-                <Text style={styles.calendarIcon}>📅</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Due Date */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Due Date</Text>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDueDatePicker(true)}
-              >
-                <Text style={styles.dateText}>
-                  {dueDate.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-                <Text style={styles.calendarIcon}>📅</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Estimated Value */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Estimated Value</Text>
-              <TextInput
-                style={styles.input}
-                value={estimatedValue}
-                onChangeText={setEstimatedValue}
-                placeholder="Enter estimated value"
-                placeholderTextColor="#999"
-                keyboardType="numeric"
-              />
+          {/* Client (Read Only) */}
+          <View style={styles.readOnlyGroup}>
+            <Text style={styles.readOnlyLabel}>{t('projects.client')}</Text>
+            <View style={styles.readOnlyField}>
+              <Text style={styles.readOnlyText}>{clientName || 'Not specified'}</Text>
             </View>
           </View>
-        </Card>
 
-        {/* Add Tasks Section */}
-        <Card style={styles.tasksCard}>
+          {/* Location */}
+          <View style={styles.voiceRow}>
+            <View style={styles.voiceInputFlex}>
+              <Input
+                label={t('common.location')}
+                placeholder={t('common.location')}
+                value={location}
+                onChangeText={setLocation}
+                autoCapitalize="words"
+              />
+            </View>
+            <VoiceToTextButton
+              onResult={(text) => setLocation(prev => prev ? `${prev} ${text}` : text)}
+              size="small"
+            />
+          </View>
+
+          {/* Description */}
+          <View style={styles.voiceRow}>
+            <View style={styles.voiceInputFlex}>
+              <Input
+                label={t('projects.project_description')}
+                placeholder={t('projects.project_description')}
+                value={description}
+                onChangeText={setDescription}
+              />
+            </View>
+            <VoiceToTextButton
+              onResult={(text) => setDescription(prev => prev ? `${prev} ${text}` : text)}
+              size="small"
+            />
+          </View>
+
+          {/* Dates Row */}
+          <View style={styles.dateRow}>
+            <View style={styles.dateCol}>
+              <Text style={styles.fieldLabel}>Start Date</Text>
+              <TouchableOpacity style={styles.dateButton} onPress={() => setShowStartDatePicker(true)}>
+                <Text style={styles.dateText}>
+                  {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+                <Ionicons name="calendar-outline" size={18} color="#877ED2" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dateCol}>
+              <Text style={styles.fieldLabel}>Due Date</Text>
+              <TouchableOpacity style={styles.dateButton} onPress={() => setShowDueDatePicker(true)}>
+                <Text style={styles.dateText}>
+                  {dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+                <Ionicons name="calendar-outline" size={18} color="#877ED2" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Estimated Value */}
+          <Input
+            label="Estimated Value"
+            placeholder="Enter estimated value"
+            value={estimatedValue}
+            onChangeText={setEstimatedValue}
+            keyboardType="numeric"
+          />
+        </View>
+
+        {/* Tasks Section */}
+        <View style={styles.tasksCard}>
           <View style={styles.tasksHeader}>
             <Text style={styles.sectionTitle}>{t('tasks.tasks')} ({tasks.length})</Text>
-            <TouchableOpacity
-              style={styles.addTaskButton}
-              onPress={handleAddTask}
-            >
-              <Text style={styles.addTaskButtonText}>+ {t('tasks.create_task')}</Text>
+            <TouchableOpacity style={styles.addTaskButton} onPress={handleAddTask}>
+              <Ionicons name="add" size={18} color="#fff" />
+              <Text style={styles.addTaskButtonText}>{t('tasks.create_task')}</Text>
             </TouchableOpacity>
           </View>
 
           {tasks.length > 0 && (
             <View style={styles.tasksList}>
-              {tasks.map((task, index) => (
+              {tasks.map((task) => (
                 <View key={task.id} style={styles.taskItem}>
                   <View style={styles.taskItemContent}>
                     <Text style={styles.taskItemName}>{task.taskName}</Text>
@@ -612,16 +581,10 @@ export default function AddProjectScreen() {
                     </Text>
                   </View>
                   <View style={styles.taskItemActions}>
-                    <TouchableOpacity
-                      style={styles.editButton}
-                      onPress={() => handleEditTask(task)}
-                    >
+                    <TouchableOpacity style={styles.editButton} onPress={() => handleEditTask(task)}>
                       <Text style={styles.editButtonText}>{t('common.edit')}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => handleDeleteTask(task.id)}
-                    >
+                    <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteTask(task.id)}>
                       <Text style={styles.deleteButtonText}>{t('common.delete')}</Text>
                     </TouchableOpacity>
                   </View>
@@ -629,7 +592,7 @@ export default function AddProjectScreen() {
               ))}
             </View>
           )}
-        </Card>
+        </View>
 
         {/* Date Pickers */}
         {showStartDatePicker && (
@@ -773,7 +736,7 @@ export default function AddProjectScreen() {
                             </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => setShowAssigneePicker(false)}
-                              style={{ backgroundColor: '#007AFF', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              style={{ backgroundColor: '#877ED2', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                             >
                               <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.done')}</Text>
                             </TouchableOpacity>
@@ -812,7 +775,7 @@ export default function AddProjectScreen() {
                           })
                         : t('tasks.select_start_date')}
                     </Text>
-                    <Text style={styles.calendarIcon}>📅</Text>
+                    <Ionicons name="calendar-outline" size={18} color="#877ED2" />
                   </TouchableOpacity>
                 </View>
 
@@ -832,7 +795,7 @@ export default function AddProjectScreen() {
                           })
                         : t('tasks.select_end_date')}
                     </Text>
-                    <Text style={styles.calendarIcon}>📅</Text>
+                    <Ionicons name="calendar-outline" size={18} color="#877ED2" />
                   </TouchableOpacity>
                 </View>
 
@@ -894,7 +857,7 @@ export default function AddProjectScreen() {
                     }}
                   >
                     <Text style={styles.dateText}>Pick files</Text>
-                    <Text style={styles.calendarIcon}>�</Text>
+                    <Ionicons name="attach-outline" size={18} color="#877ED2" />
                   </TouchableOpacity>
                   {(currentTask.attachments || []).length > 0 && (
                     <View style={{ marginTop: 8 }}>
@@ -1198,125 +1161,139 @@ export default function AddProjectScreen() {
           />
         )}
 
-        {/* Action Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleCancel}
-            disabled={loading}
-          >
-            <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>{t('projects.create_project')}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        {/* Submit Button */}
+        <TouchableOpacity
+          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.submitButtonText}>{t('projects.create_project')}</Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screenContainer: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F0F0F0',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 16,
+    backgroundColor: '#F0F0F0',
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+    color: '#1A1A1A',
   },
   scrollView: {
     flex: 1,
   },
-  header: {
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    paddingTop: 24,
+    flexGrow: 1,
   },
   formCard: {
-    margin: 16,
+    borderRadius: 14,
     padding: 20,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  form: {
-    gap: 20,
-  },
-  inputGroup: {
+  voiceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 8,
   },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
+  voiceInputFlex: {
     flex: 1,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1a1a1a',
-    backgroundColor: '#fff',
+  readOnlyGroup: {
+    marginBottom: 20,
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
+  readOnlyLabel: {
+    fontSize: 11,
+    color: '#9E9E9E',
+    marginBottom: 6,
+    fontFamily: 'Inter_400Regular',
   },
   readOnlyField: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F8F9FA',
     borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: '#EAEAEA',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    minHeight: 56,
+    justifyContent: 'center',
   },
   readOnlyText: {
     fontSize: 16,
     color: '#666',
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1A1A1A',
+    marginBottom: 8,
+    fontFamily: 'Inter_400Regular',
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  dateCol: {
+    flex: 1,
   },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
+    borderColor: '#EAEAEA',
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    minHeight: 52,
   },
   dateText: {
-    fontSize: 16,
-    color: '#1a1a1a',
+    fontSize: 14,
+    color: '#1A1A1A',
   },
-  calendarIcon: {
-    fontSize: 18,
-  },
+  // Tasks Section
   tasksCard: {
-    margin: 16,
+    borderRadius: 14,
     padding: 20,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   tasksHeader: {
     flexDirection: 'row',
@@ -1325,15 +1302,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontSize: 18,
+    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+    color: '#1A1A1A',
   },
   addTaskButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#877ED2',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 4,
+    shadowColor: '#A098DC',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 1,
   },
   addTaskButtonText: {
     color: '#fff',
@@ -1344,34 +1330,35 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   taskItem: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#e1e5e9',
+    borderColor: '#E5E7EB',
   },
   taskItemContent: {
-    marginBottom: 8,
+    marginBottom: 10,
   },
   taskItemName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#1A1A1A',
     marginBottom: 4,
   },
   taskItemDetails: {
     fontSize: 12,
     color: '#666',
+    lineHeight: 18,
   },
   taskItemActions: {
     flexDirection: 'row',
     gap: 8,
   },
   editButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    backgroundColor: '#877ED2',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
   editButtonText: {
     color: '#fff',
@@ -1380,15 +1367,39 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: '#FF3B30',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
   deleteButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
   },
+  // Submit
+  submitButton: {
+    backgroundColor: '#877ED2',
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#A098DC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    shadowOpacity: 0.1,
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1407,12 +1418,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
+    borderBottomColor: '#EAEAEA',
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontSize: 20,
+    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+    color: '#1A1A1A',
   },
   modalCloseButton: {
     width: 32,
@@ -1420,10 +1432,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F0F0F0',
   },
   modalCloseIcon: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#666',
     fontWeight: '300',
   },
@@ -1440,32 +1452,69 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   modalLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1A1A1A',
     flex: 1,
+    fontFamily: 'Inter_400Regular',
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
+    borderColor: '#EAEAEA',
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     fontSize: 16,
-    color: '#1a1a1a',
+    color: '#1A1A1A',
     backgroundColor: '#fff',
+    minHeight: 56,
   },
-  // Time Tracking Button Styles
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 10,
+    padding: 16,
+    alignItems: 'center',
+  },
+  modalCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  modalSaveButton: {
+    flex: 1,
+    backgroundColor: '#877ED2',
+    borderRadius: 10,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#A098DC',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  modalSaveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  // Time Tracking
   timeTrackingButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
+    borderColor: '#EAEAEA',
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: '#fff',
+    minHeight: 52,
   },
   timeTrackingButtonLeft: {
     flexDirection: 'row',
@@ -1483,9 +1532,9 @@ const styles = StyleSheet.create({
   timeTrackingValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#877ED2',
   },
-  // Time Tracking Modal Styles
+  // Time Modal
   timeModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1504,12 +1553,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
+    borderBottomColor: '#EAEAEA',
   },
   timeModalTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+    color: '#1A1A1A',
   },
   timeModalScrollView: {
     padding: 20,
@@ -1526,9 +1576,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   totalTimeValue: {
-      fontSize: 18,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: '#1A1A1A',
   },
   timeInputSection: {
     marginBottom: 20,
@@ -1541,19 +1591,19 @@ const styles = StyleSheet.create({
   timeInput: {
     flex: 1,
     borderWidth: 2,
-    borderColor: '#007AFF',
-    borderRadius: 8,
+    borderColor: '#877ED2',
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#1a1a1a',
+    color: '#1A1A1A',
     backgroundColor: '#fff',
   },
   timerButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#877ED2',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1565,7 +1615,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f2f5',
+    borderBottomColor: '#F0F0F0',
     gap: 12,
   },
   timeDetailIcon: {
@@ -1581,7 +1631,7 @@ const styles = StyleSheet.create({
   timeDetailInput: {
     flex: 1,
     fontSize: 14,
-    color: '#1a1a1a',
+    color: '#1A1A1A',
     paddingVertical: 0,
   },
   billableToggle: {
@@ -1594,12 +1644,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#e1e5e9',
+    backgroundColor: '#EAEAEA',
     padding: 2,
     justifyContent: 'center',
   },
   toggleSwitchActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#877ED2',
   },
   toggleThumb: {
     width: 20,
@@ -1616,12 +1666,17 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   saveTimeButton: {
-    backgroundColor: '#7B68EE',
-    borderRadius: 8,
+    backgroundColor: '#877ED2',
+    borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 20,
     marginBottom: 20,
+    shadowColor: '#A098DC',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 1,
   },
   saveTimeButtonText: {
     fontSize: 16,
@@ -1644,7 +1699,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f2f5',
+    borderBottomColor: '#F0F0F0',
   },
   timeEntryLeft: {
     flexDirection: 'row',
@@ -1655,7 +1710,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#877ED2',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1670,7 +1725,7 @@ const styles = StyleSheet.create({
   timeEntryUserName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#1A1A1A',
     marginBottom: 2,
   },
   timeEntryTime: {
@@ -1686,20 +1741,20 @@ const styles = StyleSheet.create({
   timeEntryDuration: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#1A1A1A',
   },
   // Time chips
   timeChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#e1e5e9',
+    borderColor: '#EAEAEA',
     borderRadius: 18,
     backgroundColor: '#fff',
   },
   timeChipText: {
     fontSize: 14,
-    color: '#1a1a1a',
+    color: '#1A1A1A',
   },
   timePickerContent: {
     backgroundColor: '#fff',
@@ -1716,11 +1771,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f2f5',
+    borderBottomColor: '#F0F0F0',
   },
   timeSelectLabel: {
     fontSize: 16,
-    color: '#1a1a1a',
+    color: '#1A1A1A',
   },
   timeSelectHint: {
     fontSize: 12,
@@ -1749,13 +1804,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e1e5e9',
+    borderColor: '#EAEAEA',
     backgroundColor: '#fff',
     alignItems: 'center',
   },
   statusButtonSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#877ED2',
+    borderColor: '#877ED2',
   },
   statusButtonText: {
     fontSize: 12,
@@ -1765,21 +1820,22 @@ const styles = StyleSheet.create({
   statusButtonTextSelected: {
     color: '#fff',
   },
-  // Assignee selector styles
+  // Assignee selector
   selector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
+    borderColor: '#EAEAEA',
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: '#fff',
+    minHeight: 56,
   },
   selectorText: {
     fontSize: 16,
-    color: '#1a1a1a',
+    color: '#1A1A1A',
     flex: 1,
     marginRight: 8,
   },
@@ -1790,8 +1846,8 @@ const styles = StyleSheet.create({
   dropdown: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
+    borderColor: '#EAEAEA',
+    borderRadius: 12,
     backgroundColor: '#fff',
   },
   dropdownLoading: {
@@ -1807,84 +1863,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f2f5',
+    borderBottomColor: '#F0F0F0',
   },
   dropdownItemSelected: {
-    backgroundColor: '#F0F7FF',
+    backgroundColor: '#F3F1FC',
   },
   dropdownItemText: {
     fontSize: 16,
-    color: '#1a1a1a',
+    color: '#1A1A1A',
   },
   dropdownItemTextSelected: {
-    color: '#007AFF',
+    color: '#877ED2',
     fontWeight: '600',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  modalCancelButton: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  modalCancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  modalSaveButton: {
-    flex: 1,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  modalSaveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    paddingBottom: 32,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  submitButton: {
-    flex: 1,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
   },
 });
 

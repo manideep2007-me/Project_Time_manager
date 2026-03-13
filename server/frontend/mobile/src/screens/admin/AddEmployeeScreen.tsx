@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert,
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../../api/client';
 import { Ionicons } from '@expo/vector-icons';
@@ -208,6 +208,43 @@ function FloatingLabelDateInput({ label, value, onPress, required }: FloatingLab
 // Dropdown data
 const SALUTATIONS = ['Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'];
 
+// Route params type for pending registration approval and edit mode
+interface PendingRegistrationData {
+  id: number;
+  email: string;
+  phone: string;
+  first_name: string;
+  last_name: string;
+  gender?: string;
+  age?: number;
+}
+
+interface EditEmployeeData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  designation?: string;
+  department?: string;
+  salary?: number;
+  overtimeRate?: number;
+  address?: string;
+  employmentType?: string;
+  dateOfBirth?: string;
+  joiningDate?: string;
+  aadhaarNumber?: string;
+  payCalculation?: string;
+  isActive?: boolean;
+}
+
+type AddEmployeeRouteParams = {
+  AddEmployee: {
+    pendingRegistration?: PendingRegistrationData;
+    editEmployee?: EditEmployeeData;
+  };
+};
+
 // Country and State types
 interface Country {
   country_id: string;
@@ -242,6 +279,13 @@ const PHONE_CODES = [
 export default function AddEmployeeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  const route = useRoute<RouteProp<AddEmployeeRouteParams, 'AddEmployee'>>();
+  
+  // Check if this is a pending registration approval or edit mode
+  const pendingRegistration = route.params?.pendingRegistration;
+  const editEmployee = route.params?.editEmployee;
+  const isApprovalMode = !!pendingRegistration;
+  const isEditMode = !!editEmployee;
 
   const [saving, setSaving] = useState(false);
 
@@ -275,6 +319,112 @@ export default function AddEmployeeScreen() {
   const [city, setCity] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  // Pre-fill form with pending registration data
+  useEffect(() => {
+    if (pendingRegistration) {
+      setFirstName(pendingRegistration.first_name || '');
+      setLastName(pendingRegistration.last_name || '');
+      setEmail(pendingRegistration.email || '');
+      
+      // Parse phone number - handle formats like "+91 9876543210" or "9876543210"
+      const phoneStr = pendingRegistration.phone || '';
+      const phoneMatch = phoneStr.match(/^(\+\d{1,4})\s*(.*)$/);
+      if (phoneMatch) {
+        setPhoneCode(phoneMatch[1]);
+        setPhone(phoneMatch[2]);
+      } else {
+        setPhone(phoneStr);
+      }
+      
+      // Set salutation based on gender if available
+      if (pendingRegistration.gender) {
+        const gender = pendingRegistration.gender.toLowerCase();
+        if (gender === 'male') setSalutation('Mr.');
+        else if (gender === 'female') setSalutation('Ms.');
+      }
+      
+      // Calculate DOB from age if provided
+      if (pendingRegistration.age && pendingRegistration.age > 0) {
+        const birthYear = new Date().getFullYear() - pendingRegistration.age;
+        setDob(new Date(birthYear, 0, 1));
+      }
+    }
+  }, [pendingRegistration]);
+
+  // Pre-fill form with existing employee data for editing
+  useEffect(() => {
+    if (editEmployee) {
+      setFirstName(editEmployee.firstName || '');
+      setLastName(editEmployee.lastName || '');
+      setEmail(editEmployee.email || '');
+      
+      // Parse phone number
+      const phoneStr = editEmployee.phone || '';
+      const phoneMatch = phoneStr.match(/^(\+\d{1,4})\s*(.*)$/);
+      if (phoneMatch) {
+        setPhoneCode(phoneMatch[1]);
+        setPhone(phoneMatch[2]);
+      } else {
+        setPhone(phoneStr);
+      }
+      
+      // Set designation/skill
+      if (editEmployee.designation) {
+        setSkill(editEmployee.designation);
+      }
+      
+      // Set address
+      if (editEmployee.address) {
+        setAddress(editEmployee.address);
+      }
+      
+      // Set aadhaar
+      if (editEmployee.aadhaarNumber) {
+        setAadhaarNumber(editEmployee.aadhaarNumber);
+      }
+      
+      // Set DOB
+      if (editEmployee.dateOfBirth) {
+        setDob(new Date(editEmployee.dateOfBirth));
+      }
+      
+      // Set joining date
+      if (editEmployee.joiningDate) {
+        setJoiningDate(new Date(editEmployee.joiningDate));
+      }
+      
+      // Set employment type
+      if (editEmployee.employmentType) {
+        const empType = editEmployee.employmentType;
+        if (empType === 'Full Time' || empType === 'Temporary' || empType === 'Contract') {
+          setEmployeeType(empType);
+        }
+      }
+      
+      // Set salary
+      if (editEmployee.salary) {
+        setAmount(String(editEmployee.salary));
+      }
+      
+      // Set overtime rate
+      if (editEmployee.overtimeRate) {
+        setOvertimeRate(String(editEmployee.overtimeRate));
+      }
+      
+      // Set pay calculation
+      if (editEmployee.payCalculation) {
+        const payCalc = editEmployee.payCalculation;
+        if (payCalc === 'monthly' || payCalc === 'Monthly') {
+          setPayCalculation('Monthly');
+        } else if (payCalc === 'daily' || payCalc === 'Daily') {
+          setPayCalculation('Daily');
+        } else if (payCalc === 'hourly' || payCalc === 'Hourly rate') {
+          setPayCalculation('Hourly rate');
+        }
+      }
+    }
+  }, [editEmployee]);
 
   // Fetch countries on mount
   useEffect(() => {
@@ -372,11 +522,25 @@ export default function AddEmployeeScreen() {
 
   const validate = () => {
     const errors: string[] = [];
-    if (!salutation) errors.push('Salutation');
+    
+    // Basic required fields for all modes
     if (!firstName.trim()) errors.push('First Name');
     if (!lastName.trim()) errors.push('Last Name');
-    if (!skill) errors.push('Designation');
     if (!phone.trim()) errors.push('Phone Number');
+    
+    // For edit mode, only require basic fields
+    if (isEditMode) {
+      if (email && (!email.includes('@') || !email.includes('.'))) errors.push('Valid Email');
+      if (errors.length) {
+        Alert.alert('Validation Error', `Please provide:\n\n• ${errors.join('\n• ')}`);
+        return false;
+      }
+      return true;
+    }
+    
+    // Full validation for new employee and approval modes
+    if (!salutation) errors.push('Salutation');
+    if (!skill) errors.push('Designation');
     if (!address.trim()) errors.push('Address');
     if (!country) errors.push('Country');
     if (!state) errors.push('State');
@@ -398,22 +562,14 @@ export default function AddEmployeeScreen() {
     if (!validate()) return;
     try {
       setSaving(true);
-      const employeeId = `EMP-${Date.now()}`;
 
       const payload: any = {
-        employeeId,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim() || undefined,
-        phone: `${phoneCode} ${phone.trim()}`,
         salutation: salutation,
         dateOfBirth: dob ? dob.toISOString().split('T')[0] : undefined,
-        designationId: skillId || undefined,  // Send designation UUID
+        designationId: skillId || undefined,
         address: address.trim(),
-        countryId: countryId || undefined,  // Send country UUID
-        stateId: stateId || undefined,      // Send state UUID
-        city: city.trim(),
-        zipCode: zipCode.trim(),
+        countryId: countryId || undefined,
+        stateId: stateId || undefined,
         aadhaarNumber: aadhaarNumber.trim(),
         joiningDate: joiningDate ? joiningDate.toISOString().split('T')[0] : undefined,
         employmentType: employeeType,
@@ -422,9 +578,55 @@ export default function AddEmployeeScreen() {
         overtimeRate: Number(overtimeRate) || 0,
       };
 
-      // Create the employee first
-      const createRes = await api.post('/api/employees', payload);
-      const newEmployeeId = createRes.data?.employee?.id;
+      let newEmployeeId: string | undefined;
+
+      if (isApprovalMode && pendingRegistration) {
+        // Approval mode - call the approve API
+        const approveRes = await api.post(`/api/pending-registrations/${pendingRegistration.id}/approve`, payload);
+        newEmployeeId = approveRes.data?.employee?.id;
+        
+        Alert.alert('Success', `${pendingRegistration.first_name} ${pendingRegistration.last_name} has been approved and added as an employee.`, [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      } else if (isEditMode && editEmployee) {
+        // Edit mode - call the update API
+        const updatePayload = {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim() || undefined,
+          phone: `${phoneCode} ${phone.trim()}`,
+          salaryType: payCalculation === 'Hourly rate' ? 'hourly' : payCalculation.toLowerCase(),
+          salaryAmount: Number(amount) || 0,
+          isActive: true,
+        };
+
+        await api.put(`/api/employees/${editEmployee.id}`, updatePayload);
+        newEmployeeId = editEmployee.id;
+
+        Alert.alert('Success', 'Employee updated successfully', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      } else {
+        // Normal add employee flow
+        const employeeId = `EMP-${Date.now()}`;
+        const createPayload = {
+          ...payload,
+          employeeId,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim() || undefined,
+          phone: `${phoneCode} ${phone.trim()}`,
+          city: city.trim(),
+          zipCode: zipCode.trim(),
+        };
+
+        const createRes = await api.post('/api/employees', createPayload);
+        newEmployeeId = createRes.data?.employee?.id;
+
+        Alert.alert('Success', 'Employee saved successfully', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      }
 
       // If a photo is selected, upload it
       if (newEmployeeId && photoUri) {
@@ -447,13 +649,9 @@ export default function AddEmployeeScreen() {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
       }
-
-      Alert.alert('Success', 'Employee saved successfully', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
     } catch (e: any) {
       console.error('Save employee failed:', e);
-      let msg = 'Failed to save employee.';
+      let msg = isApprovalMode ? 'Failed to approve registration.' : isEditMode ? 'Failed to update employee.' : 'Failed to save employee.';
       if (e?.response?.data?.error) msg = e.response.data.error;
       if (e?.response?.data?.details?.length) {
         msg += `\n\n${e.response.data.details.map((d: any) => `• ${d.msg} (${d.path})`).join('\n')}`;
@@ -534,9 +732,31 @@ export default function AddEmployeeScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Employee</Text>
+          <Text style={styles.headerTitle}>
+            {isApprovalMode ? 'Complete Employee Details' : isEditMode ? 'Edit Employee' : 'Add Employee'}
+          </Text>
         </View>
       </View>
+
+      {/* Show pre-filled info banner in approval mode */}
+      {isApprovalMode && pendingRegistration && (
+        <View style={styles.prefillBanner}>
+          <Ionicons name="information-circle" size={20} color="#1976D2" />
+          <Text style={styles.prefillBannerText}>
+            Pre-filled with registration data. Complete the remaining fields.
+          </Text>
+        </View>
+      )}
+
+      {/* Show edit info banner in edit mode */}
+      {isEditMode && editEmployee && (
+        <View style={styles.prefillBanner}>
+          <Ionicons name="create" size={20} color="#1976D2" />
+          <Text style={styles.prefillBannerText}>
+            Editing {editEmployee.firstName} {editEmployee.lastName}'s details.
+          </Text>
+        </View>
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         {/* Personal & Contact Information Card */}
@@ -910,6 +1130,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+  },
+  prefillBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+  },
+  prefillBannerText: {
+    fontSize: 13,
+    color: '#1976D2',
+    marginLeft: 8,
+    flex: 1,
   },
   headerRight: {
     flexDirection: 'row',

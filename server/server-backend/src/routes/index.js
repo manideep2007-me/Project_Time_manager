@@ -15,5 +15,6 @@ module.exports = {
   countries: require('./countries'),
   states: require('./states'),
   designations: require('./designations'),
+  pendingRegistrations: require('./pendingRegistrations'),
 };
 

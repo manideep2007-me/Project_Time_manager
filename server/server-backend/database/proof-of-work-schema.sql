@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS proof_of_work (
   id SERIAL PRIMARY KEY,
   user_id VARCHAR(255) NOT NULL,
+  user_role VARCHAR(20) DEFAULT 'employee',
   photo_url TEXT NOT NULL,
   verified_timestamp TIMESTAMPTZ NOT NULL,
   latitude NUMERIC(10, 8) NOT NULL,
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS proof_of_work (
 CREATE INDEX IF NOT EXISTS idx_proof_user_id ON proof_of_work(user_id);
 CREATE INDEX IF NOT EXISTS idx_proof_timestamp ON proof_of_work(verified_timestamp);
 CREATE INDEX IF NOT EXISTS idx_proof_location ON proof_of_work(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_proof_of_work_user_role ON proof_of_work(user_id, user_role);
 
 -- Comments for documentation
 COMMENT ON TABLE proof_of_work IS 'Stores cryptographically verified location and timestamp proofs with anti-tamper protection';

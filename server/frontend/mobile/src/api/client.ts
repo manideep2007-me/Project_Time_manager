@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { API_BASE_URL } from '../utils/config';
 
 const TOKEN_KEY = 'auth_token';
+const ENABLE_API_DEBUG_LOGS = false;
 
 // Web-compatible storage fallback
 const getStorage = () => {
@@ -87,10 +88,12 @@ export function createApiClient(): AxiosInstance {
   instance.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     const token = await getStoredToken();
     const fullUrl = `${config.baseURL}${config.url}`;
-    console.log('API Request:', config.method?.toUpperCase(), fullUrl);
-    console.log('Request data:', config.data);
-    console.log('Base URL:', config.baseURL);
-    console.log('Token:', !!token);
+    if (ENABLE_API_DEBUG_LOGS) {
+      console.log('API Request:', config.method?.toUpperCase(), fullUrl);
+      console.log('Request data:', config.data);
+      console.log('Base URL:', config.baseURL);
+      console.log('Token:', !!token);
+    }
     
     // List of endpoints that don't require authentication
     const publicEndpoints = [
@@ -101,14 +104,17 @@ export function createApiClient(): AxiosInstance {
       '/api/organizations/join',
       '/api/otp/send',
       '/api/otp/verify',
-      '/api/otp/resend'
+      '/api/otp/resend',
+      '/api/auth/registration-data',
     ];
     
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint));
     
     // If no token and this is not a public endpoint, reject the request
     if (!token && !isPublicEndpoint) {
-      console.log('No token available, rejecting API request for offline mode');
+      if (ENABLE_API_DEBUG_LOGS) {
+        console.log('No token available, rejecting API request for offline mode');
+      }
       return Promise.reject(new Error('No authentication token available - offline mode'));
     }
     
@@ -130,37 +136,43 @@ export function createApiClient(): AxiosInstance {
 
   instance.interceptors.response.use(
     (response: AxiosResponse) => {
-      console.log('✅ API Response:', response.status, response.config.url);
-      console.log('Response data:', response.data);
+      if (ENABLE_API_DEBUG_LOGS) {
+        console.log('✅ API Response:', response.status, response.config.url);
+        console.log('Response data:', response.data);
+      }
       return response;
     },
     async (error) => {
-      console.error('❌ API Error occurred');
-      console.error('Error message:', error.message);
-      console.error('Error code:', error.code);
-      console.error('Error status:', error.response?.status);
-      console.error('Error URL:', error.config?.url);
-      console.error('Full error:', error);
-      
-      if (error.response) {
-        // Server responded with error status
-        console.error('Response data:', error.response.data);
-        console.error('Response headers:', error.response.headers);
-      } else if (error.request) {
-        // Request was made but no response received
-        console.error('No response received. Request details:', error.request);
-        console.error('This usually means:');
-        console.error('1. Backend server is not running');
-        console.error('2. CORS is blocking the request');
-        console.error('3. Network connectivity issue');
-      } else {
-        // Error in request setup
-        console.error('Error setting up request:', error.message);
+      if (ENABLE_API_DEBUG_LOGS) {
+        console.error('❌ API Error occurred');
+        console.error('Error message:', error.message);
+        console.error('Error code:', error.code);
+        console.error('Error status:', error.response?.status);
+        console.error('Error URL:', error.config?.url);
+        console.error('Full error:', error);
+        
+        if (error.response) {
+          // Server responded with error status
+          console.error('Response data:', error.response.data);
+          console.error('Response headers:', error.response.headers);
+        } else if (error.request) {
+          // Request was made but no response received
+          console.error('No response received. Request details:', error.request);
+          console.error('This usually means:');
+          console.error('1. Backend server is not running');
+          console.error('2. CORS is blocking the request');
+          console.error('3. Network connectivity issue');
+        } else {
+          // Error in request setup
+          console.error('Error setting up request:', error.message);
+        }
       }
       
       // Handle 401 Unauthorized - clear token and redirect to login
       if (error.response?.status === 401) {
-        console.log('401 Unauthorized - clearing stored token');
+        if (ENABLE_API_DEBUG_LOGS) {
+          console.log('401 Unauthorized - clearing stored token');
+        }
         await setStoredToken(null);
       }
       

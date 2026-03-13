@@ -16,6 +16,7 @@ export interface DashboardOverview {
   totalCost: number;
   activeTimeEntries?: number;
   totalTimeEntries?: number;
+  pendingRegistrations?: number;
 }
 
 export interface Project {

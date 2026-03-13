@@ -196,7 +196,7 @@ export default function ProjectTasksScreen() {
       
       // Load tasks for this project with employee info
       console.log('🔍 Fetching tasks for project:', projectId);
-      const response = await api.get(`/api/tasks?projectId=${projectId}&page=1&limit=100`);
+      const response = await api.get(`/api/projects/${projectId}/tasks`, { params: { page: 1, limit: 100 } });
       
       console.log('📊 API Response:', JSON.stringify(response.data, null, 2));
       
@@ -472,142 +472,154 @@ export default function ProjectTasksScreen() {
     option.label.toLowerCase().includes(statusSearch.toLowerCase())
   );
 
+  const totalTasks = departmentGroups.reduce((sum, g) => sum + g.tasks.length, 0);
+
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading tasks...</Text>
-      </View>
+      <SafeAreaWrapper backgroundColor="#877ED2">
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.loadingText}>Loading tasks...</Text>
+        </View>
+      </SafeAreaWrapper>
     );
   }
 
   return (
-    <SafeAreaWrapper>
+    <SafeAreaWrapper backgroundColor="#877ED2">
+      {/* Fixed Header */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerBarTitle} numberOfLines={1}>{String(projectName || 'Project Tasks')}</Text>
+        <TouchableOpacity onPress={() => handleAddTask('')} style={styles.headerActionBtn}>
+          <Ionicons name="add-circle-outline" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={departmentGroups.length === 0 ? styles.scrollContentEmpty : styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#877ED2" colors={['#877ED2']} />}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.projectLabel}>PROJECT NAME</Text>
-              <Text style={styles.title}>{String(projectName || 'Project')}</Text>
-              {/* <Text style={styles.subtitle}>{departmentGroups.reduce((sum, g) => sum + g.tasks.length, 0)} tasks</Text> */}
-            </View>
-            <TouchableOpacity
-              style={styles.headerAddButton}
-              onPress={() => handleAddTask('')}
-            >
-              <Text style={styles.headerAddButtonText}>+ Add Task</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {departmentGroups.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No tasks</Text>
-            <Text style={styles.emptySubtitle}>Pull to refresh to load tasks.</Text>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="clipboard-outline" size={48} color="#877ED2" />
+            </View>
+            <Text style={styles.emptyTitle}>No tasks yet</Text>
+            <Text style={styles.emptySubtitle}>Tap + to create your first task{"\n"}or pull down to refresh</Text>
           </View>
         ) : (
           departmentGroups.map((group, groupIndex) => (
             <View key={groupIndex} style={styles.departmentSection}>
-              {/* Department Header */}
-              <View style={styles.departmentHeader}>
-                <View>
-                  <Text style={styles.departmentLabel}>DEPARTMENT</Text>
-                  <Text style={styles.departmentName}>{group.department}</Text>
+              {/* Section Title */}
+              <Text style={styles.sectionTitle}>{group.department}</Text>
+
+              {/* Summary Row */}
+              <View style={styles.summaryCards}>
+                <View style={styles.summaryCard}>
+                  <View style={[styles.summaryIconBg, { backgroundColor: '#F3F2FF' }]}> 
+                    <Ionicons name="time-outline" size={16} color="#877ED2" />
+                  </View>
+                  <View>
+                    <Text style={styles.summaryValue}>{group.totalHours}h</Text>
+                    <Text style={styles.summaryLabel}>Hours</Text>
+                  </View>
+                </View>
+                <View style={styles.summaryCard}>
+                  <View style={[styles.summaryIconBg, { backgroundColor: '#E8FAF0' }]}> 
+                    <Ionicons name="cash-outline" size={16} color="#34C759" />
+                  </View>
+                  <View>
+                    <Text style={styles.summaryValue}>₹{group.totalCost.toLocaleString('en-IN')}</Text>
+                    <Text style={styles.summaryLabel}>Cost</Text>
+                  </View>
                 </View>
               </View>
 
-              {/* Department Summary */}
-              <View style={styles.summaryCards}>
-                <Card style={styles.summaryCard}>
-                  <Text style={styles.summaryValue}>{group.totalHours}h</Text>
-                  <Text style={styles.summaryLabel}>Total Hours</Text>
-                </Card>
-                <Card style={styles.summaryCard}>
-                  <Text style={styles.summaryValue}>₹{group.totalCost.toLocaleString('en-IN')}</Text>
-                  <Text style={styles.summaryLabel}>Total Cost</Text>
-                </Card>
-              </View>
-
-              {/* Task List */}
-              {group.tasks.map((task, taskIndex) => (
-                <TouchableOpacity
-                  key={task.id}
-                  style={styles.taskItem}
-                  onPress={() => handleEditTask(task.id)}
-                >
-                  <View style={styles.taskContent}>
-                    <View>
-                      <Text style={styles.taskLabel}>TASK</Text>
-                      <Text style={styles.taskName}>{task.title}</Text>
+              {/* Task Cards */}
+              {group.tasks.map((task) => {
+                const statusColor = getStatusColor(task.status);
+                return (
+                  <TouchableOpacity
+                    key={task.id}
+                    style={styles.taskCard}
+                    onPress={() => handleEditTask(task.id)}
+                    activeOpacity={0.7}
+                  >
+                    {/* Status badge at top */}
+                    <View style={[styles.taskStatusBadge, { backgroundColor: statusColor }]}>
+                      <Text style={styles.taskStatusBadgeText}>{translateStatus(task.status, t)}</Text>
                     </View>
-                    <View style={styles.taskDetails}>
-                      <View style={styles.taskDetail}>
-                        <Text style={styles.taskDetailLabel}>Assigned to</Text>
-                        <Text style={styles.taskDetailValue}>
-                          {task.assigned_employees && task.assigned_employees.length > 0
-                            ? task.assigned_employees.map(emp => `${emp.first_name} ${emp.last_name}`).join(', ')
-                            : 'Unassigned'}
+
+                    <Text style={styles.taskName} numberOfLines={2}>{task.title}</Text>
+
+                    {/* Assignee */}
+                    <View style={styles.taskMetaRow}>
+                      <Ionicons name="person-outline" size={14} color="#8E8E93" />
+                      <Text style={styles.taskMetaText} numberOfLines={1}>
+                        {task.assigned_employees && task.assigned_employees.length > 0
+                          ? task.assigned_employees.map(emp => `${emp.first_name} ${emp.last_name}`).join(', ')
+                          : 'Unassigned'}
+                      </Text>
+                    </View>
+
+                    {/* Dates row */}
+                    <View style={styles.taskDatesRow}>
+                      <View style={styles.taskDateItem}>
+                        <Text style={styles.taskDateLabel}>Start</Text>
+                        <Text style={styles.taskDateValue}>
+                          {task.created_at
+                            ? new Date(task.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : '-'}
                         </Text>
                       </View>
-                      
-                      <TouchableOpacity 
-                        style={styles.taskDetail}
-                        onPress={() => handleStatusClick(task)}
-                      >
-                        <Text style={styles.taskDetailLabel}>Status</Text>
-                        <View style={[styles.statusDot, { backgroundColor: getStatusColor(task.status) }]} />
-                        <Text style={styles.taskDetailValue}>{translateStatus(task.status, t).toUpperCase()}</Text>
-                        <Text style={styles.statusArrow}> ▼</Text>
-                      </TouchableOpacity>
-                      
-                      <View style={styles.taskDetail}>
-                        <Text style={styles.taskDetailLabel}>Due by</Text>
-                        <Text style={styles.taskDetailValue}>
-                          {task.due_date 
-                            ? new Date(task.due_date).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })
-                            : 'No due date'}
+                      <View style={styles.taskDateItem}>
+                        <Text style={styles.taskDateLabel}>Due</Text>
+                        <Text style={styles.taskDateValue}>
+                          {task.due_date
+                            ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : '-'}
                         </Text>
                       </View>
-                      <View style={styles.taskDetail}>
-                        <Text style={styles.fieldLabel}>Total Hours:</Text>
-                        <Text style={styles.fieldValue}>
-                          {task.total_time_minutes 
+                    </View>
+
+                    {/* Footer */}
+                    <View style={styles.taskFooter}>
+                      <View style={styles.taskFooterStats}>
+                        <Ionicons name="time-outline" size={13} color="#877ED2" />
+                        <Text style={styles.taskFooterText}>
+                          {task.total_time_minutes
                             ? `${Math.floor(task.total_time_minutes / 60)}h ${task.total_time_minutes % 60}m`
                             : '0h'}
                         </Text>
-                      </View>
-                      <View style={[styles.taskDetail, { marginTop: 0 }]}> 
-                        <Text style={styles.fieldLabel}>Total Cost:</Text>
-                        <Text style={styles.fieldValue}>
-                          ₹{task.total_cost ? task.total_cost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0'}
+                        <View style={styles.taskFooterDot} />
+                        <Ionicons name="cash-outline" size={13} color="#34C759" />
+                        <Text style={styles.taskFooterText}>
+                          ₹{task.total_cost ? task.total_cost.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '0'}
                         </Text>
                       </View>
+                      <View style={styles.taskFooterActions}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleStatusClick(task)}
+                        >
+                          <Ionicons name="swap-horizontal" size={15} color="#877ED2" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleEditTask(task.id)}
+                        >
+                          <Ionicons name="create-outline" size={15} color="#877ED2" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-                  {/* Task Actions */}
-                  <View style={styles.taskActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleEditTask(task.id)}
-                    >
-                      <Ionicons name="create-outline" size={18} color="#007AFF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleAttachment(task.id)}
-                    >
-                      <Ionicons name="attach-outline" size={18} color="#007AFF" />
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           ))
         )}
@@ -624,12 +636,10 @@ export default function ProjectTasksScreen() {
           {/* Header */}
           <View style={styles.createTaskHeader}>
             <TouchableOpacity onPress={handleCloseModal} style={styles.backButton}>
-              <Ionicons name="chevron-back" size={24} color="#1C1C1E" />
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
             <Text style={styles.createTaskTitle}>Create New Task</Text>
-            <TouchableOpacity style={styles.menuButton}>
-              <Ionicons name="ellipsis-vertical" size={20} color="#1C1C1E" />
-            </TouchableOpacity>
+            <View style={{ width: 28 }} />
           </View>
 
           <ScrollView style={styles.createTaskContent} showsVerticalScrollIndicator={false}>
@@ -644,7 +654,7 @@ export default function ProjectTasksScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Select Project (read-only showing current project) */}
+            {/* Select Project (read-only) */}
             <View style={styles.inputField}>
               <View style={styles.inputContainer}>
                 <Text style={styles.inputText}>{projectName || 'Select Project*'}</Text>
@@ -660,7 +670,7 @@ export default function ProjectTasksScreen() {
                   placeholder="Task Title"
                   value={taskName}
                   onChangeText={setTaskName}
-                  placeholderTextColor="#8E8E93"
+                  placeholderTextColor="#9CA3AF"
                 />
               </View>
               <VoiceToTextButton
@@ -680,7 +690,7 @@ export default function ProjectTasksScreen() {
                   onChangeText={setDescription}
                   multiline
                   numberOfLines={3}
-                  placeholderTextColor="#8E8E93"
+                  placeholderTextColor="#9CA3AF"
                 />
               </View>
               <VoiceToTextButton
@@ -755,7 +765,6 @@ export default function ProjectTasksScreen() {
                 </TouchableOpacity>
               </View>
               
-              {/* Selected Team Members */}
               {selectedAssignees.length > 0 && teamMembers.filter(m => selectedAssignees.includes(m.id)).map((member) => (
                 <View key={member.id} style={styles.teamMemberRow}>
                   <View style={styles.teamMemberInfo}>
@@ -772,7 +781,7 @@ export default function ProjectTasksScreen() {
                   <TouchableOpacity 
                     onPress={() => setSelectedAssignees(prev => prev.filter(id => id !== member.id))}
                   >
-                    <Ionicons name="close" size={20} color="#8E8E93" />
+                    <Ionicons name="close-circle" size={20} color="#FF3B30" />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -832,7 +841,6 @@ export default function ProjectTasksScreen() {
           </ScrollView>
         </View>
 
-        {/* Date Pickers */}
         {showStartDatePicker && (
           <DateTimePicker
             value={startDate}
@@ -870,44 +878,37 @@ export default function ProjectTasksScreen() {
           onPress={() => setShowStatusModal(false)}
         >
           <View style={styles.statusModalContent}>
-            {/* Search Input */}
+            <Text style={styles.statusModalTitle}>Change Status</Text>
             <View style={styles.statusSearchContainer}>
               <TextInput
                 style={styles.statusSearchInput}
                 placeholder="Search..."
                 value={statusSearch}
                 onChangeText={setStatusSearch}
-                placeholderTextColor="#8E8E93"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
 
-            {/* Statuses Section */}
-            <View style={styles.statusesSection}>
-              
-
-              <ScrollView style={styles.statusList}>
-                {filteredStatusOptions.map((option, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.statusOption,
-                      selectedTask?.status === option.value && styles.statusOptionActive
-                    ]}
-                    onPress={() => handleStatusChange(option.value as TaskStatus)}
-                  >
-                    <View style={styles.statusOptionLeft}>
-                      <Text style={[styles.statusOptionIcon, { color: option.color }]}>
-                        {option.icon}
-                      </Text>
-                      <Text style={styles.statusOptionLabel}>{option.label}</Text>
-                    </View>
-                    {selectedTask?.status === option.value && (
-                      <Text style={styles.statusOptionCheck}>✓</Text>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+            <ScrollView style={styles.statusList}>
+              {filteredStatusOptions.map((option, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.statusOption,
+                    selectedTask?.status === option.value && styles.statusOptionActive
+                  ]}
+                  onPress={() => handleStatusChange(option.value as TaskStatus)}
+                >
+                  <View style={styles.statusOptionLeft}>
+                    <View style={[styles.statusOptionDot, { backgroundColor: option.color }]} />
+                    <Text style={styles.statusOptionLabel}>{option.label}</Text>
+                  </View>
+                  {selectedTask?.status === option.value && (
+                    <Ionicons name="checkmark-circle" size={20} color="#877ED2" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -921,15 +922,13 @@ export default function ProjectTasksScreen() {
       >
         <View style={styles.assigneeModalOverlay}>
           <View style={styles.assigneeModalContent}>
-            {/* Header */}
             <View style={styles.assigneeModalHeader}>
               <Text style={styles.assigneeModalTitle}>Select Assignees</Text>
               <TouchableOpacity onPress={() => setShowAssigneeModal(false)}>
-                <Ionicons name="close" size={24} color="#1C1C1E" />
+                <Ionicons name="close" size={24} color="#1A1A1A" />
               </TouchableOpacity>
             </View>
 
-            {/* Search */}
             <View style={styles.assigneeSearchContainer}>
               <Ionicons name="search" size={20} color="#8E8E93" style={styles.assigneeSearchIcon} />
               <TextInput
@@ -937,11 +936,10 @@ export default function ProjectTasksScreen() {
                 placeholder="Search employees..."
                 value={assigneeSearch}
                 onChangeText={setAssigneeSearch}
-                placeholderTextColor="#8E8E93"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
 
-            {/* Employee List */}
             <ScrollView style={styles.assigneeList} nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
               {teamMembers
                 .filter(member => 
@@ -974,7 +972,6 @@ export default function ProjectTasksScreen() {
                 ))}
             </ScrollView>
 
-            {/* Footer Buttons */}
             <View style={styles.assigneeModalFooter}>
               <TouchableOpacity
                 style={styles.assigneeCancelButton}
@@ -997,107 +994,172 @@ export default function ProjectTasksScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ── Layout ──────────────────────────────────────────
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F5F6FA',
+  },
+  scrollContent: {
+    paddingBottom: 32,
+    paddingTop: 20,
+  },
+  scrollContentEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#877ED2',
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#8E8E93',
-  },
-  header: {
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerAddButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  headerAddButtonText: {
-    color: '#FFFFFF',
+    marginTop: 12,
     fontSize: 14,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
-  projectLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#999',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+
+  // ── Header ──────────────────────────────────────────
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#877ED2',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  headerBackBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerBarTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  headerActionBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ── Hero Extension (Figma rounded purple area) ─────
+  heroExtension: {
+    height: 100,
+    backgroundColor: '#877ED2',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+
+  // ── Project Info Card (overlaps hero) ───────────────
+  projectInfoCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: -70,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  projectInfoTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  projectIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F3F2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1C1C1E',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#000000',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#8E8E93',
+    marginTop: 2,
   },
+  projectStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F6FA',
+  },
+  projectStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  projectStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  projectStatLabel: {
+    fontSize: 11,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  projectStatDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#F0F0F0',
+  },
+
+  // ── Empty State ─────────────────────────────────────
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    paddingHorizontal: 40,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F3F2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 8,
+    color: '#000000',
+    marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 14,
     color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
   },
+
+  // ── Department Section ──────────────────────────────
   departmentSection: {
-    marginVertical: 16,
-    paddingHorizontal: 20,
+    marginTop: 16,
+    paddingHorizontal: 16,
   },
-  departmentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  departmentLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#999',
-    letterSpacing: 0.5,
-    marginBottom: -2,
-  },
-  departmentName: {
+  sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#000000',
+    marginBottom: 14,
   },
-  addTaskButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addTaskButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+
+  // ── Summary Cards ───────────────────────────────────
   summaryCards: {
     flexDirection: 'row',
     gap: 12,
@@ -1105,433 +1167,203 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    padding: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  summaryIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   summaryValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#1C1C1E',
-    marginBottom: 4,
+    color: '#000000',
   },
   summaryLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
-    fontWeight: '500',
-  },
-  taskItem: {
-    backgroundColor: '#FFFFFF',
-    marginBottom: 12,
-    padding: 16,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  taskContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  taskLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#999',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    color: '#8E8E93',
+  },
+
+  // ── Task Card ───────────────────────────────────────
+  taskCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  taskStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  taskStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   taskName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 12,
+    color: '#000000',
+    marginBottom: 10,
   },
-  taskDetails: {
-    gap: 8,
-  },
-  taskDetail: {
+  taskMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginBottom: 6,
   },
-  fieldLabel: {
+  taskMetaText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#888',
-    marginRight: 8,
+    color: '#8E8E93',
+    flex: 1,
   },
-  fieldValue: {
-    fontSize: 13,
-    color: '#1C1C1E',
-    fontWeight: '500',
+  taskDatesRow: {
+    flexDirection: 'row',
+    gap: 24,
+    marginTop: 8,
+    marginBottom: 12,
   },
-  taskDetailLabel: {
+  taskDateItem: {},
+  taskDateLabel: {
     fontSize: 12,
     color: '#8E8E93',
-    fontWeight: '500',
-    minWidth: 80,
+    marginBottom: 2,
   },
-  taskDetailValue: {
-    fontSize: 12,
-    color: '#1C1C1E',
+  taskDateValue: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#000000',
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  taskFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F6FA',
   },
-  taskActions: {
+  taskFooterStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  taskFooterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  taskFooterDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#D1D1D6',
+    marginHorizontal: 2,
+  },
+  taskFooterActions: {
     flexDirection: 'row',
     gap: 8,
   },
   actionButton: {
-    backgroundColor: '#F2F2F7',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F2FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionText: {
-    fontSize: 12,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 0,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-  formField: {
-    marginBottom: 20,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    flex: 1,
-  },
-  textInput: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#1C1C1E',
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  readOnlyField: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 12,
-  },
-  readOnlyText: {
-    fontSize: 16,
-    color: '#8E8E93',
-  },
-  dateButton: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dateText: {
-    fontSize: 16,
-    color: '#1C1C1E',
-  },
-  radioGroup: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  radioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    marginRight: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioButtonSelected: {
-    backgroundColor: '#007AFF',
-  },
-  radioButtonInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#fff',
-  },
-  radioLabel: {
-    fontSize: 16,
-    color: '#1C1C1E',
-  },
-  peopleList: {
-    maxHeight: 150,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 8,
-  },
-  personOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 4,
-  },
-  personOptionSelected: {
-    backgroundColor: '#E5F4FF',
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    borderRadius: 4,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  personName: {
-    fontSize: 16,
-    color: '#1C1C1E',
-  },
-  noPeopleText: {
-    fontSize: 14,
-    color: '#8E8E93',
-    padding: 12,
-    textAlign: 'center',
-  },
-  attachmentButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 12,
-    gap: 8,
-  },
-  attachmentText: {
-    fontSize: 14,
-    color: '#8E8E93',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-    paddingBottom: 8,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  createButton: {
-    flex: 1,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  createButtonDisabled: {
-    opacity: 0.5,
-  },
-  createButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  statusArrow: {
-    fontSize: 10,
-    color: '#8E8E93',
-    marginLeft: 4,
-  },
-  // Status Modal Styles
+
+  // ── Status Modal ────────────────────────────────────
   statusModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   statusModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    width: '75%',
-    maxWidth: 260,
-    maxHeight: '65%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '80%',
+    maxWidth: 300,
+    paddingVertical: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  statusModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   statusModalTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  statusModalHeaderRight: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  statusModalPlayIcon: {
-    fontSize: 18,
-    color: '#8E8E93',
-  },
-  statusModalCheckIcon: {
-    fontSize: 18,
-    color: '#8E8E93',
+    fontWeight: '700',
+    color: '#000000',
+    textAlign: 'center',
+    marginBottom: 12,
   },
   statusSearchContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    marginBottom: 8,
   },
   statusSearchInput: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F5F6FA',
     borderRadius: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    fontSize: 16,
-    color: '#1C1C1E',
-  },
-  statusesSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  statusesSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statusesSectionTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#8E8E93',
-  },
-  statusesSectionMore: {
-    fontSize: 20,
-    color: '#8E8E93',
+    color: '#000000',
   },
   statusList: {
-    maxHeight: 400,
+    maxHeight: 300,
+    paddingHorizontal: 12,
   },
   statusOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     marginBottom: 4,
   },
   statusOptionActive: {
-    backgroundColor: '#E8E8E8',
+    backgroundColor: '#F3F2FF',
   },
   statusOptionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
-  statusOptionIcon: {
-    fontSize: 18,
-    fontWeight: '600',
+  statusOptionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   statusOptionLabel: {
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    color: '#000000',
     fontWeight: '500',
   },
-  statusOptionCheck: {
-    fontSize: 18,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  // Assign to section styles
-  assignToContainer: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 16,
-  },
-  assignToPlaceholder: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginBottom: 12,
-  },
-  selectAssigneesButton: {
-    backgroundColor: '#E5F4FF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  selectAssigneesButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  // Assignee Modal styles
+
+  // ── Assignee Modal ──────────────────────────────────
   assigneeModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1550,18 +1382,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   assigneeModalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#000000',
   },
   assigneeSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    borderRadius: 10,
+    backgroundColor: '#F5F6FA',
+    borderRadius: 12,
     paddingHorizontal: 12,
     marginBottom: 16,
   },
@@ -1571,8 +1403,8 @@ const styles = StyleSheet.create({
   assigneeSearchInput: {
     flex: 1,
     paddingVertical: 12,
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    color: '#000000',
   },
   assigneeList: {
     maxHeight: 400,
@@ -1581,83 +1413,79 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
+    borderBottomColor: '#F5F6FA',
   },
   assigneeName: {
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    color: '#000000',
   },
   assigneeCheckbox: {
     width: 24,
     height: 24,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 2,
     borderColor: '#D1D1D6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   assigneeCheckboxChecked: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#877ED2',
+    borderColor: '#877ED2',
   },
   assigneeModalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 12,
-    marginTop: 20,
+    marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F2F2F7',
+    borderTopColor: '#F5F6FA',
   },
   assigneeCancelButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    backgroundColor: '#F5F6FA',
   },
   assigneeCancelButtonText: {
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    color: '#000000',
     fontWeight: '600',
   },
   assigneeApplyButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    backgroundColor: '#877ED2',
   },
   assigneeApplyButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#FFFFFF',
     fontWeight: '600',
   },
-  // New Create Task Screen Styles
+
+  // ── Create Task Screen ──────────────────────────────
   createTaskScreen: {
     flex: 1,
-    backgroundColor: '#F8F8FA',
+    backgroundColor: '#F5F6FA',
   },
   createTaskHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    paddingVertical: 14,
+    backgroundColor: '#877ED2',
   },
   backButton: {
     padding: 4,
   },
   createTaskTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  menuButton: {
-    padding: 4,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   createTaskContent: {
     flex: 1,
@@ -1667,17 +1495,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
   },
   priorityLabel: {
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#000000',
   },
   toggleSwitch: {
     width: 52,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: '#D1D1D6',
     padding: 2,
     justifyContent: 'center',
   },
@@ -1691,7 +1523,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 2,
     elevation: 2,
   },
@@ -1699,7 +1531,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   inputField: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -1708,45 +1540,55 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#E5E6EB',
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
   inputText: {
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    color: '#000000',
   },
   placeholderText: {
     color: '#8E8E93',
   },
-  inputWithVoice: {
+  inputFieldRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 12,
+  },
+  inputFieldFlex: {
+    flex: 1,
+  },
+  textInputBordered: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    paddingLeft: 16,
-    paddingRight: 8,
-  },
-  taskTitleInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1C1C1E',
+    borderColor: '#E5E6EB',
+    paddingHorizontal: 16,
     paddingVertical: 14,
+    fontSize: 15,
+    color: '#000000',
   },
-  descriptionInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1C1C1E',
+  textAreaBordered: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E6EB',
+    paddingHorizontal: 16,
     paddingVertical: 14,
+    fontSize: 15,
+    color: '#000000',
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  voiceButtonTop: {
+    marginTop: 8,
   },
   dateRow: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   dateField: {
     flex: 1,
@@ -1756,33 +1598,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#E5E6EB',
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
   dateFieldText: {
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    color: '#000000',
   },
   dropdownList: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    marginTop: -12,
-    marginBottom: 16,
+    borderColor: '#E5E6EB',
+    marginTop: -8,
+    marginBottom: 12,
     overflow: 'hidden',
   },
   dropdownItem: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
+    borderBottomColor: '#F5F6FA',
   },
   dropdownItemText: {
-    fontSize: 16,
-    color: '#1C1C1E',
+    fontSize: 15,
+    color: '#000000',
   },
+
+  // ── Team Section (Create Task) ──────────────────────
   teamSection: {
     marginBottom: 20,
   },
@@ -1793,15 +1637,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   teamTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: '#000000',
   },
   addTeamButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F0EFFF',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F3F2FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1822,7 +1666,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F0E6D3',
+    backgroundColor: '#F3F2FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1830,24 +1674,26 @@ const styles = StyleSheet.create({
   teamMemberInitials: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8B7355',
+    color: '#877ED2',
   },
   teamMemberName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#1C1C1E',
+    color: '#000000',
   },
   teamMemberRole: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#8E8E93',
   },
+
+  // ── Attachment Section ──────────────────────────────
   attachmentSection: {
     marginBottom: 24,
   },
   attachmentTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: '#000000',
     marginBottom: 12,
   },
   attachmentPreviewRow: {
@@ -1858,11 +1704,16 @@ const styles = StyleSheet.create({
   attachmentPreview: {
     width: 70,
     height: 70,
-    borderRadius: 8,
-    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    backgroundColor: '#F5F6FA',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  attachmentImage: {
+    width: 70,
+    height: 70,
+    borderRadius: 10,
   },
   addFilesRow: {
     flexDirection: 'row',
@@ -1871,19 +1722,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#E5E6EB',
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
   addFilesText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#8E8E93',
   },
   attachButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#877ED2',
   },
+
+  // ── Create Task Button ──────────────────────────────
   createTaskButton: {
     backgroundColor: '#877ED2',
     borderRadius: 12,
@@ -1892,82 +1745,11 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   createTaskButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   createTaskButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
-  },
-  // New styles for voice button outside input
-  inputFieldRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 16,
-  },
-  inputFieldFlex: {
-    flex: 1,
-  },
-  textInputBordered: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#1C1C1E',
-  },
-  textAreaBordered: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#1C1C1E',
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  voiceButtonOutside: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F0EFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 1,
-  },
-  voiceButtonTop: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F0EFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginTop: 1,
-  },
-  attachmentImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 8,
-  },
-  removeAttachmentButton: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  attachmentPreviewWrapper: {
-    position: 'relative',
   },
 });
