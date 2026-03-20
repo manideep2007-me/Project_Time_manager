@@ -58,53 +58,48 @@ router.post('/:id/photo', photoUpload.single('photo'), async (req, res) => {
       return res.status(400).json({ error: 'Photo file is required' });
     }
     const file = req.file;
+    const db = getDbPool(req);
+    const photoUrl = `${req.protocol}://${req.get('host')}/uploads/employee-photos/${file.filename}`;
 
-    // Check if user is from registry (organization users like Walmart)
-    if (req.user?.source === 'registry' && registryPool) {
-      // Update employees_registry table for organization users
-      const exists = await registryPool.query('SELECT id FROM employees_registry WHERE id = $1', [id]);
-      if (exists.rows.length === 0) {
-        try { fs.unlinkSync(file.path); } catch {}
-        return res.status(404).json({ error: 'User not found in registry' });
+    // Always check org users table first (employees are created here)
+    const userExists = await db.query('SELECT user_id FROM users WHERE user_id = $1', [id]);
+
+    if (userExists.rows.length > 0) {
+      // Store file metadata in employee_documents
+      try {
+        await db.query(
+          `INSERT INTO employee_documents (employee_id, document_type, original_name, file_name, file_path, file_size, mime_type, file_extension, is_image)
+           VALUES ($1, 'photo', $2, $3, $4, $5, $6, $7, true)
+           RETURNING id`,
+          [id, file.originalname, file.filename, file.path, file.size, file.mimetype, path.extname(file.originalname).toLowerCase()]
+        );
+      } catch (docErr) {
+        console.log('employee_documents insert skipped:', docErr.message);
       }
 
-      // Update the photograph column in employees_registry
-      await registryPool.query(
-        `UPDATE employees_registry SET photograph = $1 WHERE id = $2`,
+      await db.query(
+        `UPDATE users SET photograph = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2`,
         [file.path, id]
       );
 
-      const photoUrl = `${req.protocol}://${req.get('host')}/uploads/employee-photos/${file.filename}`;
       return res.json({ success: true, fileName: file.filename, photo_url: photoUrl });
     }
 
-    // Otherwise, update users table (demo/local users)
-    const db = getDbPool(req);
-
-    // Ensure user exists
-    const exists = await db.query('SELECT user_id FROM users WHERE user_id = $1', [id]);
-    if (exists.rows.length === 0) {
-      // cleanup file if user not found
-      try { fs.unlinkSync(file.path); } catch {}
-      return res.status(404).json({ error: 'User not found' });
+    // Fallback: check employees_registry for registry users
+    if (req.user?.source === 'registry' && registryPool) {
+      const registryExists = await registryPool.query('SELECT id FROM employees_registry WHERE id = $1', [id]);
+      if (registryExists.rows.length > 0) {
+        await registryPool.query(
+          `UPDATE employees_registry SET photograph = $1 WHERE id = $2`,
+          [file.path, id]
+        );
+        return res.json({ success: true, fileName: file.filename, photo_url: photoUrl });
+      }
     }
 
-    // Store file metadata in employee_documents
-    const insert = await db.query(
-      `INSERT INTO employee_documents (employee_id, document_type, original_name, file_name, file_path, file_size, mime_type, file_extension, is_image)
-       VALUES ($1, 'photo', $2, $3, $4, $5, $6, $7, true)
-       RETURNING id`,
-      [id, file.originalname, file.filename, file.path, file.size, file.mimetype, path.extname(file.originalname).toLowerCase()]
-    );
-
-    // Also update the photograph column in users table with the file path
-    await db.query(
-      `UPDATE users SET photograph = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2`,
-      [file.path, id]
-    );
-
-    const photoUrl = `${req.protocol}://${req.get('host')}/uploads/employee-photos/${file.filename}`;
-    res.json({ success: true, documentId: insert.rows[0].id, fileName: file.filename, photo_url: photoUrl });
+    // Not found anywhere
+    try { fs.unlinkSync(file.path); } catch {}
+    return res.status(404).json({ error: 'Employee not found' });
   } catch (error) {
     console.error('Error uploading employee photo:', error);
     res.status(500).json({ error: 'Failed to upload photo' });
@@ -121,29 +116,32 @@ router.post('/:id/aadhaar', photoUpload.single('aadhaar'), async (req, res) => {
     }
     const file = req.file;
 
-    // Ensure user exists
     const exists = await db.query('SELECT user_id FROM users WHERE user_id = $1', [id]);
     if (exists.rows.length === 0) {
-      // cleanup file if user not found
       try { fs.unlinkSync(file.path); } catch {}
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Employee not found' });
     }
 
     // Store file metadata in employee_documents
-    const insert = await db.query(
-      `INSERT INTO employee_documents (employee_id, document_type, original_name, file_name, file_path, file_size, mime_type, file_extension, is_image)
-       VALUES ($1, 'aadhaar', $2, $3, $4, $5, $6, $7, true)
-       RETURNING id`,
-      [id, file.originalname, file.filename, file.path, file.size, file.mimetype, path.extname(file.originalname).toLowerCase()]
-    );
+    let documentId = null;
+    try {
+      const insert = await db.query(
+        `INSERT INTO employee_documents (employee_id, document_type, original_name, file_name, file_path, file_size, mime_type, file_extension, is_image)
+         VALUES ($1, 'aadhaar', $2, $3, $4, $5, $6, $7, true)
+         RETURNING id`,
+        [id, file.originalname, file.filename, file.path, file.size, file.mimetype, path.extname(file.originalname).toLowerCase()]
+      );
+      documentId = insert.rows[0].id;
+    } catch (docErr) {
+      console.log('employee_documents insert skipped:', docErr.message);
+    }
 
-    // Also update the aadhaar_image column in users table with the file path
     await db.query(
       `UPDATE users SET aadhaar_image = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2`,
       [file.path, id]
     );
 
-    res.json({ success: true, documentId: insert.rows[0].id, fileName: file.filename });
+    res.json({ success: true, documentId, fileName: file.filename });
   } catch (error) {
     console.error('Error uploading aadhaar image:', error);
     res.status(500).json({ error: 'Failed to upload aadhaar image' });
@@ -458,7 +456,7 @@ router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
     const db = getDbPool(req);
     const { id } = req.params;
     
-    // Check if user has time entries — cannot hard-delete if history exists
+    // Check if user has time entries â€” cannot hard-delete if history exists
     const timeEntries = await db.query('SELECT COUNT(*) as count FROM time_entries WHERE employee_id = $1', [id]);
     if (parseInt(timeEntries.rows[0].count) > 0) {
       return res.status(400).json({ error: 'Cannot delete employee with existing time entries' });
@@ -467,7 +465,7 @@ router.delete('/:id', requireRole(['admin', 'manager']), async (req, res) => {
     // Delete salary records first (no cascade defined)
     await db.query('DELETE FROM salaries WHERE employee_id = $1', [id]);
 
-    // Hard delete — employee_documents cascades automatically
+    // Hard delete â€” employee_documents cascades automatically
     const result = await db.query('DELETE FROM users WHERE user_id = $1 RETURNING user_id', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -496,7 +494,7 @@ router.get('/:id/time-entries', async (req, res) => {
         const userByEmail = await db.query('SELECT user_id FROM users WHERE email_id = $1', [req.user.email]);
         if (userByEmail.rows.length > 0) {
           employeeId = userByEmail.rows[0].user_id;
-          console.log(`✅ Found user by email: ${req.user.email} -> ${employeeId}`);
+          console.log(`âœ… Found user by email: ${req.user.email} -> ${employeeId}`);
         } else {
           return res.status(404).json({ error: 'User not found' });
         }
@@ -580,9 +578,9 @@ router.get('/:id/summary', async (req, res) => {
     }
 
     const [totalHours, projectCount, recentEntries] = await Promise.all([
-      pool.query(`SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries te WHERE te.employee_id = $1 ${dateFilter}`, params),
-      pool.query(`SELECT COUNT(DISTINCT t.project_id) as project_count FROM time_entries te JOIN tasks t ON te.task_id = t.task_id WHERE te.employee_id = $1 ${dateFilter}`, params),
-      pool.query(`SELECT te.id, te.start_time, te.duration_minutes, p.project_name as project_name FROM time_entries te JOIN tasks t ON te.task_id = t.task_id JOIN projects p ON t.project_id = p.project_id WHERE te.employee_id = $1 ${dateFilter} ORDER BY te.start_time DESC LIMIT 5`, params)
+      db.query(`SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries te WHERE te.employee_id = $1 ${dateFilter}`, params),
+      db.query(`SELECT COUNT(DISTINCT t.project_id) as project_count FROM time_entries te JOIN tasks t ON te.task_id = t.task_id WHERE te.employee_id = $1 ${dateFilter}`, params),
+      db.query(`SELECT te.id, te.start_time, te.duration_minutes, p.project_name as project_name FROM time_entries te JOIN tasks t ON te.task_id = t.task_id JOIN projects p ON t.project_id = p.project_id WHERE te.employee_id = $1 ${dateFilter} ORDER BY te.start_time DESC LIMIT 5`, params)
     ]);
 
     res.json({

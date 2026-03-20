@@ -2040,7 +2040,7 @@ interface Photo {
   }
 
   return (
-    <SafeAreaWrapper backgroundColor="#F5F6FA">
+    <SafeAreaWrapper backgroundColor="#877ED2">
       <View style={styles.container}>
         {/* Fixed Header with Purple Background */}
         <View style={styles.fixedHeader}>
@@ -3560,15 +3560,13 @@ interface Photo {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F6FA',
+    backgroundColor: '#877ED2',
   },
   fixedHeader: {
     backgroundColor: '#877ED2',
     paddingTop: 12,
     paddingBottom: 12,
     paddingHorizontal: 16,
-    zIndex: 100,
-    elevation: 5,
   },
   headerContent: {
     flexDirection: 'row',
@@ -3592,6 +3590,7 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     flex: 1,
+    backgroundColor: '#F5F6FA',
   },
   scrollView: {
     flex: 1,

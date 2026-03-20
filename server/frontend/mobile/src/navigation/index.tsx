@@ -615,7 +615,7 @@ export default function RootNavigator() {
             <Stack.Screen name="EmployeeDetail" component={EmployeeDetailScreenWrapper} options={{ headerShown: true, title: 'Employee Details' }} />
             <Stack.Screen name="TimeEntry" component={TimeEntryScreen} options={{ headerShown: true, title: 'Manual Time Entry' }} />
             <Stack.Screen name="Timesheet" component={TimeEntriesScreen} options={{ headerShown: true, title: 'Timesheet' }} />
-            <Stack.Screen name="TaskUpload" component={TaskUploadScreen} options={{ headerShown: true, title: 'Upload Completed Task' }} />
+            <Stack.Screen name="TaskUpload" component={TaskUploadScreen} options={{ headerShown: false }} />
             <Stack.Screen name="CreateTask" component={CreateTaskScreen} options={{ headerShown: false }} />
             <Stack.Screen name="MyUploads" component={MyUploadsScreen} options={{ headerShown: true, title: 'My Uploads' }} />
             <Stack.Screen name="TaskDetails" component={TaskDetailsScreen} options={{ headerShown: false }} />

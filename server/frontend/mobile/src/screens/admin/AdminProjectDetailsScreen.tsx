@@ -43,6 +43,15 @@ export default function AdminProjectDetailsScreen() {
   });
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
 
+  const normalizePhotoUrl = (value?: string) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('data:image/')) return raw;
+    const base = String(api.defaults.baseURL || '').replace(/\/$/, '');
+    if (!base) return raw;
+    return `${base}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  };
+
   const loadData = async () => {
     try {
       if (!id) return;
@@ -87,6 +96,21 @@ export default function AdminProjectDetailsScreen() {
       try {
         const teamResponse = await getProjectTeam(id as string);
         const teamData = teamResponse?.teamMembers || [];
+        let employeePhotoById = new Map<string, string>();
+
+        // Reuse EmployeesScreen source of truth for profile icons.
+        try {
+          const employeesRes = await listEmployees({ page: 1, limit: 500, active: 'all' });
+          const allEmployees = employeesRes?.employees || [];
+          allEmployees.forEach((emp: any) => {
+            const photo = normalizePhotoUrl(emp?.photo_url || emp?.photoUrl || emp?.photograph || '');
+            if (!photo) return;
+            if (emp?.id) employeePhotoById.set(String(emp.id), photo);
+            if (emp?.employee_id) employeePhotoById.set(String(emp.employee_id), photo);
+          });
+        } catch (photoError) {
+          console.warn('Unable to preload employee photos for team avatars:', photoError);
+        }
         
         // Get stats for each team member to include hours logged
         let employeeBreakdown: any[] = [];
@@ -103,9 +127,20 @@ export default function AdminProjectDetailsScreen() {
           const totalMinutes = statsForMember ? (statsForMember.totalMinutes || 0) : 0;
           const hours = Math.floor(totalMinutes / 60);
           const minutes = totalMinutes % 60;
+          const avatarRaw =
+            member?.avatar ||
+            member?.photo_url ||
+            member?.photoUrl ||
+            member?.photograph ||
+            member?.profile_image ||
+            member?.profileImage ||
+            employeePhotoById.get(String(member?.id || '')) ||
+            employeePhotoById.get(String(member?.employee_id || '')) ||
+            '';
           
           return {
             ...member,
+            avatar: normalizePhotoUrl(avatarRaw),
             hours,
             minutes,
             totalMinutes,
@@ -278,7 +313,7 @@ export default function AdminProjectDetailsScreen() {
       case 'On Hold':
         return '#FF9500'; // Orange
       case 'To Do':
-        return '#8E8E93'; // Grey
+        return '#7E99D2'; // In Progress blue
       default:
         return '#8E8E93';
     }
@@ -306,16 +341,16 @@ export default function AdminProjectDetailsScreen() {
       case 'On Hold':
         return 'On Hold';
       case 'To Do':
-        return 'To Do';
+        return 'In Progress';
       default:
-        return 'To Do';
+        return 'In Progress';
     }
   };
 
   const getProjectStatus = () => {
     if (!project?.status) return 'In Progress';
     const status = project.status;
-    if (status === 'To Do') return 'To Do';
+    if (status === 'To Do') return 'In Progress';
     if (status === 'Active') return 'In Progress';
     if (status === 'Completed') return 'Completed';
     if (status === 'On Hold') return 'On Hold';
@@ -323,19 +358,32 @@ export default function AdminProjectDetailsScreen() {
     return 'In Progress';
   };
 
-  const getProjectStatusColor = () => {
+  const getProjectStatusPillTheme = () => {
     const status = getProjectStatus();
     switch (status) {
-      case 'In Progress': return '#34C759';
-      case 'Completed': return '#34C759';
-      case 'On Hold': return '#FF9500';
-      case 'Cancelled': return '#FF3B30';
-      case 'To Do': return '#8E8E93';
-      default: return '#34C759';
+      case 'Completed':
+        return { bg: '#E8F7ED', text: '#23A050' };
+      case 'On Hold':
+        return { bg: '#FFF2DF', text: '#D48806' };
+      case 'Cancelled':
+        return { bg: '#FDECEC', text: '#D63636' };
+      case 'In Progress':
+      default:
+        return { bg: '#7E99D2', text: '#FFFFFF' };
     }
   };
 
   const displayedTasks = showMoreTasks ? tasks : tasks.slice(0, 4);
+  const statusPillTheme = getProjectStatusPillTheme();
+
+  const handleMoreTaskPress = () => {
+    if (tasks.length > 4) {
+      setShowMoreTasks(!showMoreTasks);
+      return;
+    }
+
+    navigation.navigate('ProjectTasks', { projectId: id, projectName: project?.name });
+  };
 
   // Productivity helper functions
   const getProductivityWeekRange = () => {
@@ -367,27 +415,34 @@ export default function AdminProjectDetailsScreen() {
     });
   };
 
-  // Get unique departments from team members
-  const getDepartments = () => {
-    const departments = new Set<string>();
-    teamMembers.forEach(member => {
-      if (member.department) {
-        departments.add(member.department);
-      }
-    });
-    return ['All', ...Array.from(departments).sort()];
+  // Get display role for a team member (same logic as EmployeesScreen)
+  const getMemberRoleLabel = (member: any) => {
+    const raw = member?.designation || member?.role || member?.department || 'Employee';
+    return String(raw || 'Employee').trim() || 'Employee';
   };
 
-  // Filter time entries by department
+  // Get unique roles from team members for productivity filters
+  const getDepartments = () => {
+    const roles = new Set<string>();
+    teamMembers.forEach(member => {
+      const roleLabel = getMemberRoleLabel(member);
+      if (roleLabel) {
+        roles.add(roleLabel);
+      }
+    });
+    return ['All', ...Array.from(roles)];
+  };
+
+  // Filter time entries by selected role
   const getFilteredTimeEntries = () => {
     let filtered = timeEntries;
     
     if (selectedDepartment !== 'All') {
-      const departmentEmployeeIds = teamMembers
-        .filter(m => m.department === selectedDepartment)
+      const roleEmployeeIds = teamMembers
+        .filter(m => getMemberRoleLabel(m) === selectedDepartment)
         .map(m => m.id);
       filtered = filtered.filter(entry => 
-        departmentEmployeeIds.includes(entry.employee_id)
+        roleEmployeeIds.includes(entry.employee_id)
       );
     }
     
@@ -630,8 +685,8 @@ export default function AdminProjectDetailsScreen() {
             <View style={styles.statusCard}>
               <View style={styles.statusHeader}>
                 <Text style={styles.statusTitle}>Status</Text>
-                <View style={[styles.statusPill, { backgroundColor: getProjectStatusColor() }]}>
-                  <Text style={styles.statusPillText}>{getProjectStatus()}</Text>
+                <View style={[styles.statusPill, { backgroundColor: statusPillTheme.bg }]}>
+                  <Text style={[styles.statusPillText, { color: statusPillTheme.text }]}>{getProjectStatus()}</Text>
                 </View>
               </View>
               
@@ -661,9 +716,10 @@ export default function AdminProjectDetailsScreen() {
                   {displayedTasks.map((task, index) => {
                     const statusColor = getStatusColor(task.status, task.due_date);
                     const statusText = getStatusText(task.status, task.due_date);
+                    const isLastItem = index === displayedTasks.length - 1;
                     
                     return (
-                      <View key={task.id || index} style={styles.taskItem}>
+                      <View key={task.id || index} style={[styles.taskItem, isLastItem && styles.taskItemLast]}>
                         <View style={styles.taskItemContent}>
                           <Text style={styles.taskName}>{task.title || 'Task'}</Text>
                           <View style={styles.taskMeta}>
@@ -679,16 +735,14 @@ export default function AdminProjectDetailsScreen() {
                   })}
                 </View>
 
-                {tasks.length > 4 && (
-                  <TouchableOpacity 
-                    style={styles.moreTaskButton}
-                    onPress={() => setShowMoreTasks(!showMoreTasks)}
-                  >
-                    <Text style={styles.moreTaskText}>
-                      {showMoreTasks ? 'Show Less' : 'More Task'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={styles.moreTaskButton}
+                  onPress={handleMoreTaskPress}
+                >
+                  <Text style={styles.moreTaskText}>
+                    {tasks.length > 4 && showMoreTasks ? 'Show Less' : 'More Task'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -734,7 +788,7 @@ export default function AdminProjectDetailsScreen() {
                         case 'On Hold':
                           return '#FF9500';
                         case 'To Do':
-                          return '#8E8E93';
+                          return '#7E99D2';
                         default:
                           return '#8E8E93';
                       }
@@ -760,9 +814,9 @@ export default function AdminProjectDetailsScreen() {
                         case 'On Hold':
                           return 'On Hold';
                         case 'To Do':
-                          return 'To Do';
+                          return 'In Progress';
                         default:
-                          return 'To Do';
+                          return 'In Progress';
                       }
                     };
 
@@ -898,13 +952,13 @@ export default function AdminProjectDetailsScreen() {
                         style={[styles.productivityChartToggleButton, chartView === 'bar' && styles.productivityChartToggleButtonActive]}
                         onPress={() => setChartView('bar')}
                       >
-                        <Ionicons name="bar-chart" size={20} color={chartView === 'bar' ? '#877ED2' : '#8E8E93'} />
+                        <Ionicons name="bar-chart" size={18} color={chartView === 'bar' ? '#FFFFFF' : '#9D9DA8'} />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.productivityChartToggleButton, chartView === 'list' && styles.productivityChartToggleButtonActive]}
                         onPress={() => setChartView('list')}
                       >
-                        <Ionicons name="list" size={20} color={chartView === 'list' ? '#877ED2' : '#8E8E93'} />
+                        <Ionicons name="list" size={18} color={chartView === 'list' ? '#FFFFFF' : '#9D9DA8'} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -931,13 +985,15 @@ export default function AdminProjectDetailsScreen() {
                       {productivityData.map((item, index) => {
                         const barHeightPercent = maxHours > 0 && item.hours > 0 ? (item.hours / maxHours) * 100 : 0;
                         const fillHeight = item.hours > 0 ? Math.max((barHeightPercent / 100) * 100, 4) : 4;
-                        const fillColor = item.hours > 0 ? '#877ED2' : '#E5E5EA';
+                        const fillColor = item.hours > 0 ? '#6F67CC' : '#E5E5EA';
                         
                         return (
                           <View key={index} style={styles.productivityBarColumn}>
-                            <Text style={[styles.productivityBarValue, item.hours === 0 && styles.productivityBarValueZero]}>
-                              {Math.round(item.hours)}
-                            </Text>
+                            <View style={styles.productivityBarValuePill}>
+                              <Text style={[styles.productivityBarValue, item.hours === 0 && styles.productivityBarValueZero]}>
+                                {Math.round(item.hours)}
+                              </Text>
+                            </View>
                             <View style={styles.productivityBarWrapper}>
                               <View style={styles.productivityBarBackground} />
                               <View 
@@ -988,13 +1044,17 @@ export default function AdminProjectDetailsScreen() {
             <View style={styles.expenseSection}>
               <Text style={styles.sectionTitle}>Expense</Text>
               <View style={styles.expenseCard}>
-                <Text style={styles.expenseAmount}>₹ 0</Text>
-                <Text style={styles.expenseDateRange}>
-                  {formatDate(project.start_date)} - {formatDate(project.end_date)}
-                </Text>
-                <TouchableOpacity style={styles.recordExpenseButton}>
-                  <Text style={styles.recordExpenseText}>Record Expense</Text>
-                </TouchableOpacity>
+                <View style={styles.expenseRow}>
+                  <View style={styles.expenseInfo}>
+                    <Text style={styles.expenseAmount}>₹ 0</Text>
+                    <Text style={styles.expenseDateRange}>
+                      {formatDate(project.start_date)} - {formatDate(project.end_date)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={styles.recordExpenseButton}>
+                    <Text style={styles.recordExpenseText}>Record Expense</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
@@ -1101,7 +1161,7 @@ export default function AdminProjectDetailsScreen() {
                   setSelectedEmployee(null);
                 }}
               >
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close-circle-outline" size={26} color="#ADADAD" />
               </TouchableOpacity>
             </View>
 
@@ -1300,122 +1360,130 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
   statusHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   statusTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2F2F2F',
   },
   statusPill: {
-    backgroundColor: '#5AC8FA',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    minWidth: 72,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    alignItems: 'center',
   },
   statusPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '500',
   },
   datesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   dateItem: {
     flex: 1,
   },
   dateLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 12,
+    color: '#8F8F8F',
     marginBottom: 4,
     fontWeight: '400',
   },
   dateValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '500',
+    color: '#2F2F2F',
   },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   progressBar: {
     flex: 1,
-    height: 8,
-    backgroundColor: '#F5F6FA',
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: '#ECECF3',
+    borderRadius: 999,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#34C759',
-    borderRadius: 4,
+    borderRadius: 999,
   },
   progressText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8A8A8A',
   },
   taskStatusSection: {
-    marginTop: 24,
-    paddingTop: 24,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F5F6FA',
+    borderTopColor: '#ECECF3',
   },
   taskStatusTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 16,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2F2F2F',
+    marginBottom: 12,
   },
   taskList: {
     gap: 0,
   },
   taskItem: {
-    marginBottom: 16,
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECECF3',
+  },
+  taskItemLast: {
+    marginBottom: 0,
+    borderBottomWidth: 0,
   },
   taskItemContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   taskName: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#303030',
     marginRight: 12,
   },
   taskMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   taskDuration: {
     fontSize: 12,
-    fontWeight: '400',
-    color: '#8E8E93',
+    fontWeight: '500',
+    color: '#808080',
   },
   taskStatusText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   taskStatusBar: {
     height: 2,
@@ -1423,12 +1491,12 @@ const styles = StyleSheet.create({
   },
   moreTaskButton: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     marginTop: 8,
   },
   moreTaskText: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 12,
+    color: '#8F8F8F',
     fontWeight: '400',
   },
   viewTasksButton: {
@@ -1469,6 +1537,8 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   tasksScrollContent: {
+    paddingTop: 6,
+    paddingBottom: 6,
     paddingRight: 16,
   },
   taskCard: {
@@ -1477,20 +1547,22 @@ const styles = StyleSheet.create({
     padding: 16,
     marginRight: 12,
     width: 280,
+    borderWidth: 1,
+    borderColor: '#ECECF3',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   statusBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    borderRadius: 10,
     marginBottom: 8,
-    marginTop: -18,
+    marginTop: 0,
   },
   statusBadgeText: {
     fontSize: 12,
@@ -1558,82 +1630,96 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   productivityTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1D1D1F',
+    marginBottom: 12,
   },
   productivityFilters: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   productivityFiltersLabel: {
     fontSize: 12,
-    color: '#8E8E93',
-    marginBottom: 8,
+    color: '#8F8F8F',
+    marginBottom: 10,
     fontWeight: '400',
   },
   productivityFiltersScroll: {
-    paddingRight: 16,
+    paddingRight: 8,
   },
   productivityFilterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F5F6FA',
+    minWidth: 64,
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D8D8E2',
+    backgroundColor: '#FFFFFF',
     marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productivityFilterButtonActive: {
-    backgroundColor: '#877ED2',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#6F67CC',
   },
   productivityFilterButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: '#8F8F8F',
   },
   productivityFilterButtonTextActive: {
-    color: '#FFFFFF',
+    color: '#4D4D57',
     fontWeight: '600',
   },
   productivityCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 12,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    borderWidth: 1,
+    borderColor: '#ECECF3',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 3,
   },
   productivityCardHeader: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   productivityHeaderTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 10,
   },
   productivityHeaderLeft: {
     alignItems: 'flex-start',
   },
   productivityViewToggle: {
     flexDirection: 'row',
-    backgroundColor: '#F5F6FA',
-    borderRadius: 8,
+    backgroundColor: '#F1F1F4',
+    borderRadius: 16,
     padding: 2,
+    width: 208,
+    height: 34,
   },
   productivityToggleButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    width: 102,
+    height: 30,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productivityToggleButtonActive: {
-    backgroundColor: '#877ED2',
+    backgroundColor: '#6F67CC',
   },
   productivityToggleText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: '#8F8F8F',
   },
   productivityToggleTextActive: {
     color: '#FFFFFF',
@@ -1641,20 +1727,31 @@ const styles = StyleSheet.create({
   },
   productivityChartToggle: {
     flexDirection: 'row',
-    backgroundColor: '#F5F6FA',
-    borderRadius: 8,
+    backgroundColor: '#F1F1F4',
+    borderRadius: 10,
     padding: 2,
-    gap: 2,
+    gap: 4,
+    height: 34,
   },
   productivityChartToggleButton: {
     width: 32,
-    height: 32,
-    borderRadius: 6,
+    height: 30,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   productivityChartToggleButtonActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#6F67CC',
+  },
+  productivityBarValuePill: {
+    minWidth: 22,
+    height: 14,
+    paddingHorizontal: 5,
+    borderRadius: 7,
+    backgroundColor: '#F1F1F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   productivityWeekNav: {
     flexDirection: 'row',
@@ -1662,31 +1759,30 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'space-between',
     paddingVertical: 8,
-    position: 'relative',
+    minHeight: 52,
+    marginBottom: 6,
   },
   productivityNavButton: {
+    padding: 4,
     zIndex: 1,
   },
   productivityWeekNavText: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+    flex: 1,
     alignItems: 'center',
-    zIndex: 0,
   },
   productivityWeekRange: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000000',
+    color: '#2F2F2F',
   },
   productivityChartContainer: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
   productivityChart: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 140,
+    height: 126,
     width: '100%',
   },
   productivityBarColumn: {
@@ -1695,35 +1791,34 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   productivityBarValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 4,
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#8A8A8A',
+    marginBottom: 0,
   },
   productivityBarValueZero: {
-    color: '#8E8E93',
+    color: '#A0A0AA',
   },
   productivityBarWrapper: {
-    width: '80%',
-    height: 100,
+    width: '100%',
+    height: 90,
     justifyContent: 'flex-end',
-    marginBottom: 8,
+    marginBottom: 10,
     position: 'relative',
     alignSelf: 'center',
     alignItems: 'center',
   },
   productivityBarBackground: {
-    width: '40%',
-    height: 100,
-    borderRadius: 4,
-    backgroundColor: '#E5E5EA',
+    width: 11,
+    height: 90,
+    borderRadius: 6,
+    backgroundColor: '#ECECF3',
     position: 'absolute',
     bottom: 0,
   },
   productivityBarFill: {
-    width: '40%',
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
+    width: 11,
+    borderRadius: 6,
     position: 'absolute',
     bottom: 0,
     minHeight: 4,
@@ -1732,32 +1827,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   productivityBarDay: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: '#8F8F8F',
+    lineHeight: 13,
   },
   productivityBarDate: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: '#8F8F8F',
+    lineHeight: 13,
   },
   productivitySummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: 16,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F5F6FA',
+    borderTopColor: '#ECECF3',
   },
   productivitySummaryLeft: {
     flex: 1,
   },
   productivitySummaryRight: {
     alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   productivitySummaryLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginBottom: 4,
+    fontSize: 12,
+    color: '#8F8F8F',
+    marginBottom: 2,
     fontWeight: '400',
   },
   productivitySummaryHours: {
@@ -1765,19 +1863,21 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   productivitySummaryHoursNumber: {
-    fontSize: 20,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#000000',
+    color: '#1D1D1F',
+    lineHeight: 34,
   },
   productivitySummaryHoursUnit: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 12,
+    color: '#8F8F8F',
     fontWeight: '400',
   },
   productivitySummaryValue: {
-    fontSize: 20,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#000000',
+    color: '#1D1D1F',
+    lineHeight: 34,
   },
   teamSection: {
     marginTop: 24,
@@ -1897,32 +1997,44 @@ const styles = StyleSheet.create({
   },
   expenseCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 3,
+  },
+  expenseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  expenseInfo: {
+    flex: 1,
+    marginRight: 12,
   },
   expenseAmount: {
-    fontSize: 28,
+    fontSize: 34,
     fontWeight: '700',
     color: '#000000',
+    lineHeight: 38,
     marginBottom: 4,
   },
   expenseDateRange: {
     fontSize: 13,
-    color: '#8E8E93',
-    marginBottom: 20,
-    fontWeight: '400',
+    color: '#53535C',
+    marginBottom: 0,
+    fontWeight: '500',
   },
   recordExpenseButton: {
     backgroundColor: '#877ED2',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    width: 170,
+    height: 50,
     borderRadius: 25,
-    alignSelf: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   recordExpenseText: {
     fontSize: 14,
@@ -2020,97 +2132,116 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 22,
+    paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#F2F2F2',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#333',
+    color: '#2B2B2B',
   },
   modalListContent: {
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
   modalEmployeeItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    backgroundColor: '#FAFAFA',
+    borderRadius: 14,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: '#EBEBEB',
   },
   modalEmployeeItemSelected: {
-    backgroundColor: '#e3f2fd',
-    borderColor: '#007AFF',
+    backgroundColor: '#F2F0FF',
+    borderColor: '#877ED2',
     borderWidth: 2,
   },
   modalAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   modalAvatarText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   modalEmployeeInfo: {
     flex: 1,
   },
   modalEmployeeName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#2B2B2B',
   },
   modalEmployeeDepartment: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#8C8C8C',
+    marginTop: 3,
   },
   modalEmpty: {
-    padding: 20,
+    paddingVertical: 28,
     alignItems: 'center',
   },
   modalEmptyText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#ADADAD',
   },
   modalFooter: {
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 20,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: '#F2F2F2',
   },
   modalAddButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    borderRadius: 10,
+    backgroundColor: '#877ED2',
+    paddingVertical: 15,
+    borderRadius: 14,
     alignItems: 'center',
+    shadowColor: '#877ED2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   modalAddButtonDisabled: {
-    backgroundColor: '#d1d5db',
+    backgroundColor: '#C5C0E8',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   modalAddButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },

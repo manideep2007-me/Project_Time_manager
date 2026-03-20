@@ -636,8 +636,8 @@ router.get('/pending-approval', async (req, res) => {
     `;
 
     const [result, countResult] = await Promise.all([
-      pool.query(query, [limit, offset]),
-      pool.query(countQuery)
+      db.query(query, [limit, offset]),
+      db.query(countQuery)
     ]);
 
     res.json({
@@ -680,8 +680,8 @@ router.get('/approved', async (req, res) => {
     `;
 
     const [result, countResult] = await Promise.all([
-      pool.query(query, [limit, offset]),
-      pool.query(countQuery)
+      db.query(query, [limit, offset]),
+      db.query(countQuery)
     ]);
 
     res.json({

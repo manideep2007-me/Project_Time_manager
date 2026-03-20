@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { api } from '../../api/client';
 
 // ── Design constants ────────────────────────────────────────────────
 const FONTS = {
@@ -20,10 +21,10 @@ const FONTS = {
 };
 
 const COLORS = {
-  bg: '#F5F6FA',
+  bg: '#F0F0F0',
   surface: '#FFFFFF',
   accent: '#877ED2',
-  accentLight: '#8E97F0',
+  accentLight: '#7E99D2',
   textPrimary: '#1A1A1A',
   textSecondary: '#6A6D73',
   textMuted: '#999999',
@@ -40,7 +41,9 @@ export default function ClientProjectsScreen() {
   const route = useRoute<any>();
   const { client, projects } = route.params || { client: {}, projects: [] };
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredProjects, setFilteredProjects] = useState(projects);
+  const [projectSource, setProjectSource] = useState<any[]>(Array.isArray(projects) ? projects : []);
+  const [filteredProjects, setFilteredProjects] = useState<any[]>(Array.isArray(projects) ? projects : []);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [clientExpanded, setClientExpanded] = useState(true);
 
   // Hide the default navigation header
@@ -48,13 +51,47 @@ export default function ClientProjectsScreen() {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
+  const loadClientProjects = async () => {
+    if (!client?.id) return;
+    try {
+      const res = await api.get(`/api/clients/${client.id}/projects`, { params: { page: 1, limit: 100 } });
+      const list = Array.isArray(res.data?.projects) ? res.data.projects : [];
+      setProjectSource(list);
+    } catch {
+      try {
+        const fallback = await api.get('/api/projects', { params: { page: 1, limit: 100, clientId: client.id } });
+        const list = Array.isArray(fallback.data?.projects) ? fallback.data.projects : [];
+        setProjectSource(list);
+      } catch {
+        setProjectSource([]);
+      }
+    }
+  };
+
+  const loadEmployees = async () => {
+    try {
+      const res = await api.get('/api/employees', { params: { page: 1, limit: 200, active: 'all' } });
+      const list = Array.isArray(res.data?.employees) ? res.data.employees : [];
+      setEmployees(list);
+    } catch {
+      setEmployees([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!Array.isArray(projects) || projects.length === 0) {
+      loadClientProjects();
+    }
+    loadEmployees();
+  }, [client?.id]);
+
   // Filter projects based on search query
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      setFilteredProjects(projects);
+      setFilteredProjects(projectSource);
     } else {
       const q = searchQuery.toLowerCase();
-      const filtered = projects.filter(
+      const filtered = projectSource.filter(
         (p: any) =>
           p.name?.toLowerCase().includes(q) ||
           p.location?.toLowerCase().includes(q) ||
@@ -63,15 +100,15 @@ export default function ClientProjectsScreen() {
       );
       setFilteredProjects(filtered);
     }
-  }, [searchQuery, projects]);
+  }, [searchQuery, projectSource]);
 
   // Stats – use full project list, not filtered
-  const totalProjects = projects.length;
-  const activeProjects = projects.filter((p: any) => {
+  const totalProjects = projectSource.length;
+  const activeProjects = projectSource.filter((p: any) => {
     const s = (p.status || '').toLowerCase();
     return s === 'active' || s === 'in progress';
   }).length;
-  const inactiveProjects = projects.filter((p: any) => {
+  const inactiveProjects = projectSource.filter((p: any) => {
     const s = (p.status || '').toLowerCase();
     return s === 'completed' || s === 'cancelled' || s === 'on hold';
   }).length;
@@ -112,27 +149,59 @@ export default function ClientProjectsScreen() {
     const s = (status || '').toLowerCase();
     if (s.includes('completed')) return { bg: COLORS.blueGray, label: 'Completed' };
     if (s.includes('overdue')) return { bg: COLORS.red, label: 'Over due' };
-    if (s === 'to do' || s === 'new') return { bg: '#90CAF9', label: 'New' };
-    return { bg: COLORS.accent, label: status || 'In Progress' };
+    if (s === 'to do' || s === 'new') return { bg: COLORS.accentLight, label: 'In Progress' };
+    if (s === 'active' || s === 'in progress' || s === 'in_progress') return { bg: COLORS.accentLight, label: 'In Progress' };
+    return { bg: COLORS.accentLight, label: 'In Progress' };
+  };
+
+  const getProjectAvatarUris = (project: any) => {
+    const members = Array.isArray(project.team_members)
+      ? project.team_members
+      : Array.isArray(project.assigned_to)
+        ? project.assigned_to
+        : [];
+
+    const byId = (id: any) =>
+      employees.find(
+        (e: any) =>
+          String(e.id) === String(id) ||
+          String(e.employee_id) === String(id) ||
+          String(e.user_id) === String(id)
+      );
+
+    const fromMembers = members
+      .map((m: any) => {
+        if (typeof m === 'string' || typeof m === 'number') {
+          const emp = byId(m);
+          return emp?.photo_url || emp?.photoUrl || emp?.photograph || '';
+        }
+        return m?.photo_url || m?.photoUrl || m?.photograph || byId(m?.id || m?.employee_id)?.photo_url || '';
+      })
+      .filter(Boolean)
+      .slice(0, 3);
+
+    if (fromMembers.length > 0) return fromMembers;
+
+    // Fallback: use real employee photos from org (not generated avatars)
+    const orgPhotos = employees
+      .map((e: any) => e?.photo_url || e?.photoUrl || e?.photograph || '')
+      .filter(Boolean)
+      .slice(0, 3);
+
+    return orgPhotos;
   };
 
   // ── Project card ────────────────────────────────────────────────
   const renderProjectCard = ({ item }: any) => {
     const progress = getProgressInfo(item);
     const badge = getBadge(item.status);
-
-    // deterministic avatar ids from project id
-    const id = Number(item.id) || 1;
-    const avatarIds = [(id * 3) % 70 + 1, (id * 7) % 70 + 1, (id * 11) % 70 + 1];
+    const avatarUris = getProjectAvatarUris(item);
 
     return (
       <View style={styles.projectCard}>
-        {/* Left accent bar */}
-        <View style={styles.cardAccent} />
-
         <View style={styles.cardContent}>
           {/* Status badge */}
-          <View style={[styles.badge, { backgroundColor: badge.bg }]}>  
+          <View style={[styles.badge, { backgroundColor: badge.bg }]}>
             <Text style={styles.badgeText}>{badge.label}</Text>
           </View>
 
@@ -149,10 +218,10 @@ export default function ClientProjectsScreen() {
 
             {/* Overlapping avatars + green plus */}
             <View style={styles.avatarGroup}>
-              {avatarIds.map((aid: number, i: number) => (
+              {avatarUris.map((uri: string, i: number) => (
                 <Image
                   key={i}
-                  source={{ uri: `https://i.pravatar.cc/150?img=${aid}` }}
+                  source={{ uri }}
                   style={[
                     styles.avatar,
                     { zIndex: 10 - i, marginLeft: i === 0 ? 0 : -10 },
@@ -181,9 +250,7 @@ export default function ClientProjectsScreen() {
 
             <View style={styles.progressWrap}>
               <View style={styles.progressLabelRow}>
-                <Text style={[styles.progressLabel, { color: progress.color }]}>
-                  {progress.label}
-                </Text>
+                <Text style={styles.progressLabel}>{progress.label}</Text>
                 {progress.days !== null && (
                   <Text style={[styles.progressDays, { color: progress.color }]}>
                     {progress.days}
@@ -253,9 +320,6 @@ export default function ClientProjectsScreen() {
 
             {/* ── Client detail card ─────────────────────────── */}
             <View style={styles.clientCard}>
-              {/* Left accent */}
-              <View style={styles.clientAccent} />
-
               <View style={styles.clientInner}>
                 {/* Header row – tap to expand / collapse */}
                 <TouchableOpacity
@@ -274,7 +338,9 @@ export default function ClientProjectsScreen() {
                 </TouchableOpacity>
 
                 <Text style={styles.clientSub}>
-                  {client.client_type || 'Residential properties developer'} |{' '}
+                  {(client.client_type && client.client_type.toLowerCase() !== 'client'
+                    ? client.client_type
+                    : 'Residential properties developer')} |{' '}
                   {client.location || 'Bangalore'}
                 </Text>
 
@@ -322,9 +388,10 @@ export default function ClientProjectsScreen() {
                       </View>
                       <View style={styles.col}>
                         <Text style={styles.fieldLabel}>Number of Projects:</Text>
-                        <Text style={styles.fieldValue}>{projects.length}</Text>
+                        <Text style={styles.fieldValue}>{projectSource.length}</Text>
                       </View>
                     </View>
+
                   </View>
                 )}
               </View>
@@ -433,19 +500,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 22,
     overflow: 'hidden',
-    flexDirection: 'row',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 3,
   },
-  clientAccent: {
-    width: 4,
-    backgroundColor: COLORS.accent,
-  },
   clientInner: {
-    flex: 1,
     padding: 16,
   },
   clientHeaderRow: {
@@ -507,6 +568,29 @@ const styles = StyleSheet.create({
   col: {
     flex: 1,
   },
+  clientActionRow: {
+    marginTop: 12,
+  },
+  clientMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#877ED2',
+    width: 86,
+    height: 30,
+    borderRadius: 25,
+    paddingTop: 5,
+    paddingRight: 15,
+    paddingBottom: 5,
+    paddingLeft: 15,
+    gap: 5,
+    justifyContent: 'center',
+  },
+  clientMoreButtonText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontFamily: FONTS.semibold,
+    fontWeight: '600',
+  },
 
   // ─ Section title ─
   sectionTitle: {
@@ -523,29 +607,28 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 16,
     overflow: 'hidden',
-    flexDirection: 'row',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 3,
   },
-  cardAccent: {
-    width: 4,
-    backgroundColor: COLORS.accent,
-  },
   cardContent: {
-    flex: 1,
-    padding: 16,
+    padding: 14,
+    paddingTop: 22,
+    position: 'relative',
   },
 
   // Badge
   badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 14,
-    marginBottom: 6,
+    position: 'absolute',
+    top: -6,
+    left: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginBottom: 0,
+    zIndex: 2,
   },
   badgeText: {
     color: '#FFF',
@@ -558,8 +641,8 @@ const styles = StyleSheet.create({
   projectLocation: {
     fontSize: 11,
     fontFamily: FONTS.regular,
-    color: COLORS.textMuted,
-    marginBottom: 4,
+    color: '#8F8F8F',
+    marginBottom: 2,
   },
 
   // Name row
@@ -567,7 +650,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
     marginTop: 2,
   },
   projectName: {
@@ -585,21 +668,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: COLORS.surface,
     backgroundColor: '#E0E0E0',
   },
   plusBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.green,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#6B6B6B',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: -8,
+    marginLeft: -6,
     borderWidth: 2,
     borderColor: COLORS.surface,
   },
@@ -607,7 +690,7 @@ const styles = StyleSheet.create({
   // Footer
   footer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     marginTop: 4,
   },
   dateCol: {
@@ -628,8 +711,9 @@ const styles = StyleSheet.create({
 
   // Progress
   progressWrap: {
-    flex: 1,
+    width: 106,
     alignItems: 'flex-end',
+    marginTop: 1,
   },
   progressLabelRow: {
     flexDirection: 'row',
@@ -641,6 +725,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FONTS.semibold,
     fontWeight: '600',
+    color: '#8F8F8F',
   },
   progressDays: {
     fontSize: 11,
@@ -648,15 +733,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   progressTrack: {
-    width: '100%',
-    height: 5,
+    width: 88,
+    height: 4,
     backgroundColor: '#EEEEEE',
-    borderRadius: 3,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 2,
   },
 
   // ─ Empty state ─

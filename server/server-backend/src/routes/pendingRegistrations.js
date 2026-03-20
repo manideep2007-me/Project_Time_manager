@@ -84,7 +84,32 @@ router.post('/:id/approve', async (req, res) => {
     );
 
     if (pending.rows.length === 0) {
-      return res.status(404).json({ error: 'Pending registration not found' });
+      // Check if already approved - return existing employee if so
+      const alreadyApproved = await registryPool.query(
+        "SELECT * FROM pending_registrations WHERE id = $1 AND organization_id = $2 AND status = 'approved'",
+        [id, orgId]
+      );
+      if (alreadyApproved.rows.length > 0) {
+        const approvedReg = alreadyApproved.rows[0];
+        const orgPool = createOrgPool(approvedReg.database_name);
+        try {
+          const existingUser = await orgPool.query(
+            'SELECT user_id as id, email_id as email, first_name, last_name, role FROM users WHERE LOWER(email_id) = LOWER($1) LIMIT 1',
+            [approvedReg.email]
+          );
+          await orgPool.end();
+          if (existingUser.rows.length > 0) {
+            return res.json({
+              message: 'Registration was already approved',
+              employee: existingUser.rows[0],
+            });
+          }
+        } catch (lookupErr) {
+          try { await orgPool.end(); } catch {}
+          console.log('Lookup of already-approved employee failed:', lookupErr.message);
+        }
+      }
+      return res.status(404).json({ error: 'Pending registration not found or already processed' });
     }
 
     const reg = pending.rows[0];

@@ -39,6 +39,15 @@ export default function ManagerProjectDetailsScreen() {
   });
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
 
+  const normalizePhotoUrl = (value?: string) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('data:image/')) return raw;
+    const base = String(api.defaults.baseURL || '').replace(/\/$/, '');
+    if (!base) return raw;
+    return `${base}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  };
+
   const loadData = async () => {
     try {
       if (!id) return;
@@ -83,7 +92,39 @@ export default function ManagerProjectDetailsScreen() {
       try {
         const teamResponse = await getProjectTeam(id as string);
         const teamData = teamResponse?.teamMembers || [];
-        setTeamMembers(teamData);
+        let employeePhotoById = new Map<string, string>();
+
+        // Reuse EmployeesScreen data source for profile icons.
+        try {
+          const employeesRes = await api.get('/api/employees', { params: { limit: 500, active: 'all' } });
+          const allEmployees = Array.isArray(employeesRes?.data?.employees) ? employeesRes.data.employees : [];
+          allEmployees.forEach((emp: any) => {
+            const photo = normalizePhotoUrl(emp?.photo_url || emp?.photoUrl || emp?.photograph || '');
+            if (!photo) return;
+            if (emp?.id) employeePhotoById.set(String(emp.id), photo);
+            if (emp?.employee_id) employeePhotoById.set(String(emp.employee_id), photo);
+          });
+        } catch (photoError) {
+          console.warn('Unable to preload employee photos for team avatars:', photoError);
+        }
+
+        const normalizedTeam = teamData.map((member: any) => {
+          const avatarRaw =
+            member?.avatar ||
+            member?.photo_url ||
+            member?.photoUrl ||
+            member?.photograph ||
+            member?.profile_image ||
+            member?.profileImage ||
+            employeePhotoById.get(String(member?.id || '')) ||
+            employeePhotoById.get(String(member?.employee_id || '')) ||
+            '';
+          return {
+            ...member,
+            avatar: normalizePhotoUrl(avatarRaw),
+          };
+        });
+        setTeamMembers(normalizedTeam);
       } catch (e) {
         setTeamMembers([]);
       }
@@ -182,7 +223,7 @@ export default function ManagerProjectDetailsScreen() {
       case 'On Hold':
         return '#FF9500'; // Orange
       case 'To Do':
-        return '#8E8E93'; // Grey
+        return '#7E99D2'; // In Progress blue
       default:
         return '#8E8E93';
     }
@@ -210,16 +251,16 @@ export default function ManagerProjectDetailsScreen() {
       case 'On Hold':
         return 'On Hold';
       case 'To Do':
-        return 'To Do';
+        return 'In Progress';
       default:
-        return 'To Do';
+        return 'In Progress';
     }
   };
 
   const getProjectStatus = () => {
     if (!project?.status) return 'Active';
     const status = project.status;
-    if (status === 'To Do') return 'To Do';
+    if (status === 'To Do') return 'In Progress';
     if (status === 'Active') return 'Active';
     if (status === 'Completed') return 'Completed';
     if (status === 'On Hold') return 'On Hold';
@@ -227,7 +268,34 @@ export default function ManagerProjectDetailsScreen() {
     return 'Active';
   };
 
+  const getProjectStatusPillTheme = () => {
+    const status = getProjectStatus();
+    switch (status) {
+      case 'Completed':
+        return { bg: '#E8F7ED', text: '#23A050' };
+      case 'On Hold':
+        return { bg: '#FFF2DF', text: '#D48806' };
+      case 'Cancelled':
+        return { bg: '#FDECEC', text: '#D63636' };
+      case 'To Do':
+        return { bg: '#7E99D2', text: '#FFFFFF' };
+      case 'Active':
+      default:
+        return { bg: '#7E99D2', text: '#FFFFFF' };
+    }
+  };
+
   const displayedTasks = showMoreTasks ? tasks : tasks.slice(0, 4);
+  const statusPillTheme = getProjectStatusPillTheme();
+
+  const handleMoreTaskPress = () => {
+    if (tasks.length > 4) {
+      setShowMoreTasks(!showMoreTasks);
+      return;
+    }
+
+    navigation.navigate('ProjectTasks', { projectId: id, projectName: project?.name });
+  };
 
   // Productivity helper functions
   const getProductivityWeekRange = () => {
@@ -259,27 +327,34 @@ export default function ManagerProjectDetailsScreen() {
     });
   };
 
-  // Get unique departments from team members
-  const getDepartments = () => {
-    const departments = new Set<string>();
-    teamMembers.forEach(member => {
-      if (member.department) {
-        departments.add(member.department);
-      }
-    });
-    return ['All', ...Array.from(departments).sort()];
+  // Get display role for a team member (same logic as EmployeesScreen)
+  const getMemberRoleLabel = (member: any) => {
+    const raw = member?.designation || member?.role || member?.department || 'Employee';
+    return String(raw || 'Employee').trim() || 'Employee';
   };
 
-  // Filter time entries by department
+  // Get unique roles from team members for productivity filters
+  const getDepartments = () => {
+    const roles = new Set<string>();
+    teamMembers.forEach(member => {
+      const roleLabel = getMemberRoleLabel(member);
+      if (roleLabel) {
+        roles.add(roleLabel);
+      }
+    });
+    return ['All', ...Array.from(roles)];
+  };
+
+  // Filter time entries by selected role
   const getFilteredTimeEntries = () => {
     let filtered = timeEntries;
     
     if (selectedDepartment !== 'All') {
-      const departmentEmployeeIds = teamMembers
-        .filter(m => m.department === selectedDepartment)
+      const roleEmployeeIds = teamMembers
+        .filter(m => getMemberRoleLabel(m) === selectedDepartment)
         .map(m => m.id);
       filtered = filtered.filter(entry => 
-        departmentEmployeeIds.includes(entry.employee_id)
+        roleEmployeeIds.includes(entry.employee_id)
       );
     }
     
@@ -530,8 +605,8 @@ export default function ManagerProjectDetailsScreen() {
             <View style={styles.statusCard}>
               <View style={styles.statusHeader}>
                 <Text style={styles.statusTitle}>Status</Text>
-                <View style={styles.statusPill}>
-                  <Text style={styles.statusPillText}>{getProjectStatus()}</Text>
+                <View style={[styles.statusPill, { backgroundColor: statusPillTheme.bg }]}>
+                  <Text style={[styles.statusPillText, { color: statusPillTheme.text }]}>{getProjectStatus()}</Text>
                 </View>
               </View>
               
@@ -549,10 +624,8 @@ export default function ManagerProjectDetailsScreen() {
               <View style={styles.progressContainer}>
                 <View style={styles.progressBar}>
                   <View style={[styles.progressFill, { width: `${progress}%` }]} />
-                  <View style={[styles.progressTextContainer, { left: `${progress}%` }]}>
-                    <Text style={styles.progressText}>{progress}%</Text>
-                  </View>
                 </View>
+                <Text style={styles.progressText}>{progress}%</Text>
               </View>
 
               {/* Task Status Section within the same card */}
@@ -563,9 +636,10 @@ export default function ManagerProjectDetailsScreen() {
                   {displayedTasks.map((task, index) => {
                     const statusColor = getStatusColor(task.status, task.due_date);
                     const statusText = getStatusText(task.status, task.due_date);
+                    const isLastItem = index === displayedTasks.length - 1;
                     
                     return (
-                      <View key={task.id || index} style={styles.taskItem}>
+                      <View key={task.id || index} style={[styles.taskItem, isLastItem && styles.taskItemLast]}>
                         <View style={styles.taskItemContent}>
                           <Text style={styles.taskName}>{task.title || 'Task'}</Text>
                           <View style={styles.taskMeta}>
@@ -581,16 +655,14 @@ export default function ManagerProjectDetailsScreen() {
                   })}
                 </View>
 
-                {tasks.length > 4 && (
-                  <TouchableOpacity 
-                    style={styles.moreTaskButton}
-                    onPress={() => setShowMoreTasks(!showMoreTasks)}
-                  >
-                    <Text style={styles.moreTaskText}>
-                      {showMoreTasks ? 'Show Less' : 'More Task'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={styles.moreTaskButton}
+                  onPress={handleMoreTaskPress}
+                >
+                  <Text style={styles.moreTaskText}>
+                    {tasks.length > 4 && showMoreTasks ? 'Show Less' : 'More Task'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -636,7 +708,7 @@ export default function ManagerProjectDetailsScreen() {
                         case 'On Hold':
                           return '#FF9500';
                         case 'To Do':
-                          return '#8E8E93';
+                          return '#7E99D2';
                         default:
                           return '#8E8E93';
                       }
@@ -662,9 +734,9 @@ export default function ManagerProjectDetailsScreen() {
                         case 'On Hold':
                           return 'On Hold';
                         case 'To Do':
-                          return 'To Do';
+                          return 'In Progress';
                         default:
-                          return 'To Do';
+                          return 'In Progress';
                       }
                     };
 
@@ -800,13 +872,13 @@ export default function ManagerProjectDetailsScreen() {
                         style={[styles.productivityChartToggleButton, chartView === 'bar' && styles.productivityChartToggleButtonActive]}
                         onPress={() => setChartView('bar')}
                       >
-                        <Ionicons name="bar-chart" size={20} color={chartView === 'bar' ? '#877ED2' : '#8E8E93'} />
+                        <Ionicons name="bar-chart" size={18} color={chartView === 'bar' ? '#FFFFFF' : '#9D9DA8'} />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.productivityChartToggleButton, chartView === 'list' && styles.productivityChartToggleButtonActive]}
                         onPress={() => setChartView('list')}
                       >
-                        <Ionicons name="list" size={20} color={chartView === 'list' ? '#877ED2' : '#8E8E93'} />
+                        <Ionicons name="list" size={18} color={chartView === 'list' ? '#FFFFFF' : '#9D9DA8'} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -817,7 +889,7 @@ export default function ManagerProjectDetailsScreen() {
                       <Ionicons name="chevron-back" size={20} color="#000000" />
                     </TouchableOpacity>
                     <View style={styles.productivityWeekNavText}>
-                      <Text style={styles.productivityWeekLabel}>Week</Text>
+                      <Text style={styles.productivityWeekLabel}>{productivityView === 'week' ? 'Week' : 'Month'}</Text>
                       <Text style={styles.productivityWeekRange}>{getProductivityWeekRange()}</Text>
                     </View>
                     <TouchableOpacity onPress={() => navigateWeek('next')} style={styles.productivityNavButton}>
@@ -833,13 +905,15 @@ export default function ManagerProjectDetailsScreen() {
                       {productivityData.map((item, index) => {
                         const barHeightPercent = maxHours > 0 && item.hours > 0 ? (item.hours / maxHours) * 100 : 0;
                         const fillHeight = item.hours > 0 ? Math.max((barHeightPercent / 100) * 100, 4) : 4;
-                        const fillColor = item.hours > 0 ? '#877ED2' : '#E5E5EA';
+                        const fillColor = item.hours > 0 ? '#6F67CC' : '#E5E5EA';
                         
                         return (
                           <View key={index} style={styles.productivityBarColumn}>
-                            <Text style={[styles.productivityBarValue, item.hours === 0 && styles.productivityBarValueZero]}>
-                              {Math.round(item.hours)}
-                            </Text>
+                            <View style={styles.productivityBarValuePill}>
+                              <Text style={[styles.productivityBarValue, item.hours === 0 && styles.productivityBarValueZero]}>
+                                {Math.round(item.hours)}
+                              </Text>
+                            </View>
                             <View style={styles.productivityBarWrapper}>
                               <View style={styles.productivityBarBackground} />
                               <View 
@@ -1147,52 +1221,52 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
   statusHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   statusTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    fontFamily: typography.families.medium,
-    color: '#404040',
+    fontWeight: '600',
+    fontFamily: typography.families.semibold,
+    color: '#2F2F2F',
   },
   statusPill: {
-    backgroundColor: '#7E99D2',
-    borderRadius: 12,
-    width: 70,
-    height: 17,
+    minWidth: 72,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
   statusPillText: {
-    fontSize: 10,
-    fontWeight: '400',
-    color: '#FFFFFF',
-    fontFamily: typography.families.regular,
+    fontSize: 11,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
   },
   datesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 22,
+    marginBottom: 12,
   },
   dateItem: {
     flex: 1,
   },
   dateLabel: {
     fontSize: 12,
-    color: '#727272',
+    color: '#8F8F8F',
     marginBottom: 4,
     fontWeight: '400',
     fontFamily: typography.families.regular,
@@ -1201,42 +1275,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     fontFamily: typography.families.medium,
-    color: '#404040',
+    color: '#2F2F2F',
   },
   progressContainer: {
-    position: 'relative',
-    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   progressBar: {
-    width: '100%',
-    height: 8,
-    backgroundColor: '#F5F6FA',
-    borderRadius: 4,
-    overflow: 'visible',
-    position: 'relative',
+    flex: 1,
+    height: 6,
+    backgroundColor: '#ECECF3',
+    borderRadius: 999,
+    overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#34C759',
-    borderRadius: 4,
-  },
-  progressTextContainer: {
-    position: 'absolute',
-    top: -18,
-    marginLeft: -26,
-    zIndex: 1,
+    borderRadius: 999,
   },
   progressText: {
     fontSize: 12,
     fontWeight: '500',
     fontFamily: typography.families.medium,
-    color: '#727272',
+    color: '#8A8A8A',
   },
   taskStatusSection: {
-    marginTop: 24,
-    paddingTop: 24,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F5F6FA',
+    borderTopColor: '#ECECF3',
   },
   taskStatusCard: {
     backgroundColor: '#FFFFFF',
@@ -1251,40 +1319,47 @@ const styles = StyleSheet.create({
   },
   taskStatusTitle: {
     fontSize: 14,
-    fontWeight: '500',
-    fontFamily: typography.families.medium,
-    color: '#404040',
-    marginBottom: 16,
+    fontWeight: '600',
+    fontFamily: typography.families.semibold,
+    color: '#2F2F2F',
+    marginBottom: 12,
   },
   taskList: {
     gap: 0,
   },
   taskItem: {
-    marginBottom: 16,
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECECF3',
+  },
+  taskItemLast: {
+    marginBottom: 0,
+    borderBottomWidth: 0,
   },
   taskItemContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   taskName: {
     flex: 1,
     fontSize: 12,
-    fontWeight: '400',
-    fontFamily: typography.families.regular,
-    color: '#404040',
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
+    color: '#303030',
     marginRight: 12,
   },
   taskMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   taskDuration: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#4C4C4C',
+    color: '#808080',
     fontFamily: typography.families.medium,
   },
   taskStatusText: {
@@ -1298,12 +1373,12 @@ const styles = StyleSheet.create({
   },
   moreTaskButton: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     marginTop: 8,
   },
   moreTaskText: {
     fontSize: 12,
-    color: '#8F8F8F',
+    color: '#8A8A8A',
     fontWeight: '400',
     fontFamily: typography.families.regular,
   },
@@ -1349,6 +1424,8 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   tasksScrollContent: {
+    paddingTop: 6,
+    paddingBottom: 6,
     paddingRight: 16,
   },
   taskCard: {
@@ -1358,20 +1435,22 @@ const styles = StyleSheet.create({
     marginRight: 12,
     width: 280,
     height: 250,
+    borderWidth: 1,
+    borderColor: '#ECECF3',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   statusBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    borderRadius: 10,
     marginBottom: 8,
-    marginTop: -18,
+    marginTop: 0,
   },
   statusBadgeText: {
     fontSize: 12,
@@ -1443,137 +1522,138 @@ const styles = StyleSheet.create({
   },
   productivityTitle: {
     fontSize: 18,
-    fontWeight: '500',
-    fontFamily: typography.families.medium,
-    color: '#000000',
-    marginBottom: 16,
+    fontWeight: '600',
+    fontFamily: typography.families.semibold,
+    color: '#1D1D1F',
+    marginBottom: 12,
   },
   productivityFilters: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   productivityFiltersLabel: {
-    fontSize: 10,
-    color: '#727272',
-    marginBottom: 8,
+    fontSize: 12,
+    color: '#8F8F8F',
+    marginBottom: 10,
     fontWeight: '400',
     fontFamily: typography.families.regular,
   },
   productivityFiltersScroll: {
-    paddingRight: 16,
+    paddingRight: 8,
   },
   productivityFilterButton: {
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#8F8F8F',
-    backgroundColor: '#F1F1F4',
-    marginRight: 8,
+    minWidth: 64,
     height: 30,
-    width: 100,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D8D8E2',
+    backgroundColor: '#FFFFFF',
+    marginRight: 8,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   productivityFilterButtonActive: {
-    backgroundColor: '#F1F1F4',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#6F67CC',
   },
   productivityFilterButtonText: {
     fontSize: 12,
-    fontWeight: '400',
-    fontFamily: typography.families.regular,
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
     color: '#8F8F8F',
     textAlign: 'center',
   },
   productivityFilterButtonTextActive: {
-    fontWeight: '400',
+    fontWeight: '600',
     fontSize: 12,
-    fontFamily: typography.families.regular,
-    color: '#000000',
+    fontFamily: typography.families.semibold,
+    color: '#4D4D57',
   },
   productivityCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 12,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    borderWidth: 1,
+    borderColor: '#ECECF3',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 3,
   },
   productivityCardHeader: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   productivityHeaderTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 10,
   },
   productivityHeaderLeft: {
     alignItems: 'flex-start',
-    height: 32,
-    width: 200,
-    borderRadius: 60,
   },
   productivityViewToggle: {
     flexDirection: 'row',
-    backgroundColor: '#F5F6FA',
-    borderRadius: 30,
+    backgroundColor: '#F1F1F4',
+    borderRadius: 16,
     padding: 2,
+    width: 208,
+    height: 34,
   },
   productivityToggleButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 30,
-    height: 32,
-    width: 95,
+    width: 102,
+    height: 30,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   productivityToggleButtonActive: {
     backgroundColor: '#6F67CC',
-    borderRadius: 30,
-    height: 32,
-    width: 95,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   productivityToggleText: {
     fontSize: 12,
-    fontWeight: '400',
-    color: '#727272',
-    fontFamily: typography.families.regular,
+    fontWeight: '500',
+    color: '#8F8F8F',
+    fontFamily: typography.families.medium,
   },
   productivityToggleTextActive: {
     color: '#FFFFFF',
-    fontWeight: '400',
-    fontFamily: typography.families.regular,
+    fontWeight: '600',
+    fontFamily: typography.families.semibold,
     fontSize: 12,
   },
   productivityChartToggle: {
     flexDirection: 'row',
-    backgroundColor: '#F5F6FA',
-    borderRadius: 8,
-    paddingRight: 22,
-    gap: 2,
-    width: 74,
-    height: 32,
+    backgroundColor: '#F1F1F4',
+    borderRadius: 10,
+    padding: 2,
+    gap: 4,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
   },
   productivityChartToggleButton: {
-    width: 45,
-    height: 32,
-    borderRadius: 30,
+    width: 32,
+    height: 30,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   productivityChartToggleButtonActive: {
     backgroundColor: '#6F67CC',
-    borderRadius: 30,
-    width: 45,
-    height: 32,
+  },
+  productivityBarValuePill: {
+    minWidth: 22,
+    height: 14,
+    paddingHorizontal: 5,
+    borderRadius: 7,
+    backgroundColor: '#F1F1F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   productivityWeekNav: {
     flexDirection: 'row',
@@ -1581,39 +1661,38 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'space-between',
     paddingVertical: 8,
-    position: 'relative',
-    height: 42,
+    minHeight: 52,
+    marginBottom: 6,
   },
   productivityNavButton: {
+    padding: 4,
     zIndex: 1,
   },
   productivityWeekNavText: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+    flex: 1,
     alignItems: 'center',
-    zIndex: 0,
   },
   productivityWeekLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '400',
-    color: '#727272',
+    color: '#8F8F8F',
     fontFamily: typography.families.regular,
+    marginBottom: 2,
   },
   productivityWeekRange: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000000',
-    marginBottom: 4,
+    color: '#2F2F2F',
+    marginBottom: 0,
   },
   productivityChartContainer: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
   productivityChart: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 140,
+    height: 126,
     width: '100%',
   },
   productivityBarColumn: {
@@ -1622,35 +1701,34 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   productivityBarValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 4,
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#8A8A8A',
+    marginBottom: 0,
   },
   productivityBarValueZero: {
-    color: '#8E8E93',
+    color: '#A0A0AA',
   },
   productivityBarWrapper: {
-    width: '80%',
-    height: 100,
+    width: '100%',
+    height: 90,
     justifyContent: 'flex-end',
-    marginBottom: 8,
+    marginBottom: 10,
     position: 'relative',
     alignSelf: 'center',
     alignItems: 'center',
   },
   productivityBarBackground: {
-    width: '40%',
-    height: 100,
-    borderRadius: 4,
-    backgroundColor: '#E5E5EA',
+    width: 11,
+    height: 90,
+    borderRadius: 6,
+    backgroundColor: '#ECECF3',
     position: 'absolute',
     bottom: 0,
   },
   productivityBarFill: {
-    width: '40%',
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
+    width: 11,
+    borderRadius: 6,
     position: 'absolute',
     bottom: 0,
     minHeight: 4,
@@ -1659,32 +1737,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   productivityBarDay: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: '#8F8F8F',
+    lineHeight: 13,
   },
   productivityBarDate: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: '#8F8F8F',
+    lineHeight: 13,
   },
   productivitySummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: 16,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F5F6FA',
+    borderTopColor: '#ECECF3',
   },
   productivitySummaryLeft: {
     flex: 1,
   },
   productivitySummaryRight: {
     alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   productivitySummaryLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginBottom: 4,
+    fontSize: 12,
+    color: '#8F8F8F',
+    marginBottom: 2,
     fontWeight: '400',
   },
   productivitySummaryHours: {
@@ -1692,19 +1773,21 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   productivitySummaryHoursNumber: {
-    fontSize: 20,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#000000',
+    color: '#1D1D1F',
+    lineHeight: 34,
   },
   productivitySummaryHoursUnit: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 12,
+    color: '#8F8F8F',
     fontWeight: '400',
   },
   productivitySummaryValue: {
-    fontSize: 20,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#000000',
+    color: '#1D1D1F',
+    lineHeight: 34,
   },
   teamSection: {
     marginTop: 24,

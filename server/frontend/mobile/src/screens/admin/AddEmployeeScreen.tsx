@@ -579,17 +579,13 @@ export default function AddEmployeeScreen() {
       };
 
       let newEmployeeId: string | undefined;
+      let successMsg = '';
 
       if (isApprovalMode && pendingRegistration) {
-        // Approval mode - call the approve API
         const approveRes = await api.post(`/api/pending-registrations/${pendingRegistration.id}/approve`, payload);
         newEmployeeId = approveRes.data?.employee?.id;
-        
-        Alert.alert('Success', `${pendingRegistration.first_name} ${pendingRegistration.last_name} has been approved and added as an employee.`, [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
+        successMsg = `${pendingRegistration.first_name} ${pendingRegistration.last_name} has been approved and added as an employee.`;
       } else if (isEditMode && editEmployee) {
-        // Edit mode - call the update API
         const updatePayload = {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
@@ -602,12 +598,8 @@ export default function AddEmployeeScreen() {
 
         await api.put(`/api/employees/${editEmployee.id}`, updatePayload);
         newEmployeeId = editEmployee.id;
-
-        Alert.alert('Success', 'Employee updated successfully', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
+        successMsg = 'Employee updated successfully';
       } else {
-        // Normal add employee flow
         const employeeId = `EMP-${Date.now()}`;
         const createPayload = {
           ...payload,
@@ -622,33 +614,41 @@ export default function AddEmployeeScreen() {
 
         const createRes = await api.post('/api/employees', createPayload);
         newEmployeeId = createRes.data?.employee?.id;
-
-        Alert.alert('Success', 'Employee saved successfully', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
+        successMsg = 'Employee saved successfully';
       }
 
-      // If a photo is selected, upload it
+      // Upload photo and aadhaar BEFORE showing success
       if (newEmployeeId && photoUri) {
-        const formData = new FormData();
-        const filename = photoUri.split('/').pop() || `employee-${newEmployeeId}.jpg`;
-        const file: any = { uri: photoUri, name: filename, type: 'image/jpeg' };
-        formData.append('photo', file);
-        await api.post(`/api/employees/${newEmployeeId}/photo`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        try {
+          const formData = new FormData();
+          const filename = photoUri.split('/').pop() || `employee-${newEmployeeId}.jpg`;
+          const file: any = { uri: photoUri, name: filename, type: 'image/jpeg' };
+          formData.append('photo', file);
+          await api.post(`/api/employees/${newEmployeeId}/photo`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        } catch (photoErr: any) {
+          console.warn('Photo upload failed (non-blocking):', photoErr?.message);
+        }
       }
 
-      // If an aadhaar image is selected, upload it
       if (newEmployeeId && aadhaarFileUri) {
-        const formData = new FormData();
-        const filename = aadhaarFileUri.split('/').pop() || `aadhaar-${newEmployeeId}.jpg`;
-        const file: any = { uri: aadhaarFileUri, name: filename, type: 'image/jpeg' };
-        formData.append('aadhaar', file);
-        await api.post(`/api/employees/${newEmployeeId}/aadhaar`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        try {
+          const formData = new FormData();
+          const filename = aadhaarFileUri.split('/').pop() || `aadhaar-${newEmployeeId}.jpg`;
+          const file: any = { uri: aadhaarFileUri, name: filename, type: 'image/jpeg' };
+          formData.append('aadhaar', file);
+          await api.post(`/api/employees/${newEmployeeId}/aadhaar`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        } catch (aadhaarErr: any) {
+          console.warn('Aadhaar upload failed (non-blocking):', aadhaarErr?.message);
+        }
       }
+
+      Alert.alert('Success', successMsg, [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
     } catch (e: any) {
       console.error('Save employee failed:', e);
       let msg = isApprovalMode ? 'Failed to approve registration.' : isEditMode ? 'Failed to update employee.' : 'Failed to save employee.';

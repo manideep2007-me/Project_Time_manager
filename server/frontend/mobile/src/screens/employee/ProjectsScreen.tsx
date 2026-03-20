@@ -6,18 +6,20 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   StyleSheet,
-  TextInput,
   RefreshControl,
+  Platform,
+  Modal,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import { api } from '../../api/client';
-import VoiceToTextButton from '../../components/shared/VoiceToTextButton';
+import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import { tokens } from '../../design/tokens';
 
-const { typography } = tokens;
+const { colors, typography } = tokens;
 
 export default function ProjectsScreen() {
   const { t } = useTranslation();
@@ -27,19 +29,40 @@ export default function ProjectsScreen() {
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [search, setSearch] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'active' | 'todo' | 'completed' | 'cancelled' | 'on_hold' | 'all'>('active');
+  const [selectedFilter, setSelectedFilter] = useState<'active' | 'todo' | 'completed' | 'all'>('active');
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
+  const [calendarDate, setCalendarDate] = useState(new Date());
+
+  const getWeekDays = () => {
+    const today = new Date();
+    const currentDay = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
+      days.push({
+        date,
+        dateStr: date.toISOString().split('T')[0],
+        dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        dayNum: date.getDate(),
+      });
+    }
+    return days;
+  };
+
+  const weekDays = getWeekDays();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = (dateStr: string) => dateStr === todayStr;
 
   const loadProjects = async () => {
     try {
       setLoading(true);
-      if (!user?.id) {
-        setProjects([]);
-        return;
-      }
+      if (!user?.id) { setProjects([]); return; }
       const response = await api.get('/api/projects/assigned');
-      const employeeProjects = response.data?.projects || [];
-      setProjects(employeeProjects);
+      setProjects(response.data?.projects || []);
     } catch (error) {
       console.error('Error loading projects:', error);
       setProjects([]);
@@ -48,9 +71,7 @@ export default function ProjectsScreen() {
     }
   };
 
-  useEffect(() => {
-    loadProjects();
-  }, [user?.id]);
+  useEffect(() => { loadProjects(); }, [user?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -58,106 +79,46 @@ export default function ProjectsScreen() {
     setRefreshing(false);
   };
 
-  const getStatusCounts = () => {
-    const active = projects.filter(p => p.status === 'Active').length;
-    const todo = projects.filter(p => p.status === 'To Do').length;
-    const completed = projects.filter(p => p.status === 'Completed').length;
-    const cancelled = projects.filter(p => p.status === 'Cancelled').length;
-    const onHold = projects.filter(p => p.status === 'On Hold').length;
-    return {
-      active,
-      todo,
-      completed,
-      cancelled,
-      on_hold: onHold,
-      all: projects.length,
-    };
+  const statusCounts = {
+    active: projects.filter(p => p.status === 'Active').length,
+    todo: projects.filter(p => p.status === 'To Do').length,
+    completed: projects.filter(p => p.status === 'Completed').length,
+    all: projects.length,
   };
 
-  const statusCounts = getStatusCounts();
-
-  // Get available statuses dynamically (only statuses that have projects)
-  const availableStatuses = [
-    { key: 'active', label: 'Active', count: statusCounts.active },
-    { key: 'todo', label: 'To Do', count: statusCounts.todo },
-    { key: 'completed', label: 'Completed', count: statusCounts.completed },
-    { key: 'cancelled', label: 'Cancelled', count: statusCounts.cancelled },
-    { key: 'on_hold', label: 'On Hold', count: statusCounts.on_hold },
-  ].filter(status => status.count > 0);
-
-  // Reset filter to first available or 'all' if selected filter no longer has projects
-  useEffect(() => {
-    if (selectedFilter !== 'all') {
-      const currentFilterCount = selectedFilter === 'active' ? statusCounts.active :
-        selectedFilter === 'todo' ? statusCounts.todo :
-        selectedFilter === 'completed' ? statusCounts.completed :
-        selectedFilter === 'cancelled' ? statusCounts.cancelled :
-        selectedFilter === 'on_hold' ? statusCounts.on_hold : 0;
-      
-      if (currentFilterCount === 0) {
-        const firstAvailable = availableStatuses[0];
-        setSelectedFilter(firstAvailable?.key as any || 'all');
-      }
-    }
-  }, [projects]);
+  const filterTabs: Array<{ key: 'active' | 'todo' | 'completed' | 'all'; label: string }> = [
+    { key: 'active', label: 'In Progress' },
+    { key: 'todo', label: 'New' },
+    { key: 'completed', label: 'Completed' },
+    { key: 'all', label: 'All' },
+  ];
 
   const filteredProjects = projects.filter(project => {
-    if (selectedFilter === 'active') {
-      if (project.status !== 'Active') return false;
-    } else if (selectedFilter === 'todo') {
-      if (project.status !== 'To Do') return false;
-    } else if (selectedFilter === 'completed') {
-      if (project.status !== 'Completed') return false;
-    } else if (selectedFilter === 'cancelled') {
-      if (project.status !== 'Cancelled') return false;
-    } else if (selectedFilter === 'on_hold') {
-      if (project.status !== 'On Hold') return false;
-    }
-
-    if (search) {
-      const s = search.toLowerCase();
-      if (
-        !project.name?.toLowerCase().includes(s) &&
-        !project.location?.toLowerCase().includes(s)
-      ) {
-        return false;
-      }
-    }
-
+    if (selectedFilter === 'active' && project.status !== 'Active') return false;
+    if (selectedFilter === 'todo' && project.status !== 'To Do') return false;
+    if (selectedFilter === 'completed' && project.status !== 'Completed') return false;
     return true;
   });
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Active':
-        return '#877ED2';
-      case 'Completed':
-        return '#34C759';
-      case 'To Do':
-        return '#FF9500';
-      case 'On Hold':
-        return '#FF9500';
-      case 'Cancelled':
-        return '#FF3B30';
-      default:
-        return '#8E8E93';
+      case 'Active': return '#7E99D2';
+      case 'Completed': return '#34C759';
+      case 'To Do': return '#7E99D2';
+      case 'On Hold': return '#FF9500';
+      case 'Cancelled': return '#FF3B30';
+      default: return '#8E8E93';
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'Active':
-        return 'Active';
-      case 'Completed':
-        return 'Completed';
-      case 'To Do':
-        return 'To Do';
-      case 'On Hold':
-        return 'On Hold';
-      case 'Cancelled':
-        return 'Cancelled';
-      default:
-        return status || 'Unknown';
+      case 'Active': return 'In Progress';
+      case 'To Do': return 'In Progress';
+      case 'Completed': return 'Completed';
+      case 'On Hold': return 'On Hold';
+      case 'Cancelled': return 'Cancelled';
+      default: return status || 'Unknown';
     }
   };
 
@@ -167,9 +128,7 @@ export default function ProjectsScreen() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     due.setHours(0, 0, 0, 0);
-    const diffTime = due.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
   const isOverdue = (endDate: string) => getDaysRemaining(endDate) < 0;
@@ -177,9 +136,7 @@ export default function ProjectsScreen() {
   const formatProjectDate = (dateString: string) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
-    const formatted = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    // Add comma after month: "01 Oct 2025" -> "01 Oct, 2025"
-    return formatted.replace(/(\w+)\s+(\d{4})/, '$1, $2');
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   const handleProjectPress = (project: any) => {
@@ -196,12 +153,14 @@ export default function ProjectsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaWrapper style={styles.container} backgroundColor="#F0F0F0">
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
           <Ionicons name="chevron-back" size={24} color="#1A1A1A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Projects</Text>
+        <View style={{ flex: 1 }} />
         <TouchableOpacity style={styles.headerButton}>
           <Ionicons name="ellipsis-vertical" size={24} color="#1A1A1A" />
         </TouchableOpacity>
@@ -211,61 +170,61 @@ export default function ProjectsScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Status filters - Dynamic based on available projects */}
-        <View style={styles.filterContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterContent}
-          >
-            {availableStatuses.map((status) => (
-              <TouchableOpacity
-                key={status.key}
-                style={[styles.filterTab, selectedFilter === status.key && styles.filterTabActive]}
-                onPress={() => setSelectedFilter(status.key as any)}
-              >
-                <Text style={[styles.filterText, selectedFilter === status.key && styles.filterTextActive]}>
-                  {status.label} ({status.count})
-                </Text>
-              </TouchableOpacity>
-            ))}
-            {projects.length > 0 && (
-              <TouchableOpacity
-                style={[styles.filterTab, selectedFilter === 'all' && styles.filterTabActive]}
-                onPress={() => setSelectedFilter('all')}
-              >
-                <Text style={[styles.filterText, selectedFilter === 'all' && styles.filterTextActive]}>
-                  All ({statusCounts.all})
-                </Text>
-              </TouchableOpacity>
-            )}
+        {/* Date strip */}
+        <View style={styles.dateSelector}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateSelectorContent}>
+            {weekDays.map((day) => {
+              const isTodayDate = isToday(day.dateStr);
+              const isSelected = day.dateStr === selectedDate;
+              const isSelectedNotToday = isSelected && !isTodayDate;
+              return (
+                <TouchableOpacity
+                  key={day.dateStr}
+                  style={[
+                    styles.dateItem,
+                    isTodayDate && styles.dateItemToday,
+                    isSelectedNotToday && styles.dateItemSelected,
+                  ]}
+                  onPress={() => setSelectedDate(day.dateStr)}
+                >
+                  <Text style={[styles.dateNumber, isTodayDate ? styles.dateNumberToday : isSelectedNotToday ? styles.dateNumberSelected : null]}>
+                    {day.dayNum}
+                  </Text>
+                  <Text style={[styles.dateDay, isTodayDate ? styles.dateDayToday : isSelectedNotToday ? styles.dateDaySelected : null]}>
+                    {day.dayName}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={styles.calendarIcon}
+              onPress={() => { setCalendarDate(new Date()); setShowCalendarPicker(true); }}
+            >
+              <View style={styles.calendarIconContainer}>
+                <Ionicons name="calendar-outline" size={20} color={colors.primaryPurple} />
+                <View style={styles.clockOverlay}>
+                  <Ionicons name="time-outline" size={10} color={colors.primaryPurple} />
+                </View>
+              </View>
+            </TouchableOpacity>
           </ScrollView>
         </View>
 
-        {/* Search bar */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchRow}>
-            <View style={styles.searchInputContainer}>
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Search"
-                style={styles.searchInput}
-                placeholderTextColor="#9CA3AF"
-              />
-              <TouchableOpacity style={styles.searchIconButton}>
-                <Ionicons name="search" size={20} color="#9CA3AF" />
+        {/* Filter tabs */}
+        <View style={styles.filterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+            {filterTabs.map(tab => (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.filterTab, selectedFilter === tab.key && styles.filterTabActive]}
+                onPress={() => setSelectedFilter(tab.key)}
+              >
+                <Text style={[styles.filterText, selectedFilter === tab.key && styles.filterTextActive]}>
+                  {tab.label} ({statusCounts[tab.key] || 0})
+                </Text>
               </TouchableOpacity>
-            </View>
-            <VoiceToTextButton
-              onResult={text => {
-                setSearch(text);
-              }}
-              size="small"
-              style={styles.voiceButton}
-              color="#877ED2"
-            />
-          </View>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Project cards */}
@@ -286,30 +245,32 @@ export default function ProjectsScreen() {
                   key={project.id}
                   style={styles.projectCard}
                   onPress={() => handleProjectPress(project)}
-                  activeOpacity={0.7}
+                  activeOpacity={0.85}
                 >
-                  <View style={styles.projectCardTop}>
+                  {/* Badge row */}
+                  <View style={styles.cardTopRow}>
                     <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                       <Text style={styles.statusBadgeText}>{getStatusText(project.status)}</Text>
                     </View>
-                    <View style={styles.avatarContainer}>
-                      <View style={styles.avatar}>
-                        <Ionicons name="person" size={12} color="#fff" />
-                      </View>
-                      <View style={styles.avatarPlus}>
-                        <Text style={styles.avatarPlusText}>+</Text>
-                      </View>
+                  </View>
+
+                  {/* Avatar stack (absolute) */}
+                  <View style={styles.avatarAbsolute}>
+                    <View style={styles.avatar}>
+                      <Ionicons name="person" size={13} color="#fff" />
+                    </View>
+                    <View style={styles.avatarPlus}>
+                      <Text style={styles.avatarPlusText}>+</Text>
                     </View>
                   </View>
 
                   {project.location && (
-                    <View style={styles.locationRow}>
-                      <Text style={styles.locationText}>{project.location}</Text>
-                    </View>
+                    <Text style={styles.locationText}>{project.location}</Text>
                   )}
 
                   <Text style={styles.projectName}>{project.name}</Text>
 
+                  {/* Dates row */}
                   <View style={styles.datesContainer}>
                     <View style={styles.dateSection}>
                       <Text style={styles.dateLabel}>Start</Text>
@@ -326,61 +287,21 @@ export default function ProjectsScreen() {
                     <View style={styles.dateSection}>
                       {overdue ? (
                         <>
-                          <View style={styles.overdueRow}>
+                          <View style={styles.statusRow}>
                             <Text style={styles.dateLabel}>Over due</Text>
                             <Text style={styles.overdueValue}>{Math.abs(daysRemaining)}d</Text>
                           </View>
                           <View style={styles.overdueBar} />
                         </>
-                      ) : project.status === 'Active' ? (
+                      ) : project.status === 'Active' || project.status === 'To Do' ? (
                         <>
-                          <View style={styles.overdueRow}>
+                          <View style={styles.statusRow}>
                             <Text style={styles.dateLabel}>In Progress</Text>
-                            <Text style={styles.inProgressValue}>{daysRemaining}d</Text>
+                            <Text style={styles.inProgressDays}>{daysRemaining}d</Text>
                           </View>
                           <View style={styles.inProgressBar} />
                         </>
-                      ) : project.status === 'Completed' ? (
-                        <>
-                          <View style={styles.overdueRow}>
-                            <Text style={styles.dateLabel}>Completed</Text>
-                            <Ionicons name="checkmark-circle" size={14} color="#34C759" />
-                          </View>
-                          <View style={styles.completedBar} />
-                        </>
-                      ) : project.status === 'To Do' ? (
-                        <>
-                          <View style={styles.overdueRow}>
-                            <Text style={styles.dateLabel}>To Do</Text>
-                            <Text style={styles.newValue}>{daysRemaining}d</Text>
-                          </View>
-                          <View style={styles.newBar} />
-                        </>
-                      ) : project.status === 'On Hold' ? (
-                        <>
-                          <View style={styles.overdueRow}>
-                            <Text style={styles.dateLabel}>On Hold</Text>
-                            <Ionicons name="pause-circle" size={14} color="#FF9500" />
-                          </View>
-                          <View style={styles.onHoldBar} />
-                        </>
-                      ) : project.status === 'Cancelled' ? (
-                        <>
-                          <View style={styles.overdueRow}>
-                            <Text style={styles.dateLabel}>Cancelled</Text>
-                            <Ionicons name="close-circle" size={14} color="#FF3B30" />
-                          </View>
-                          <View style={styles.cancelledBar} />
-                        </>
-                      ) : (
-                        <>
-                          <View style={styles.overdueRow}>
-                            <Text style={styles.dateLabel}>Status</Text>
-                            <Text style={styles.unknownValue}>—</Text>
-                          </View>
-                          <View style={styles.unknownBar} />
-                        </>
-                      )}
+                      ) : null}
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -389,330 +310,382 @@ export default function ProjectsScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+
+      {/* Calendar Picker Modal */}
+      {Platform.OS === 'ios' && showCalendarPicker && (
+        <Modal visible={showCalendarPicker} transparent animationType="slide" onRequestClose={() => setShowCalendarPicker(false)}>
+          <View style={styles.calendarModalOverlay}>
+            <View style={styles.calendarModalContent}>
+              <View style={styles.calendarModalHeader}>
+                <Text style={styles.calendarModalTitle}>Select Date</Text>
+                <TouchableOpacity onPress={() => setShowCalendarPicker(false)}>
+                  <Ionicons name="close" size={24} color="#1A1A1A" />
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker value={calendarDate} mode="date" display="spinner" onChange={(e, d) => { if (d) setCalendarDate(d); if (e.type === 'dismissed') setShowCalendarPicker(false); }} />
+              <TouchableOpacity style={styles.calendarConfirmButton} onPress={() => { setSelectedDate(calendarDate.toISOString().split('T')[0]); setShowCalendarPicker(false); }}>
+                <Text style={styles.calendarConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+      {Platform.OS === 'android' && showCalendarPicker && (
+        <DateTimePicker value={calendarDate} mode="date" display="default" onChange={(e, d) => { setShowCalendarPicker(false); if (d && e.type === 'set') { setCalendarDate(d); setSelectedDate(d.toISOString().split('T')[0]); } }} />
+      )}
+    </SafeAreaWrapper>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F6FA',
+    backgroundColor: '#F0F0F0',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F6FA',
+    backgroundColor: '#F0F0F0',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
     color: '#666',
   },
+  // ── Header ──────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 24,
-    paddingBottom: 12,
-    backgroundColor: '#F5F5F5',
+    paddingTop: 6,
+    paddingBottom: 8,
+    paddingHorizontal: 4,
+    backgroundColor: '#F0F0F0',
   },
   headerButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 4,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '400',
-    color: '#000000',
-    fontFamily: typography.families.regular,
-    marginLeft: 8,
-    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    fontFamily: typography.families.semibold,
+    marginLeft: 4,
   },
   scrollView: {
     flex: 1,
   },
-  filterContainer: {
-    backgroundColor: 'transparent',
-    paddingTop: 16,
-    paddingBottom: 0,
+  // ── Date strip ──────────────────────────────────────────────
+  dateSelector: {
+    backgroundColor: '#F0F0F0',
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  dateSelectorContent: {
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dateItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#EBEBEB',
+    width: 52,
+    height: 56,
+  },
+  dateItemToday: {
+    backgroundColor: '#877ED2',
+  },
+  dateItemSelected: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#877ED2',
+  },
+  dateNumber: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    fontFamily: typography.families.semibold,
+    marginBottom: 2,
+  },
+  dateNumberToday: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  dateNumberSelected: {
+    color: '#877ED2',
+    fontWeight: '700',
+  },
+  dateDay: {
+    fontSize: 11,
+    color: '#888888',
+    fontFamily: typography.families.regular,
+  },
+  dateDayToday: {
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  dateDaySelected: {
+    color: '#877ED2',
+    fontWeight: '500',
+  },
+  calendarIcon: {
+    marginLeft: 4,
+    height: 56,
+    justifyContent: 'center',
+  },
+  calendarIconContainer: {
+    width: 48,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  clockOverlay: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.primaryPurple,
+  },
+  // ── Calendar modal ──────────────────────────────────────────
+  calendarModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  calendarModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  calendarModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E6EB',
+  },
+  calendarModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    fontFamily: typography.families.semibold,
+  },
+  calendarConfirmButton: {
+    backgroundColor: colors.primaryPurple,
+    marginHorizontal: 20,
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  calendarConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: typography.families.semibold,
+  },
+  // ── Filter tabs ─────────────────────────────────────────────
+  filterContainer: {
+    backgroundColor: '#F0F0F0',
+    paddingTop: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E2E2',
   },
   filterContent: {
     paddingHorizontal: 16,
     paddingBottom: 0,
+    gap: 4,
   },
   filterTab: {
-    marginRight: 20,
-    paddingBottom: 6,
-    position: 'relative',
+    marginRight: 16,
+    paddingBottom: 8,
   },
   filterTabActive: {
-    borderBottomWidth: 3,
+    borderBottomWidth: 2.5,
     borderBottomColor: '#877ED2',
     marginBottom: -1,
   },
   filterText: {
-    fontSize: 16,
-    color: '#8F8F8F',
+    fontSize: 14,
+    color: '#9CA3AF',
     fontFamily: typography.families.regular,
     fontWeight: '400',
   },
   filterTextActive: {
-    color: '#000000',
-    fontWeight: '400',
-    fontFamily: typography.families.regular,
-    fontSize: 16,
-  },
-  searchContainer: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 0,
-    borderBottomColor: 'transparent',
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchInputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    paddingRight: 8,
-    borderWidth: 1,
-    borderColor: '#E5E6EB',
-  },
-  searchInput: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
     color: '#1A1A1A',
-    fontFamily: typography.families.regular,
+    fontWeight: '600',
+    fontFamily: typography.families.semibold,
   },
-  voiceButton: {
-    marginLeft: 12,
-  },
-  searchIconButton: {
-    padding: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // ── Project cards ───────────────────────────────────────────
   projectsContainer: {
-    padding: 16,
+    padding: 14,
+    paddingTop: 16,
   },
   projectCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: 14,
+    marginBottom: 18,
+    shadowColor: '#1A1A2E',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 5,
     overflow: 'hidden',
-    height: 151,
-    width: 372,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.04)',
+    paddingBottom: 14,
   },
-  projectCardTop: {
+  cardTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingHorizontal: 14,
+    paddingTop: 0,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     alignSelf: 'flex-start',
-    marginTop: -14,
   },
   statusBadgeText: {
-    fontSize: 10,
-    paddingTop: 2,
-    fontWeight: '400',
+    fontSize: 12,
+    fontWeight: '600',
     color: '#FFFFFF',
-    fontFamily: typography.families.regular,
+    fontFamily: typography.families.semibold,
   },
-  avatarContainer: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+  avatarAbsolute: {
     position: 'absolute',
-    top: 8,
-    right: 12,
+    top: 10,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
   },
   avatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: '#FF9500',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'absolute',
-    top: 30,
-    right: 16,
+    marginRight: -8,
     zIndex: 1,
-  },
-  avatarPlus: {
-    width: 24,
-    height: 24,
-    borderRadius: 16,
-    backgroundColor: '#666666',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'absolute',
-    top: 28,
-    right: 4,
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
+  },
+  avatarPlus: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#5F5F6E',
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 2,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   avatarPlusText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#FFFFFF',
     fontWeight: '600',
-    fontFamily: typography.families.bold,
-    textAlign: 'center',
-    lineHeight: 12,
-  },
-  locationRow: {
-    paddingHorizontal: 16,
-    marginTop: 6,
-    marginBottom: 2,
+    lineHeight: 14,
   },
   locationText: {
-    fontSize: 10,
-    color: '#727272',
+    fontSize: 12,
+    color: '#9CA3AF',
+    paddingHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 2,
     fontFamily: typography.families.regular,
-    fontWeight: '400',
   },
   projectName: {
     fontSize: 18,
-    fontWeight: '500',
-    color: '#404040',
-    marginBottom: 8,
-    marginTop: 0,
-    paddingHorizontal: 16,
-    fontFamily: typography.families.medium,
+    fontWeight: '600',
+    color: '#2B2B2B',
+    marginBottom: 10,
+    marginTop: 2,
+    paddingHorizontal: 14,
+    fontFamily: typography.families.semibold,
+    lineHeight: 24,
   },
   datesContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingHorizontal: 14,
+    paddingTop: 6,
   },
   dateSection: {
     flex: 1,
   },
   dateLabel: {
     fontSize: 10,
-    color: '#727272',
+    color: '#9CA3AF',
     fontWeight: '400',
-    marginBottom: 4,
     fontFamily: typography.families.regular,
+    marginBottom: 3,
   },
   dateValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#404040',
-    fontFamily: typography.families.medium,
-    marginTop: -4,
-  },
-  overdueValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FF3B30',
+    color: '#1A1A1A',
     fontFamily: typography.families.semibold,
   },
-  overdueBar: {
-    height: 2,
-    backgroundColor: '#FF3B30',
-    borderRadius: 1,
-    width: 90,
-    marginTop: 4,
-    marginLeft: 26,
-  },
-  inProgressValue: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#85C369',
-    fontFamily: typography.families.bold,
-  },
-  inProgressBar: {
-    height: 2,
-    backgroundColor: '#85C369',
-    borderRadius: 4,
-    width: 90,
-    marginTop: 4,
-    marginLeft: 26,
-  },
-  completedBar: {
-    height: 2,
-    backgroundColor: '#34C759',
-    borderRadius: 4,
-    width: 90,
-    marginTop: 4,
-    marginLeft: 26,
-  },
-  newValue: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#007AFF',
-    fontFamily: typography.families.bold,
-  },
-  newBar: {
-    height: 2,
-    backgroundColor: '#007AFF',
-    borderRadius: 4,
-    width: 90,
-    marginTop: 4,
-    marginLeft: 26,
-  },
-  onHoldBar: {
-    height: 2,
-    backgroundColor: '#FF9500',
-    borderRadius: 4,
-    width: 90,
-    marginTop: 4,
-    marginLeft: 26,
-  },
-  cancelledBar: {
-    height: 2,
-    backgroundColor: '#FF3B30',
-    borderRadius: 4,
-    width: 90,
-    marginTop: 4,
-    marginLeft: 26,
-  },
-  unknownValue: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#8E8E93',
-    fontFamily: typography.families.bold,
-  },
-  unknownBar: {
-    height: 2,
-    backgroundColor: '#8E8E93',
-    borderRadius: 4,
-    width: 90,
-    marginTop: 4,
-    marginLeft: 26,
-  },
-  overdueRow: {
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: 26,
+    marginBottom: 4,
   },
+  overdueValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FF3B30',
+    fontFamily: typography.families.bold,
+  },
+  overdueBar: {
+    height: 4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 4,
+    width: '100%',
+  },
+  inProgressDays: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#34C759',
+    fontFamily: typography.families.bold,
+  },
+  inProgressBar: {
+    height: 4,
+    backgroundColor: '#34C759',
+    borderRadius: 4,
+    width: '100%',
+  },
+  // ── Empty ───────────────────────────────────────────────────
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
@@ -732,5 +705,3 @@ const styles = StyleSheet.create({
     fontFamily: typography.families.regular,
   },
 });
-
-

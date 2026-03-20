@@ -100,8 +100,7 @@ router.get('/analytics', async (req, res) => {
       projectStatusDistribution,
       employeePerformance
     ] = await Promise.all([
-      // Time by project
-      pool.query(`
+      db.query(`
         SELECT p.project_name, p.status, SUM(te.duration_minutes) as total_minutes, COUNT(te.id) as entry_count
         FROM time_entries te
         JOIN tasks t ON te.task_id = t.task_id
@@ -112,8 +111,7 @@ router.get('/analytics', async (req, res) => {
         LIMIT 10
       `, params),
       
-      // Time by employee
-      pool.query(`
+      db.query(`
         SELECT e.first_name, e.last_name, e.user_id as employee_id, SUM(te.duration_minutes) as total_minutes, COUNT(te.id) as entry_count
         FROM time_entries te
         JOIN users e ON te.employee_id = e.user_id
@@ -123,8 +121,7 @@ router.get('/analytics', async (req, res) => {
         LIMIT 10
       `, params),
       
-      // Cost by project (removed as cost column doesn't exist)
-      pool.query(`
+      db.query(`
         SELECT p.project_name, p.status, 0 as total_cost, COUNT(te.id) as entry_count
         FROM time_entries te
         JOIN tasks t ON te.task_id = t.task_id
@@ -135,8 +132,7 @@ router.get('/analytics', async (req, res) => {
         LIMIT 10
       `, params),
       
-      // Cost by employee (removed as cost column doesn't exist)
-      pool.query(`
+      db.query(`
         SELECT e.first_name, e.last_name, e.user_id as employee_id, 0 as total_cost, COUNT(te.id) as entry_count
         FROM time_entries te
         JOIN users e ON te.employee_id = e.user_id
@@ -146,8 +142,7 @@ router.get('/analytics', async (req, res) => {
         LIMIT 10
       `, params),
       
-      // Daily time entries
-      pool.query(`
+      db.query(`
         SELECT DATE(te.start_time) as date, SUM(te.duration_minutes) as total_minutes, COUNT(te.id) as entry_count
         FROM time_entries te
         WHERE 1=1 ${dateFilter}
@@ -156,16 +151,14 @@ router.get('/analytics', async (req, res) => {
         LIMIT 30
       `, params),
       
-      // Project status distribution
-      pool.query(`
+      db.query(`
         SELECT status, COUNT(*) as count
         FROM projects
         GROUP BY status
         ORDER BY count DESC
       `),
       
-      // Employee performance (hours per day)
-      pool.query(`
+      db.query(`
         SELECT e.first_name, e.last_name, e.user_id as employee_id, 
                ROUND(AVG(te.duration_minutes) / 60, 2) as avg_hours_per_day,
                COUNT(DISTINCT DATE(te.start_time)) as days_worked
@@ -225,7 +218,7 @@ router.get('/reports', async (req, res) => {
     switch (type) {
       case 'summary':
         const [totalStats, projectStats, employeeStats] = await Promise.all([
-          pool.query(`
+          db.query(`
             SELECT 
               COUNT(DISTINCT t.project_id) as projects_worked,
               COUNT(DISTINCT te.employee_id) as employees_worked,
@@ -237,7 +230,7 @@ router.get('/reports', async (req, res) => {
             WHERE 1=1 ${dateFilter}
           `, params),
           
-          pool.query(`
+          db.query(`
             SELECT p.project_name as name, p.status, p.estimated_value as budget,
                    SUM(te.duration_minutes) as total_minutes,
                    0 as total_cost,
@@ -249,7 +242,7 @@ router.get('/reports', async (req, res) => {
             ORDER BY total_minutes DESC
           `, params),
           
-          pool.query(`
+          db.query(`
             SELECT e.first_name, e.last_name, e.user_id as employee_id, NULL as department,
                    SUM(te.duration_minutes) as total_minutes,
                    0 as total_cost,

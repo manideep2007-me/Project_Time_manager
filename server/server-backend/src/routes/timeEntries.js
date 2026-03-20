@@ -486,11 +486,11 @@ router.get('/summary/overview', async (req, res) => {
     }
     
     const [totalHours, totalCost, entryCount, topEmployees, topProjects] = await Promise.all([
-      pool.query(`SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries te ${where}`, params),
-      pool.query(`SELECT 0 as total_cost`, []),
-      pool.query(`SELECT COUNT(*) as count FROM time_entries te ${where}`, params),
-      pool.query(`SELECT u.first_name, u.last_name, u.user_id, SUM(te.duration_minutes) as total_minutes FROM time_entries te JOIN users u ON te.employee_id = u.user_id ${where} GROUP BY u.user_id, u.first_name, u.last_name ORDER BY total_minutes DESC LIMIT 5`, params),
-      pool.query(`SELECT p.project_name, p.status, SUM(te.duration_minutes) as total_minutes FROM time_entries te JOIN tasks t ON te.task_id = t.task_id JOIN projects p ON t.project_id = p.project_id ${where} GROUP BY p.project_id, p.project_name, p.status ORDER BY total_minutes DESC LIMIT 5`, params)
+      db.query(`SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries te ${where}`, params),
+      db.query(`SELECT 0 as total_cost`, []),
+      db.query(`SELECT COUNT(*) as count FROM time_entries te ${where}`, params),
+      db.query(`SELECT u.first_name, u.last_name, u.user_id, SUM(te.duration_minutes) as total_minutes FROM time_entries te JOIN users u ON te.employee_id = u.user_id ${where} GROUP BY u.user_id, u.first_name, u.last_name ORDER BY total_minutes DESC LIMIT 5`, params),
+      db.query(`SELECT p.project_name, p.status, SUM(te.duration_minutes) as total_minutes FROM time_entries te JOIN tasks t ON te.task_id = t.task_id JOIN projects p ON t.project_id = p.project_id ${where} GROUP BY p.project_id, p.project_name, p.status ORDER BY total_minutes DESC LIMIT 5`, params)
     ]);
     
     res.json({

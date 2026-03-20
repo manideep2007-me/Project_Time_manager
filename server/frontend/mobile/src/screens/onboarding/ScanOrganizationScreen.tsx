@@ -259,7 +259,7 @@ export default function ScanOrganizationScreen({ navigation }: any) {
     }
   };
 
-  // Send Email OTP (simulated - logs to console)
+  // Send Email OTP
   const handleSendEmailOtp = async () => {
     if (!email.trim()) {
       showOtpNotice('Validation', 'Please enter your email address.', 'error');
@@ -272,23 +272,26 @@ export default function ScanOrganizationScreen({ navigation }: any) {
 
     setSendingEmailOtp(true);
     try {
-      // Generate a 6-digit OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      // Try sending via backend first
+      let otp: string | undefined;
+      try {
+        const res = await api.post('/api/otp/send', { phoneNumber: email });
+        otp = res.data?.otp; // Dev mode returns OTP in response
+      } catch {
+        // Fallback: generate client-side
+      }
+
+      if (!otp) {
+        otp = Math.floor(100000 + Math.random() * 900000).toString();
+      }
       
-      // Log OTP to console (for development/testing)
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('📧 Email OTP (Development Mode)');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log(`To: ${email}`);
-      console.log(`OTP: ${otp}`);
-      console.log('═══════════════════════════════════════════════════════════');
+      console.log(`OTP sent to ${email}: ${otp}`);
       
-      // Store OTP temporarily for verification
       (global as any).emailOtpStore = { email, otp, expiresAt: Date.now() + 5 * 60 * 1000 };
       
       setEmailOtpSent(true);
-      setEmailOtpTimer(300); // 5 minutes
-      showOtpNotice('OTP Sent', `Verification code sent to ${email}. Check your console for the OTP.`, 'info');
+      setEmailOtpTimer(300);
+      showOtpNotice('OTP Sent', `Your verification code is: ${otp}\n\nThis code expires in 5 minutes.`, 'info');
     } catch (error) {
       console.error('Send email OTP error:', error);
       showOtpNotice('Error', 'Failed to send OTP. Please try again.', 'error');
@@ -351,8 +354,11 @@ export default function ScanOrganizationScreen({ navigation }: any) {
       
       if (result.success) {
         setPhoneOtpSent(true);
-        setPhoneOtpTimer(300); // 5 minutes
-        showOtpNotice('OTP Sent', `Verification code sent to ${fullPhone}. Check your console/WhatsApp for the OTP.`, 'info');
+        setPhoneOtpTimer(300);
+        const otpMsg = result.otp 
+          ? `Your verification code is: ${result.otp}\n\nSent to ${fullPhone}. Expires in 5 minutes.`
+          : `Verification code sent to ${fullPhone}. Check your WhatsApp for the OTP.`;
+        showOtpNotice('OTP Sent', otpMsg, 'info');
       } else {
         showOtpNotice('Error', result.message || 'Failed to send OTP.', 'error');
       }

@@ -93,7 +93,7 @@ router.post('/upload', upload.array('files', 10), async (req, res) => {
         RETURNING id
       `;
       
-      return pool.query(attachmentQuery, [
+      return db.query(attachmentQuery, [
         uploadId,
         file.originalname,
         file.filename,
@@ -142,14 +142,10 @@ router.get('/task/:taskId', async (req, res) => {
     const db = getDbPool(req);
     const { taskId } = req.params;
     
-    // Check if pool is available
-    if (!pool || typeof pool.query !== 'function') {
+    if (!db || typeof db.query !== 'function') {
       console.error('Database pool is not available');
       return res.json({ uploads: [] });
     }
-
-    // Use LEFT JOIN to handle cases where employee or task might not exist
-    // Also handle the case where there are no uploads (return empty array instead of error)
     const query = `
       SELECT 
         a.id as upload_id,
@@ -183,8 +179,7 @@ router.get('/:uploadId/attachments', async (req, res) => {
     const db = getDbPool(req);
     const { uploadId } = req.params;
 
-    // Check if pool is available
-    if (!pool || typeof pool.query !== 'function') {
+    if (!db || typeof db.query !== 'function') {
       console.error('Database pool is not available');
       return res.json({ attachments: [] });
     }
@@ -247,8 +242,8 @@ router.get('/employee/:employeeId', async (req, res) => {
     `;
 
     const [result, countResult] = await Promise.all([
-      pool.query(query, [employeeId, limit, offset]),
-      pool.query(countQuery, [employeeId])
+      db.query(query, [employeeId, limit, offset]),
+      db.query(countQuery, [employeeId])
     ]);
 
     res.json({

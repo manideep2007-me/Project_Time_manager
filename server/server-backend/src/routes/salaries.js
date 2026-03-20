@@ -103,8 +103,8 @@ router.get('/', async (req, res) => {
     `;
     
     const [salariesResult, countResult] = await Promise.all([
-      pool.query(salariesQuery, params),
-      pool.query(countQuery, params)
+      db.query(salariesQuery, params),
+      db.query(countQuery, params)
     ]);
     
     res.json({
@@ -406,8 +406,8 @@ router.get('/stats', async (req, res) => {
     `;
     
     const [statsResult, departmentResult] = await Promise.all([
-      pool.query(statsQuery),
-      pool.query(departmentStatsQuery)
+      db.query(statsQuery),
+      db.query(departmentStatsQuery)
     ]);
     
     res.json({

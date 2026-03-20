@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import { api } from '../../api/client';
 import { tokens } from '../../design/tokens';
+import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 const { colors, spacing, radii, typography } = tokens;
 
 type TaskStatus = 'To Do' | 'Active' | 'Completed' | 'Cancelled' | 'On Hold';
@@ -116,16 +117,27 @@ export default function EmployeeAllTasksScreen() {
     all: tasks.length,
   };
 
-  // Get available statuses dynamically (only statuses that have tasks)
-  const availableStatuses = (['Active', 'To Do', 'Completed', 'Cancelled', 'On Hold'] as const)
-    .filter(status => taskCounts[status] > 0);
+  // Keep filter tabs fixed to match app design
+  const filterTabs: Array<'Active' | 'To Do' | 'Completed' | 'all'> = ['Active', 'To Do', 'Completed', 'all'];
+  const getFilterLabel = (status: 'Active' | 'To Do' | 'Completed' | 'all') => {
+    switch (status) {
+      case 'Active':
+        return 'In Progress';
+      case 'To Do':
+        return 'To Do';
+      case 'Completed':
+        return 'Completed';
+      case 'all':
+      default:
+        return 'All';
+    }
+  };
 
-  // Reset filter to 'all' if selected filter no longer has tasks
+  // Ensure selected filter is always one of visible tabs
   useEffect(() => {
-    if (selectedFilter !== 'all' && taskCounts[selectedFilter] === 0) {
-      // Find first available status or default to 'all'
-      const firstAvailable = availableStatuses[0];
-      setSelectedFilter(firstAvailable || 'all');
+    const visibleTabs: Array<'Active' | 'To Do' | 'Completed' | 'all'> = ['Active', 'To Do', 'Completed', 'all'];
+    if (!visibleTabs.includes(selectedFilter as any)) {
+      setSelectedFilter('Active');
     }
   }, [tasks]);
 
@@ -142,7 +154,7 @@ export default function EmployeeAllTasksScreen() {
 
   const getStatusText = (status: TaskStatus | string) => {
     switch (status) {
-      case 'Active': return 'Active';
+      case 'Active': return 'In Progress';
       case 'To Do': return 'To Do';
       case 'Completed': return 'Completed';
       case 'Cancelled': return 'Cancelled';
@@ -300,7 +312,7 @@ export default function EmployeeAllTasksScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaWrapper style={styles.container} backgroundColor="#F0F0F0">
       {/* Custom Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
@@ -375,27 +387,17 @@ export default function EmployeeAllTasksScreen() {
         {/* Task Category Filters - Dynamic based on available tasks */}
         <View style={styles.filterContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
-            {availableStatuses.map((status) => (
+            {filterTabs.map((status) => (
               <TouchableOpacity
                 key={status}
                 style={[styles.filterTab, selectedFilter === status && styles.filterTabActive]}
                 onPress={() => setSelectedFilter(status)}
               >
                 <Text style={[styles.filterText, selectedFilter === status && styles.filterTextActive]}>
-                  {status} ({taskCounts[status]})
+                  {getFilterLabel(status)} ({taskCounts[status] || 0})
                 </Text>
               </TouchableOpacity>
             ))}
-            {tasks.length > 0 && (
-              <TouchableOpacity
-                style={[styles.filterTab, selectedFilter === 'all' && styles.filterTabActive]}
-                onPress={() => setSelectedFilter('all')}
-              >
-                <Text style={[styles.filterText, selectedFilter === 'all' && styles.filterTextActive]}>
-                  All ({taskCounts.all})
-                </Text>
-              </TouchableOpacity>
-            )}
           </ScrollView>
         </View>
 
@@ -627,20 +629,20 @@ export default function EmployeeAllTasksScreen() {
           }}
         />
       )}
-    </View>
+    </SafeAreaWrapper>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F6FA',
+    backgroundColor: '#F0F0F0',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F6FA',
+    backgroundColor: '#F0F0F0',
   },
   loadingText: {
     marginTop: 12,
@@ -651,8 +653,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     //paddingHorizontal: 16,
-    paddingTop: 24,
-    backgroundColor: '#F5F5F5',
+    paddingTop: 6,
+    backgroundColor: '#F0F0F0',
   },
   headerButton: {
     width: 40,
@@ -675,7 +677,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateSelector: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F0F0F0',
     paddingTop: 12,
     height: 80,
   },
@@ -805,7 +807,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.families.semibold,
   },
   filterContainer: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#F0F0F0',
     paddingTop: 16,
     paddingBottom: 0,
     borderBottomWidth: 1,
@@ -842,9 +844,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
-    backgroundColor: '#F5F5F5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E6EB',
+    backgroundColor: '#F0F0F0',
   },
   projectFilterLabel: {
     fontSize: 14,
@@ -902,16 +902,18 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   taskCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    marginBottom: 18,
+    shadowColor: '#1A1A2E',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 5,
     overflow: 'hidden',
-    height: 220,
+    minHeight: 214,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.04)',
   },
   taskCardTop: {
     flexDirection: 'row',
@@ -1035,27 +1037,32 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bottomSection: {
-    backgroundColor: '#E8E7ED99',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    backgroundColor: '#EEEDF5',
+    borderTopWidth: 1,
+    borderTopColor: '#E4E2EE',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
   },
   timeWorkedContainer: {
     flexShrink: 0,
   },
   timeWorkedLabel: {
     fontSize: 10,
-    color: '#727272',
+    color: '#8A8A8A',
     fontWeight: '400',
-    marginBottom: 4,
+    marginBottom: 2,
     fontFamily: typography.families.regular,
   },
   timeWorkedRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginTop: -4,
+    marginTop: -1,
   },
   timeWorkedNumber: {
     fontSize: 16,
@@ -1073,17 +1080,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexShrink: 0,
-    marginLeft: 16,
+    marginLeft: 14,
+    alignItems: 'center',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    height: 34,
     paddingHorizontal: 14,
-    borderRadius: 10,
-    gap: 6,
-    minWidth: 100,
+    borderRadius: 999,
+    gap: 5,
+    minWidth: 96,
   },
   actionButtonPrimary: {
     backgroundColor: '#877ED2',
@@ -1093,8 +1101,8 @@ const styles = StyleSheet.create({
     borderRadius: 40,
   },
   actionButtonSecondary: {
-    backgroundColor: '#F0EFFF',
-    borderRadius: 40,
+    backgroundColor: '#ECE9FB',
+    borderRadius: 999,
     borderWidth: 0,
   },
   actionButtonText: {
@@ -1107,7 +1115,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   actionButtonTextSecondary: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: '#877ED2',
     fontFamily: typography.families.medium,

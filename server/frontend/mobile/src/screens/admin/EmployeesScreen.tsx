@@ -18,8 +18,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { api } from '../../api/client';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 
-const PRIMARY_PURPLE = '#877ED2';
-const BG_COLOR = '#F0F0F0';
+const PRIMARY_PURPLE = '#7E73D8';
+const BG_COLOR = '#F3F3F5';
 
 interface Employee {
   id: string;
@@ -53,8 +53,8 @@ export default function EmployeesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDepartment, setSelectedDepartment] = useState('All');
-  const [departments, setDepartments] = useState<string[]>(['All']);
+  const [selectedRole, setSelectedRole] = useState('All');
+  const [roleFilters, setRoleFilters] = useState<string[]>(['All']);
   const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
@@ -64,7 +64,7 @@ export default function EmployeesScreen() {
   const toggleExpand = (id: string) => {
     setExpandedEmployeeId(expandedEmployeeId === id ? null : id);
   };
-  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive'>('active');
+  const [summaryCounts, setSummaryCounts] = useState({ total: 0, active: 0, offDuty: 0 });
 
   const handleEditEmployee = (employee: Employee) => {
     // Navigate to AddEmployee screen with employee data for editing
@@ -154,29 +154,40 @@ export default function EmployeesScreen() {
     );
   };
 
+  const getEmployeeRoleLabel = (employee: Employee) => {
+    const raw = employee.designation || employee.role || employee.department || 'Employee';
+    return String(raw || 'Employee').trim() || 'Employee';
+  };
+
   const loadEmployees = async () => {
     try {
-      const activeParam = activeFilter === 'active' ? 'true' : 'false';
-      const res = await api.get('/api/employees', { params: { limit: 100, active: activeParam } });
+      const res = await api.get('/api/employees', { params: { limit: 500, active: 'all' } });
       const list = Array.isArray(res.data?.employees) ? res.data.employees : [];
       setEmployees(list);
       
-      // Extract unique departments
-      const depts = ['All', ...new Set(list.map((emp: Employee) => emp.department).filter(Boolean))] as string[];
-      setDepartments(depts);
+      // Extract unique roles/designations from real employee data
+      const roleMap = new Map<string, string>();
+      list.forEach((emp: Employee) => {
+        const roleLabel = getEmployeeRoleLabel(emp);
+        const key = roleLabel.toLowerCase();
+        if (!roleMap.has(key)) {
+          roleMap.set(key, roleLabel);
+        }
+      });
+      setRoleFilters(['All', ...Array.from(roleMap.values())]);
       
-      filterEmployees(list, searchQuery, selectedDepartment);
+      filterEmployees(list, searchQuery, selectedRole);
     } catch (error) {
       console.error('Error loading employees:', error);
     }
   };
 
-  const filterEmployees = useCallback((empList: Employee[], search: string, dept: string) => {
+  const filterEmployees = useCallback((empList: Employee[], search: string, roleFilter: string) => {
     let filtered = empList;
     
-    // Filter by department
-    if (dept !== 'All') {
-      filtered = filtered.filter(emp => emp.department === dept);
+    // Filter by dynamic role/designation
+    if (roleFilter !== 'All') {
+      filtered = filtered.filter(emp => getEmployeeRoleLabel(emp) === roleFilter);
     }
     
     // Filter by search
@@ -184,11 +195,21 @@ export default function EmployeesScreen() {
       const searchLower = search.toLowerCase();
       filtered = filtered.filter(emp => {
         const name = emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim();
+        const roleLabel = getEmployeeRoleLabel(emp).toLowerCase();
         return name.toLowerCase().includes(searchLower) || 
+               roleLabel.includes(searchLower) ||
                emp.department?.toLowerCase().includes(searchLower);
       });
     }
     
+    const activeCount = filtered.filter(emp => emp.is_active).length;
+    const offDutyCount = filtered.filter(emp => !emp.is_active).length;
+    setSummaryCounts({
+      total: filtered.length,
+      active: activeCount,
+      offDuty: offDutyCount,
+    });
+
     setFilteredEmployees(filtered);
   }, []);
 
@@ -200,12 +221,8 @@ export default function EmployeesScreen() {
   );
 
   useEffect(() => {
-    filterEmployees(employees, searchQuery, selectedDepartment);
-  }, [searchQuery, selectedDepartment, employees, filterEmployees]);
-
-  useEffect(() => {
-    loadEmployees();
-  }, [activeFilter]);
+    filterEmployees(employees, searchQuery, selectedRole);
+  }, [searchQuery, selectedRole, employees, filterEmployees]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -213,8 +230,8 @@ export default function EmployeesScreen() {
     setRefreshing(false);
   };
 
-  const getActiveCount = () => filteredEmployees.filter(emp => emp.is_active).length;
-  const getOffDutyCount = () => filteredEmployees.filter(emp => !emp.is_active).length;
+  const getActiveCount = () => summaryCounts.active;
+  const getOffDutyCount = () => summaryCounts.offDuty;
 
   const getInitials = (firstName: string, lastName: string) => {
     const first = firstName?.charAt(0)?.toUpperCase() || '';
@@ -228,7 +245,7 @@ export default function EmployeesScreen() {
     return colors[index];
   };
 
-  const EmployeeItem = ({ employee }: { employee: Employee }) => {
+  const EmployeeItem = ({ employee, index, total }: { employee: Employee; index: number; total: number }) => {
     const name = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
     const initials = getInitials(employee.first_name, employee.last_name);
     const avatarColor = getAvatarColor(name);
@@ -237,12 +254,12 @@ export default function EmployeesScreen() {
     const isUpdatingStatus = statusUpdatingId === employee.id;
     
     return (
-      <View style={styles.cardContainer}>
+      <View style={[styles.cardContainer, index !== total - 1 && styles.cardContainerWithDivider]}>
         {/* Header Row */}
         <View style={styles.cardHeader}>
           <TouchableOpacity 
             style={styles.employeeLeft}
-            onPress={() => navigation.navigate('EmployeeDetail', { id: employee.id })}
+            onPress={() => navigation.navigate('EmployeeInfo', { id: employee.id, employeeData: employee })}
           >
             {employee.photo_url ? (
               <Image source={{ uri: employee.photo_url }} style={styles.avatar} />
@@ -289,11 +306,11 @@ export default function EmployeesScreen() {
             {/* Salary Row */}
             <View style={styles.detailRow}>
               <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Monthly Salary</Text>
+                <Text style={styles.detailLabel}>Monthly Salary:</Text>
                 <Text style={styles.detailValue}>₹{employee.salary?.toLocaleString() || '0'}</Text>
               </View>
               <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Overtime Rate</Text>
+                <Text style={styles.detailLabel}>Overtime Rate:</Text>
                 <Text style={styles.detailValue}>{employee.overtime_rate || '0'}</Text>
               </View>
             </View>
@@ -301,18 +318,18 @@ export default function EmployeesScreen() {
             {/* Contact Row */}
             <View style={styles.detailRow}>
               <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Mobile</Text>
+                <Text style={styles.detailLabel}>Mobile:</Text>
                 <Text style={styles.detailValue}>{employee.phone || 'N/A'}</Text>
               </View>
               <View style={styles.detailColumn}>
-                <Text style={styles.detailLabel}>Email</Text>
+                <Text style={styles.detailLabel}>Email:</Text>
                 <Text style={styles.detailValue}>{employee.email || 'N/A'}</Text>
               </View>
             </View>
 
             {/* Location Row */}
             <View style={styles.locationRow}>
-              <Text style={styles.detailLabel}>Location</Text>
+              <Text style={styles.detailLabel}>Location:</Text>
               <Text style={styles.detailValue}>{employee.location || 'N/A'}</Text>
             </View>
 
@@ -411,51 +428,30 @@ export default function EmployeesScreen() {
           </View>
         </View>
 
-        {/* Department Filter Label */}
+        {/* Dynamic Role Filter Label */}
         <Text style={styles.filterLabel}>List by department</Text>
 
-        {/* Status Filter Chips */}
-        <View style={styles.statusFilterRow}>
-          {(['active', 'inactive'] as const).map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={[
-                styles.statusFilterChip,
-                activeFilter === f && {
-                  borderColor: f === 'active' ? '#58A55C' : '#E55252',
-                  backgroundColor: f === 'active' ? '#EAF5EA' : '#FDEAEA',
-                },
-              ]}
-              onPress={() => setActiveFilter(f)}
-            >
-              <Text style={[styles.statusFilterChipText, activeFilter === f && styles.statusFilterChipTextActive]}>
-                {f === 'active' ? 'Active' : 'Inactive'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Department Filter Chips */}
+        {/* Dynamic Role Filter Chips */}
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
           style={styles.filterContainer}
           contentContainerStyle={styles.filterContent}
         >
-          {departments.map((dept) => (
+          {roleFilters.map((roleName) => (
             <TouchableOpacity
-              key={dept}
+              key={roleName}
               style={[
                 styles.filterChip,
-                selectedDepartment === dept && styles.filterChipActive,
+                selectedRole === roleName && styles.filterChipActive,
               ]}
-              onPress={() => setSelectedDepartment(dept)}
+              onPress={() => setSelectedRole(roleName)}
             >
               <Text style={[
                 styles.filterChipText,
-                selectedDepartment === dept && styles.filterChipTextActive,
+                selectedRole === roleName && styles.filterChipTextActive,
               ]}>
-                {dept}
+                {roleName}
               </Text>
             </TouchableOpacity>
           ))}
@@ -464,7 +460,7 @@ export default function EmployeesScreen() {
         {/* Stats Summary */}
         <View style={styles.statsContainer}>
           <Text style={styles.statsLabel}>Total: </Text>
-          <Text style={styles.statsValue}>{filteredEmployees.length}</Text>
+          <Text style={styles.statsValue}>{summaryCounts.total}</Text>
           <Text style={styles.statsDivider}>|</Text>
           <Text style={styles.statsActiveLabel}>Active: </Text>
           <Text style={styles.statsActiveValue}>{getActiveCount()}</Text>
@@ -477,7 +473,9 @@ export default function EmployeesScreen() {
         <FlatList
           data={filteredEmployees}
           keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => <EmployeeItem employee={item} />}
+          renderItem={({ item, index }) => (
+            <EmployeeItem employee={item} index={index} total={filteredEmployees.length} />
+          )}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -564,7 +562,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
-    color: '#000000',
+    color: '#2C2C2C',
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -577,51 +575,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E8E7ED',
+    borderColor: '#E7E5EF',
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
-    color: '#727272',
+    color: '#8A8A8A',
   },
   filterLabel: {
     fontSize: 12,
-    color: '#727272',
+    color: '#8B8B8B',
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
     paddingHorizontal: 16,
     marginBottom: 8,
-  },
-  statusFilterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    gap: 8,
-  },
-  statusFilterChip: {
-    paddingHorizontal: 14,
-    height: 30,
-    justifyContent: 'center',
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#8F8F8F',
-    backgroundColor: '#FFFFFF',
-  },
-  statusFilterChipActive: {
-    borderColor: '#7166CB',
-    backgroundColor: '#EFEFFC',
-  },
-  statusFilterChipText: {
-    fontSize: 12,
-    fontWeight: '400',
-    fontFamily: 'Inter_400Regular',
-    color: '#8F8F8F',
-  },
-  statusFilterChipTextActive: {
-    color: '#101010',
-    fontWeight: '500',
   },
   filterContainer: {
     flexGrow: 0,
@@ -634,18 +603,18 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     paddingHorizontal: 16,
-    height: 30,
+    height: 29,
     justifyContent: 'center',
     borderRadius: 5,
     borderWidth: 1,
-    borderColor: '#8F8F8F',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#B5B5B5',
+    backgroundColor: BG_COLOR,
     marginRight: 8,
     marginBottom: 4,
   },
   filterChipActive: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#7166CB',
+    borderColor: '#7E73D8',
     borderRadius: 5,
   },
   filterChipText: {
@@ -655,7 +624,7 @@ const styles = StyleSheet.create({
     color: '#8F8F8F',
   },
   filterChipTextActive: {
-    color: '#000000',
+    color: '#6F64CC',
     fontSize: 12,
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
@@ -668,24 +637,24 @@ const styles = StyleSheet.create({
   },
   statsLabel: {
     fontSize: 14,
-    color: '#404040',
+    color: '#3F3F3F',
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
   },
   statsValue: {
     fontSize: 14,
-    color: '#404040',
+    color: '#3F3F3F',
     fontWeight: '700',
     fontFamily: 'Inter_700Bold',
   },
   statsDivider: {
     fontSize: 16,
-    color: '#8F8F8F',
+    color: '#A2A2A2',
     marginHorizontal: 8,
   },
   statsActiveLabel: {
     fontSize: 14,
-    color: '#877ED2',
+    color: '#8176D8',
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
   },
@@ -697,7 +666,7 @@ const styles = StyleSheet.create({
   },
   statsOffDutyLabel: {
     fontSize: 14,
-    color: '#877ED2',
+    color: '#8176D8',
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
   },
@@ -711,20 +680,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     paddingTop: 12,
     paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginTop: 4,
   },
   cardContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  cardContainerWithDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F1F4',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -732,7 +703,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   expandedContent: {
-    paddingTop: 16,
+    paddingTop: 12,
+    marginTop: 8,
   },
   statusRow: {
     flexDirection: 'row',
@@ -753,10 +725,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   activeBadge: {
-    backgroundColor: '#83B465',
+    backgroundColor: '#8EBF72',
   },
   inactiveBadge: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#F05A50',
   },
   statusBadgeText: {
     fontSize: 13,
@@ -773,7 +745,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 25,
-    backgroundColor: '#E8E7ED',
+    backgroundColor: '#ECECF1',
   },
   employmentTypeText: {
     fontSize: 13,
@@ -904,13 +876,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     fontFamily: 'Inter_500Medium',
-    color: '#404040',
+    color: '#4A4A4A',
   },
   employeeRole: {
     fontSize: 12,
     fontWeight: '400',
     fontFamily: 'Inter_400Regular',
-    color: '#8F8F8F',
+    color: '#9B9B9B',
   },
   emptyState: {
     alignItems: 'center',

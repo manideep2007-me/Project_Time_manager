@@ -33,7 +33,7 @@ export default function ClientsScreen() {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#F0F0F0',
+      backgroundColor: '#F3F3F5',
     },
     screenContent: {
       flex: 1,
@@ -44,7 +44,7 @@ export default function ClientsScreen() {
       paddingHorizontal: 16,
       paddingTop: 16,
       paddingBottom: 16,
-      backgroundColor: '#F0F0F0',
+      backgroundColor: '#F3F3F5',
     },
     backButton: {
       padding: 4,
@@ -55,7 +55,7 @@ export default function ClientsScreen() {
       fontSize: 20,
       fontWeight: '400',
       fontFamily: theme.typography.families.regular,
-      color: '#000000',
+      color: '#2C2C2C',
     },
     headerAddButton: {
       width: 38,
@@ -81,7 +81,7 @@ export default function ClientsScreen() {
       paddingHorizontal: 16,
       paddingTop: 12,
       paddingBottom: 8,
-      backgroundColor: '#F0F0F0',
+      backgroundColor: '#F3F3F5',
     },
     searchBar: {
       flexDirection: 'row',
@@ -133,7 +133,7 @@ export default function ClientsScreen() {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: '#F0F0F0',
+      backgroundColor: '#F3F3F5',
     },
     loadingText: {
       marginTop: 12,
@@ -148,12 +148,12 @@ export default function ClientsScreen() {
       backgroundColor: '#FFFFFF',
       marginHorizontal: 16,
       marginTop: 16,
-      borderRadius: 12,
+      borderRadius: 14,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
+      shadowOpacity: 0.05,
+      shadowRadius: 6,
+      elevation: 2,
       overflow: 'hidden',
     },
     clientCard: {
@@ -161,14 +161,14 @@ export default function ClientsScreen() {
     },
     clientCardBorder: {
       borderBottomWidth: 1,
-      borderBottomColor: '#F0F0F0',
+      borderBottomColor: '#F1F1F4',
     },
     clientHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
     },
     clientHeaderLeft: {
       flex: 1,
@@ -179,9 +179,9 @@ export default function ClientsScreen() {
       gap: 8,
     },
     actionButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 10,
+      width: 44,
+      height: 42,
+      borderRadius: 11,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -194,90 +194,86 @@ export default function ClientsScreen() {
     actionButtonsRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: 16,
-      gap: 10,
+      marginTop: 12,
+      gap: 8,
+      paddingTop: 10,
     },
     clientName: {
       fontSize: 16,
-      fontWeight: '600',
-      color: '#1a1a1a',
+      fontWeight: '500',
+      color: '#2F2F2F',
       marginBottom: 4,
     },
     clientSubtitle: {
-      fontSize: 13,
-      color: '#999999',
+      fontSize: 12,
+      color: '#A1A1A1',
       fontWeight: '400',
     },
     clientDetails: {
-      paddingHorizontal: 16,
-      paddingBottom: 16,
-      paddingTop: 4,
+      paddingHorizontal: 14,
+      paddingBottom: 14,
+      paddingTop: 2,
       backgroundColor: '#FFFFFF',
     },
     detailRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      marginBottom: 12,
+      marginBottom: 10,
     },
     addressRow: {
       flexDirection: 'column',
-      marginBottom: 12,
+      marginBottom: 10,
     },
     detailRowDouble: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginBottom: 12,
+      marginBottom: 10,
       gap: 16,
     },
     detailColumn: {
       flex: 1,
     },
     detailLabel: {
-      fontSize: 12,
-      color: '#999999',
-      marginBottom: 4,
+      fontSize: 11,
+      color: '#A0A0A0',
+      marginBottom: 3,
       fontWeight: '400',
     },
     detailValue: {
-      fontSize: 14,
-      color: '#1a1a1a',
+      fontSize: 13,
+      color: '#3A3A3A',
       fontWeight: '400',
       flex: 1,
     },
     statusBadge: {
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 15,
-      marginLeft: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 12,
+      marginLeft: 6,
     },
     statusActive: {
-      backgroundColor: '#83B465',
+      backgroundColor: '#8DBE72',
     },
     statusInactive: {
-      backgroundColor: '#FFEBEE',
+      backgroundColor: '#FDECEE',
     },
     statusText: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
-      color: '#edf3ed',
+      color: '#FFFFFF',
     },
     statusTextInactive: {
-      color: '#F44336',
+      color: '#E25252',
     },
     moreButton: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: '#877ED2',
       paddingHorizontal: 18,
-      height: 40,
-      borderRadius: 10,
+      height: 42,
+      borderRadius: 11,
       flex: 1,
       justifyContent: 'center',
-      shadowColor: '#877ED2',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      elevation: 3,
     },
     moreButtonText: {
       fontSize: 13,
@@ -565,6 +561,16 @@ export default function ClientsScreen() {
     return { total, active, inactive };
   };
 
+  const getClientSubtitle = (client: any) => {
+    const rawAddress = String(client.address || '');
+    const addressCity = rawAddress
+      ? rawAddress.split(',').map((part: string) => part.trim()).filter(Boolean).slice(-1)[0]
+      : '';
+    const clientName = String(client.name || 'Client').trim() || 'Client';
+    const location = String(client.location || client.city || client.state || addressCity || 'Location').trim() || 'Location';
+    return `${clientName} | ${location}`;
+  };
+
   const renderClientCard = ({ item, index }: { item: any; index: number }) => {
     const isExpanded = expandedClientId === item.id;
     const isLast = index === filteredClients.length - 1;
@@ -579,13 +585,13 @@ export default function ClientsScreen() {
         >
           <View style={styles.clientHeaderLeft}>
             <Text style={styles.clientName}>{item.name}</Text>
-            <Text style={styles.clientSubtitle}>{item.client_type} | {item.location}</Text>
+            <Text style={styles.clientSubtitle}>{getClientSubtitle(item)}</Text>
           </View>
           <View style={styles.clientHeaderActions}>
             <Ionicons 
               name={isExpanded ? "chevron-up" : "chevron-down"} 
               size={22} 
-              color="#877ED2" 
+              color="#7E73D8" 
             />
           </View>
         </TouchableOpacity>
@@ -645,7 +651,7 @@ export default function ClientsScreen() {
                 style={styles.moreButton}
                 onPress={() => handleClientPress(item)}
               >
-                <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                <Ionicons name="map-outline" size={15} color="#FFFFFF" />
                 <Text style={styles.moreButtonText}>More</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -653,14 +659,14 @@ export default function ClientsScreen() {
                 onPress={() => handleEditClient(item)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="pencil" size={18} color="#877ED2" />
+                <Ionicons name="pencil" size={17} color="#877ED2" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.deleteButton]}
                 onPress={() => handleDeleteClient(item)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="trash-outline" size={18} color="#F44336" />
+                <Ionicons name="trash-outline" size={17} color="#F44336" />
               </TouchableOpacity>
             </View>
           </View>

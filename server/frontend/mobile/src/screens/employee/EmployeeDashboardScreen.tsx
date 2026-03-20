@@ -31,6 +31,29 @@ import VoiceToTextButton from '../../components/shared/VoiceToTextButton';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 
+// Get greeting based on time of day in IST (Hyderabad)
+const getGreeting = () => {
+  // Force calculation in Asia/Kolkata timezone to avoid UTC vs device clock mismatch
+  const hourString = new Date().toLocaleString('en-US', {
+    hour: 'numeric',
+    hour12: false,
+    timeZone: 'Asia/Kolkata'
+  });
+  const hour = parseInt(hourString, 10);
+  if (hour < 12) return 'Good Morning';
+  if (hour < 17) return 'Good Afternoon';
+  return 'Good Evening';
+};
+
+/** Today label for attendance card (matches header date, IST). */
+const formatDashboardToday = () => {
+  const opts: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Kolkata' };
+  const d = new Date();
+  const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...opts });
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long', ...opts });
+  return `${datePart}, ${weekday}`;
+};
+
 // Task types
 type TaskStatus = 'To Do' | 'Active' | 'Completed' | 'Cancelled' | 'On Hold';
 
@@ -64,7 +87,7 @@ export default function EmployeeDashboardScreen() {
   const navigation = useNavigation<any>();
   const { user } = useContext(AuthContext);
   const { addActivity, getRecentActivities } = useActivity();
-  
+
   // Employee Dashboard State
   const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
   const [weekTimeEntries, setWeekTimeEntries] = useState<TimeEntry[]>([]);
@@ -233,12 +256,13 @@ export default function EmployeeDashboardScreen() {
       case 'Active': return '#877ED2';
       case 'Cancelled': return '#FF3B30';
       case 'On Hold': return '#FF9500';
-      case 'To Do': return '#8E8E93';
+      case 'To Do': return '#6FC264';
       default: return '#8E8E93';
     }
   };
 
   const getTaskStatusText = (status: TaskStatus) => {
+    if (status === 'To Do') return 'New';
     return translateStatus(status, t);
   };
 
@@ -532,18 +556,26 @@ export default function EmployeeDashboardScreen() {
         {/* Exact Header Layout */}
         <View style={styles.heroHeader}>
           <View style={styles.headerInner}>
-            <Text style={styles.headerDateTop}>
-              {new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' })}, {new Date().toLocaleDateString('en-US', { weekday: 'long' })}
-            </Text>
             <View style={styles.headerRowBelowDate}>
-              <View style={styles.avatarCircleLeft}>
-                <Text style={styles.avatarInitial}>{(user?.firstName || user?.name || 'E')[0].toUpperCase()}</Text>
+              <View style={styles.headerLeftCluster}>
+                <View style={styles.avatarCircleLeft}>
+                  <Text style={styles.avatarInitial}>{(user?.firstName || user?.name || 'E')[0].toUpperCase()}</Text>
+                </View>
+                <View style={styles.textBlock}>
+                  <Text style={styles.heroGreeting}>Hello {(user?.firstName || user?.name?.split(' ')[0] || 'Employee')}!</Text>
+                  <Text style={styles.heroSubGreeting}>{getGreeting()}</Text>
+                  <Text style={styles.heroMeta}>{[user?.jobTitle, user?.role].filter(Boolean).join(' | ')}</Text>
+                </View>
               </View>
-              <View style={styles.textBlock}>
-                <Text style={styles.heroGreeting}>Hello {(user?.firstName || user?.name?.split(' ')[0] || 'Employee')}!</Text>
-                <Text style={styles.heroSubGreeting}>Good Morning</Text>
-                <Text style={styles.heroMeta}>{[user?.jobTitle, user?.role].filter(Boolean).join(' | ')}</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.headerMenuButton}
+                onPress={() => navigation.navigate('Profile')}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Profile"
+              >
+                <Ionicons name="ellipsis-vertical" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -553,11 +585,15 @@ export default function EmployeeDashboardScreen() {
           <Card style={styles.attendanceCard}>
             <View style={styles.attendanceContent}>
               <View style={styles.attendanceIconContainer}>
-                <Ionicons name="calendar-outline" size={28} color="#877ED2" />
+                <Ionicons name="calendar-outline" size={26} color="#877ED2" />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.attendanceTextColumn}>
                 <Text style={styles.attendanceTitle}>Mark your attendance</Text>
-                <Text style={styles.attendanceTime}>9 AM - 5 PM</Text>
+                <View style={styles.attendanceMetaRow}>
+                  <Text style={styles.attendanceDateText}>{formatDashboardToday()}</Text>
+                  <View style={styles.attendanceMetaDot} />
+                  <Text style={styles.attendanceTimeInline}>9 AM - 5 PM</Text>
+                </View>
               </View>
               <TouchableOpacity
                 style={styles.attendanceButton}
@@ -1133,12 +1169,12 @@ export default function EmployeeDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F0F0F0',
   },
   heroHeader: {
     backgroundColor: '#877ED2', 
     paddingHorizontal: 18,
-    paddingTop: 28,
+    paddingTop: 48,
     paddingBottom: 38,
     height: 200,
     borderBottomLeftRadius: 30,
@@ -1162,8 +1198,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
   },
+  headerRowBelowDate: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingTop: 10,
+  },
+  headerLeftCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  headerMenuButton: {
+    padding: 6,
+    marginTop: 2,
+  },
   textBlock: {
+    flex: 1,
     flexShrink: 1,
+    minWidth: 0,
     paddingTop: 2,
   },
   textOnlyBlock: {
@@ -1180,20 +1236,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#FFFFFF',
     fontFamily: typography.families.regular,
-  },
-  headerDateTop: {
-    alignSelf: 'flex-end',
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '500',
-    marginTop: 8,
-    marginBottom: 6,
-    fontFamily: typography.families.medium,
-  },
-  headerRowBelowDate: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 2,
   },
   heroMeta: {
     fontSize: 10,
@@ -1237,47 +1279,76 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   attendanceCard: {
-    height: 69,
-    width: 372,
-    padding: spacing.lg + 4,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    minHeight: 88,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg + 2,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#F0F0F5',
-    shadowColor: '#877ED2',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 4, height: 4 },
+    borderColor: '#EDEAF7',
+    shadowColor: '#5C4DC8',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 4 },
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 3,
     justifyContent: 'center',
   },
   attendanceContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  attendanceTextColumn: {
+    flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
-    height: '100%',
+  },
+  attendanceMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 6,
+    gap: 8,
+  },
+  attendanceDateText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B63B8',
+    fontFamily: typography.families.medium,
+    letterSpacing: 0.2,
+  },
+  attendanceMetaDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#C8C4E0',
+  },
+  attendanceTimeInline: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#6E6E6E',
+    fontFamily: typography.families.regular,
   },
   attendanceIconContainer: {
-    marginRight: 14,
+    marginRight: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 32,
-    height: 32,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: '#F3F2FF',
+    borderWidth: 1,
+    borderColor: 'rgba(135, 126, 210, 0.2)',
   },
   attendanceTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#404040',
+    fontWeight: '600',
+    color: '#2D2D2D',
     fontFamily: typography.families.medium,
-  },
-  attendanceTime: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: '#727272',
-    fontFamily: typography.families.regular,
-    marginTop: 4,
   },
   attendanceButton: {
     backgroundColor: '#877ED2',
@@ -1348,9 +1419,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F0F0F0',
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
     elevation: 2,
   },
   projectCardBorder: {
@@ -1477,10 +1548,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F0F0F5',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 5 },
-    shadowRadius: 14,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
     marginRight: 12,
   },
   taskBadgeRow: {
@@ -1592,7 +1663,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E8E8E8',
     shadowColor: '#000',
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 8,
     elevation: 2,

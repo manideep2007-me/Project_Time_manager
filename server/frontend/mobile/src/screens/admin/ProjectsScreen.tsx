@@ -9,6 +9,7 @@ import {
   StyleSheet,
   TextInput,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +17,6 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import { api } from '../../api/client';
-import VoiceToTextButton from '../../components/shared/VoiceToTextButton';
 import { tokens } from '../../design/tokens';
 
 const { typography } = tokens;
@@ -28,6 +28,7 @@ export default function ProjectsScreen() {
 
   const [projects, setProjects] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -61,8 +62,18 @@ export default function ProjectsScreen() {
     }
   };
 
+  const loadEmployees = async () => {
+    try {
+      const response = await api.get('/api/employees', { params: { page: 1, limit: 200, active: 'all' } });
+      setEmployees(response.data?.employees || []);
+    } catch (error) {
+      console.error('Error loading employees:', error);
+      setEmployees([]);
+    }
+  };
+
   useEffect(() => {
-    Promise.all([loadProjects(), loadClients()]).finally(() => setLoading(false));
+    Promise.all([loadProjects(), loadClients(), loadEmployees()]).finally(() => setLoading(false));
   }, [user?.id]);
 
   useFocusEffect(
@@ -75,7 +86,7 @@ export default function ProjectsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadProjects(), loadClients()]);
+    await Promise.all([loadProjects(), loadClients(), loadEmployees()]);
     setRefreshing(false);
   };
 
@@ -84,7 +95,8 @@ export default function ProjectsScreen() {
     if (!status) return 'unknown';
     const s = status.toLowerCase();
     if (s === 'active' || s === 'in progress' || s === 'in_progress') return 'active';
-    if (s === 'to do' || s === 'todo' || s === 'new') return 'todo';
+    // Treat New/To Do as In Progress as requested
+    if (s === 'to do' || s === 'todo' || s === 'new') return 'active';
     if (s === 'completed' || s === 'done') return 'completed';
     return s;
   };
@@ -121,7 +133,7 @@ export default function ProjectsScreen() {
 
   const getStatusColor = (status: string) => {
     switch (normalizeStatus(status)) {
-      case 'active': return '#877ED2';
+      case 'active': return '#7E99D2';
       case 'completed': return '#34C759';
       case 'todo': return '#FF9500';
       default: return '#8E8E93';
@@ -132,21 +144,46 @@ export default function ProjectsScreen() {
     switch (normalizeStatus(status)) {
       case 'active': return 'In Progress';
       case 'completed': return 'Completed';
-      case 'todo': return 'New';
       default: return status || 'Unknown';
     }
   };
 
-  const getDaysRemaining = (endDate: string) => {
-    if (!endDate) return 0;
-    const due = new Date(endDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    due.setHours(0, 0, 0, 0);
-    return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  };
+  const getProjectTiming = (startDate?: string, endDate?: string) => {
+    if (!startDate || !endDate) {
+      return {
+        hasDates: false,
+        isOverdue: false,
+        daysRemaining: 0,
+        overdueDays: 0,
+        progressPercent: 0,
+      };
+    }
 
-  const isOverdue = (endDate: string) => getDaysRemaining(endDate) < 0;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const today = new Date();
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    const elapsedDays = Math.max(0, Math.ceil((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    const daysRemaining = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const overdueDays = Math.max(0, -daysRemaining);
+    const overdue = daysRemaining < 0;
+
+    // Clamp fill between 2% and 100% for visibility when active
+    const rawProgress = elapsedDays / totalDays;
+    const progressPercent = Math.min(100, Math.max(2, Math.round(rawProgress * 100)));
+
+    return {
+      hasDates: true,
+      isOverdue: overdue,
+      daysRemaining,
+      overdueDays,
+      progressPercent,
+    };
+  };
 
   const handleProjectPress = (project: any) => {
     navigation.navigate('ProjectDetails', { id: project.id });
@@ -169,23 +206,66 @@ export default function ProjectsScreen() {
     });
   };
 
-  // Get team member initials for avatars (from team_members or assigned data)
+  const getSubtitleText = (project: any) => {
+    const partA =
+      project.area ||
+      project.locality ||
+      project.location ||
+      project.client_location ||
+      project.city ||
+      '';
+    const partB =
+      project.city ||
+      project.client_city ||
+      project.state ||
+      project.region ||
+      project.location ||
+      '';
+    if (partA && partB) return `${partA} | ${partB}`;
+    return partA || partB || project.client_name || 'No location';
+  };
+
+  // Resolve real employee avatars from project members
   const getTeamAvatars = (project: any) => {
     const members = project.team_members || project.assigned_to || [];
+    const findEmployeeById = (id: string) =>
+      employees.find((e: any) => String(e.id) === String(id) || String(e.employee_id) === String(id));
+
+    const toAvatar = (member: any) => {
+      if (!member) return null;
+      if (typeof member === 'string') {
+        const mapped = findEmployeeById(member);
+        if (mapped) {
+          const initial = (mapped.first_name || mapped.name || '?').charAt(0).toUpperCase();
+          return { initial, photoUrl: mapped.photo_url || mapped.photoUrl || mapped.photograph || '' };
+        }
+        return { initial: member.charAt(0).toUpperCase(), photoUrl: '' };
+      }
+
+      const mapped = findEmployeeById(member.id || member.employee_id || member.user_id);
+      const firstName = member.first_name || mapped?.first_name || member.name || mapped?.name || '?';
+      const photoUrl =
+        member.photo_url || member.photoUrl || member.photograph ||
+        mapped?.photo_url || mapped?.photoUrl || mapped?.photograph || '';
+      return { initial: String(firstName).charAt(0).toUpperCase(), photoUrl };
+    };
+
     if (Array.isArray(members)) {
-      return members.slice(0, 3).map((m: any) => {
-        if (typeof m === 'string') return m.charAt(0).toUpperCase();
-        return (m.name || m.first_name || '?').charAt(0).toUpperCase();
-      });
+      const extracted = members.slice(0, 3).map((m: any) => toAvatar(m)).filter(Boolean);
+      if (extracted.length > 0) return extracted;
     }
-    return [];
+
+    // Fallback to real company employees, not ABC placeholders
+    return employees.slice(0, 3).map((e: any) => ({
+      initial: (e.first_name || e.name || '?').charAt(0).toUpperCase(),
+      photoUrl: e.photo_url || e.photoUrl || e.photograph || '',
+    }));
   };
 
   const renderProjectCard = ({ item, index }: { item: any; index: number }) => {
     const isExpanded = expandedProjectId === item.id;
     const isLast = index === filteredProjects.length - 1;
-    const overdue = isOverdue(item.end_date || item.endDate);
-    const daysRemaining = getDaysRemaining(item.end_date || item.endDate);
+    const timing = getProjectTiming(item.start_date || item.startDate, item.end_date || item.endDate);
     const statusColor = getStatusColor(item.status);
     const avatars = getTeamAvatars(item);
     const avatarColors = ['#FF9500', '#877ED2', '#34C759', '#FF3B30', '#007AFF'];
@@ -201,13 +281,13 @@ export default function ProjectsScreen() {
           <View style={styles.projectHeaderLeft}>
             <Text style={styles.projectName}>{item.name}</Text>
             <Text style={styles.projectSubtitle}>
-              {item.location || item.client_name || 'No location'}
+              {getSubtitleText(item)}
             </Text>
           </View>
           <Ionicons
             name={isExpanded ? 'chevron-up' : 'chevron-down'}
             size={22}
-            color="#877ED2"
+            color="#7E73D8"
           />
         </TouchableOpacity>
 
@@ -247,7 +327,7 @@ export default function ProjectsScreen() {
             {/* Team Members Avatars */}
             {avatars.length > 0 && (
               <View style={styles.avatarsRow}>
-                {avatars.map((initial: string, i: number) => (
+                {avatars.map((avatar: any, i: number) => (
                   <View
                     key={i}
                     style={[
@@ -256,32 +336,48 @@ export default function ProjectsScreen() {
                       i > 0 && { marginLeft: -8 },
                     ]}
                   >
-                    <Text style={styles.avatarText}>{initial}</Text>
+                    {avatar.photoUrl ? (
+                      <Image source={{ uri: avatar.photoUrl }} style={styles.avatarImage} />
+                    ) : (
+                      <Text style={styles.avatarText}>{avatar.initial}</Text>
+                    )}
                   </View>
                 ))}
               </View>
             )}
 
-            {/* Overdue / In Progress Bar */}
-            {(item.end_date || item.endDate) && normalizeStatus(item.status) !== 'completed' && (
+            {/* Overdue / In Progress Bar (date-accurate) */}
+            {normalizeStatus(item.status) !== 'completed' && (
               <View style={styles.progressSection}>
-                {overdue ? (
+                {timing.hasDates && timing.isOverdue ? (
                   <>
                     <View style={styles.progressLabelRow}>
                       <Text style={styles.detailLabel}>Over due</Text>
-                      <Text style={styles.overdueValue}>{Math.abs(daysRemaining)}d</Text>
+                      <Text style={styles.overdueValue}>{timing.overdueDays}d</Text>
                     </View>
-                    <View style={styles.overdueBar} />
+                    <View style={styles.progressTrack}>
+                      <View style={[styles.progressFill, styles.overdueBar, { width: '100%' }]} />
+                    </View>
                   </>
-                ) : normalizeStatus(item.status) === 'active' ? (
+                ) : (
                   <>
                     <View style={styles.progressLabelRow}>
                       <Text style={styles.detailLabel}>In Progress</Text>
-                      <Text style={styles.inProgressValue}>{daysRemaining}d</Text>
+                      <Text style={styles.inProgressValue}>
+                        {timing.hasDates ? `${Math.max(0, timing.daysRemaining)}d` : '--'}
+                      </Text>
                     </View>
-                    <View style={styles.inProgressBar} />
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          styles.inProgressBar,
+                          { width: timing.hasDates ? `${timing.progressPercent}%` : '100%' },
+                        ]}
+                      />
+                    </View>
                   </>
-                ) : null}
+                )}
               </View>
             )}
 
@@ -291,7 +387,7 @@ export default function ProjectsScreen() {
                 style={styles.moreButton}
                 onPress={() => handleProjectPress(item)}
               >
-                <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                <Ionicons name="map-outline" size={15} color="#FFFFFF" />
                 <Text style={styles.moreButtonText}>More</Text>
               </TouchableOpacity>
             </View>
@@ -336,12 +432,6 @@ export default function ProjectsScreen() {
               <Ionicons name="search-outline" size={20} color="#9CA3AF" />
             </TouchableOpacity>
           </View>
-          <VoiceToTextButton
-            onResult={text => setSearch(text)}
-            size="small"
-            style={styles.voiceButton}
-            color="#877ED2"
-          />
         </View>
       </View>
 
@@ -435,13 +525,13 @@ export default function ProjectsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F3F3F5',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F3F3F5',
   },
   loadingText: {
     marginTop: 12,
@@ -455,9 +545,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: '#F0F0F0',
+    paddingTop: 14,
+    paddingBottom: 6,
+    backgroundColor: '#F3F3F5',
   },
   backButton: {
     width: 40,
@@ -469,7 +559,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 20,
     fontWeight: '400',
-    color: '#000000',
+    color: '#2C2C2C',
     fontFamily: typography.families.regular,
     marginLeft: 2,
   },
@@ -479,7 +569,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 8,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F3F3F5',
   },
   searchRow: {
     flexDirection: 'row',
@@ -490,17 +580,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 10,
     paddingRight: 8,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#E5E3ED',
   },
   searchInput: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#1A1A1A',
+    paddingVertical: 11,
+    fontSize: 14,
+    color: '#303030',
     fontFamily: typography.families.regular,
   },
   searchIconButton: {
@@ -508,48 +598,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  voiceButton: {
-    marginLeft: 12,
-  },
-
   // ─── Filter Tabs ─────────────────────────
   filterContainer: {
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F3F3F5',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E6EB',
+    borderBottomColor: '#E8E7ED',
   },
   filterContent: {
     paddingHorizontal: 16,
     paddingBottom: 0,
   },
   filterTab: {
-    marginRight: 24,
-    paddingBottom: 10,
+    marginRight: 18,
+    paddingBottom: 9,
     position: 'relative',
   },
   filterTabActive: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#877ED2',
+    borderBottomWidth: 2,
+    borderBottomColor: '#7E73D8',
     marginBottom: -1,
   },
   filterText: {
-    fontSize: 14,
-    color: '#9CA3AF',
+    fontSize: 13,
+    color: '#A1A1A1',
     fontFamily: typography.families.regular,
     fontWeight: '400',
   },
   filterTextActive: {
-    color: '#1A1A1A',
-    fontWeight: '600',
-    fontFamily: typography.families.semibold,
+    color: '#2C2C2C',
+    fontWeight: '500',
+    fontFamily: typography.families.medium,
   },
 
   // ─── Client Filter Dropdown ──────────────
   clientFilterContainer: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: 4,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F3F3F5',
     zIndex: 10,
   },
   clientDropdown: {
@@ -557,15 +643,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#E5E3ED',
   },
   clientDropdownText: {
     fontSize: 14,
-    color: '#1A1A1A',
+    color: '#4A4A4A',
     fontFamily: typography.families.regular,
   },
   dropdownMenu: {
@@ -611,12 +697,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
     marginTop: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
     overflow: 'hidden',
   },
 
@@ -626,14 +712,14 @@ const styles = StyleSheet.create({
   },
   projectCardBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#F1F1F4',
   },
   projectHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
   projectHeaderLeft: {
     flex: 1,
@@ -641,63 +727,63 @@ const styles = StyleSheet.create({
   },
   projectName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    fontFamily: typography.families.semibold,
+    fontWeight: '500',
+    color: '#2F2F2F',
+    fontFamily: typography.families.medium,
     marginBottom: 3,
   },
   projectSubtitle: {
-    fontSize: 13,
-    color: '#999999',
+    fontSize: 12,
+    color: '#A1A1A1',
     fontFamily: typography.families.regular,
   },
 
   // ─── Expanded Content ────────────────────
   expandedContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    paddingTop: 4,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    paddingTop: 2,
     backgroundColor: '#FFFFFF',
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   detailBlock: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   detailRowDouble: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
     gap: 16,
   },
   detailColumn: {
     flex: 1,
   },
   detailLabel: {
-    fontSize: 12,
-    color: '#999999',
+    fontSize: 11,
+    color: '#A0A0A0',
     fontFamily: typography.families.regular,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   detailValue: {
-    fontSize: 14,
-    color: '#1A1A1A',
+    fontSize: 13,
+    color: '#3A3A3A',
     fontWeight: '400',
     fontFamily: typography.families.regular,
   },
 
   // ─── Status Badge ────────────────────────
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 15,
-    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginLeft: 6,
   },
   statusBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: typography.families.semibold,
@@ -707,7 +793,7 @@ const styles = StyleSheet.create({
   avatarsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   avatarCircle: {
     width: 32,
@@ -717,6 +803,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 12,
@@ -727,7 +818,18 @@ const styles = StyleSheet.create({
 
   // ─── Progress / Overdue ──────────────────
   progressSection: {
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  progressTrack: {
+    height: 3,
+    backgroundColor: '#E8E8EC',
+    borderRadius: 2,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
   },
   progressLabelRow: {
     flexDirection: 'row',
@@ -742,10 +844,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.families.semibold,
   },
   overdueBar: {
-    height: 3,
     backgroundColor: '#FF3B30',
-    borderRadius: 2,
-    width: '100%',
   },
   inProgressValue: {
     fontSize: 13,
@@ -754,31 +853,29 @@ const styles = StyleSheet.create({
     fontFamily: typography.families.semibold,
   },
   inProgressBar: {
-    height: 3,
     backgroundColor: '#34C759',
-    borderRadius: 2,
-    width: '100%',
   },
 
   // ─── Action Buttons ──────────────────────
   actionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    paddingTop: 10,
   },
   moreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#877ED2',
-    paddingHorizontal: 18,
-    height: 40,
-    borderRadius: 10,
+    width: 86,
+    height: 30,
+    borderRadius: 25,
+    paddingTop: 5,
+    paddingRight: 15,
+    paddingBottom: 5,
+    paddingLeft: 15,
+    gap: 5,
     justifyContent: 'center',
-    shadowColor: '#877ED2',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
   },
   moreButtonText: {
     fontSize: 13,
