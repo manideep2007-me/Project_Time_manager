@@ -21,10 +21,12 @@ interface Photo {
 export default function AllAttachmentsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { attachments, taskTitle } = route.params as { 
+  const params = (route.params || {}) as {
     attachments: Photo[]; 
     taskTitle: string; 
   };
+  const attachments = Array.isArray(params.attachments) ? params.attachments : [];
+  const taskTitle = params.taskTitle || 'Task';
 
   const renderPhoto = ({ item }: { item: Photo }) => (
     <View style={styles.photoItem}>

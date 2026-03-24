@@ -56,13 +56,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const bootstrap = useCallback(async () => {
     setLoading(true);
     try {
-      // Disable auto-login - always require manual authentication
-      console.log('Auth bootstrap: Auto-login disabled, requiring manual authentication');
-      setUser(null);
-      setToken(null);
-      
-      // Clear any stored tokens to prevent auto-login
-      await setStoredToken(null);
+      const storedToken = await getStoredToken();
+      if (!storedToken) {
+        setUser(null);
+        setToken(null);
+        return;
+      }
+
+      setToken(storedToken);
+      try {
+        const res = await fetchProfile();
+        const backendUser = res?.user;
+        if (backendUser) {
+          const normalized: AuthUser = {
+            id: backendUser.id,
+            email: backendUser.email,
+            firstName: backendUser.first_name || backendUser.firstName,
+            lastName: backendUser.last_name || backendUser.lastName,
+            name: backendUser.name || `${backendUser.first_name || ''} ${backendUser.last_name || ''}`.trim(),
+            role: normalizeRole(backendUser.role),
+            jobTitle: backendUser.jobTitle || backendUser.job_title || undefined,
+            designation: backendUser.designation || undefined,
+            salaryMonthly: backendUser.salaryMonthly || backendUser.salary_monthly || undefined,
+            photoUrl: backendUser.photo_url || backendUser.photoUrl || backendUser.photograph || undefined,
+          };
+          setUser(normalized);
+        } else {
+          // No user in profile response, clear invalid session.
+          await setStoredToken(null);
+          setToken(null);
+          setUser(null);
+        }
+      } catch (profileError) {
+        // Expired/invalid token: clear it once and continue unauthenticated.
+        await setStoredToken(null);
+        setToken(null);
+        setUser(null);
+      }
     } catch (error) {
       console.error('Bootstrap error:', error);
       // Clear everything on any error

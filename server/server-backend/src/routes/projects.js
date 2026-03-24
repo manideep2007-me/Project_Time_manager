@@ -382,7 +382,9 @@ router.get('/:id/team-members', async (req, res) => {
 // POST /api/projects/:id/tasks - Create a task in a project
 router.post('/:id/tasks', [
   body('title').trim().notEmpty().withMessage('Title is required'),
-  body('status').optional().isIn(['todo', 'in_progress', 'done', 'overdue']),
+  // Frontend sometimes sends UI enum values like 'To Do', 'Active', etc.
+  // Backend DB enum is: ('To Do', 'Active', 'Completed', 'Cancelled', 'On Hold')
+  body('status').optional().isString(),
   body('assignedTo').optional().isArray(),
   body('assignedTo.*').optional().isUUID(),
   body('dueDate').optional().isISO8601(),
@@ -391,6 +393,26 @@ router.post('/:id/tasks', [
     const db = getDbPool(req);
     const { id } = req.params;
     const { title, status = 'todo', assignedTo = [], dueDate = null } = req.body;
+
+    // Map API/UI status strings into DB enum values
+    const statusMap = {
+      // API-style (lowercase)
+      'todo': 'To Do',
+      'in_progress': 'Active',
+      'done': 'Completed',
+      'overdue': 'On Hold',
+      'completed': 'Completed',
+      'active': 'Active',
+      'cancelled': 'Cancelled',
+      'on_hold': 'On Hold',
+      // UI-style (DB enum already)
+      'To Do': 'To Do',
+      'Active': 'Active',
+      'Completed': 'Completed',
+      'Cancelled': 'Cancelled',
+      'On Hold': 'On Hold',
+    };
+    const dbStatus = statusMap[status] || statusMap[String(status)] || 'To Do';
     
     // Check if project exists and get team members
     const project = await db.query('SELECT project_id as id, team_member_ids FROM projects WHERE project_id = $1', [id]);
@@ -415,7 +437,7 @@ router.post('/:id/tasks', [
       `INSERT INTO tasks (project_id, task_name, status, assigned_to, end_date)
        VALUES ($1, $2, $3, $4::jsonb, $5) 
        RETURNING task_id, project_id, task_name as title, status, assigned_to, end_date as due_date, created_at, updated_at`,
-      [id, title, status, JSON.stringify(assignedToArray), dueDate]
+      [id, title, dbStatus, JSON.stringify(assignedToArray), dueDate]
     );
     res.status(201).json({ task: result.rows[0] });
   } catch (err) {

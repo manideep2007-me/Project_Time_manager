@@ -167,7 +167,7 @@ export async function getTimeEntry(id: string | number) {
   return res.data as { timeEntry: any };
 }
 
-export async function startTimeEntry(payload: { projectId: number; employeeId: number; description?: string }) {
+export async function startTimeEntry(payload: { projectId: string; employeeId: string; description?: string }) {
   const res = await api.post('/api/time-entries/start', payload);
   return res.data;
 }
@@ -177,7 +177,7 @@ export async function stopTimeEntry(id: string | number, payload: { description?
   return res.data;
 }
 
-export async function createTimeEntry(payload: { projectId: number; employeeId: number; startTime: string; endTime: string; description?: string }) {
+export async function createTimeEntry(payload: { projectId: string; employeeId: string; startTime: string; endTime: string; description?: string }) {
   const res = await api.post('/api/time-entries', payload);
   return res.data;
 }
@@ -334,6 +334,11 @@ export async function getPermissionsMatrix() {
   return res.data as { roles: Array<'admin'|'manager'|'employee'>; permissions: PermissionMatrixRow[] };
 }
 
+export async function getMyPermissions() {
+  const res = await api.get('/api/permissions/my');
+  return res.data as { permissions: Array<{ name: string; hasAccess: boolean }> };
+}
+
 export async function updatePermissions(updates: Array<{ role: 'admin'|'manager'|'employee'; permissionId: string; hasAccess: boolean }>) {
   const res = await api.post('/api/permissions/update', { updates });
   return res.data as { message: string };
@@ -347,6 +352,16 @@ export async function getUserPermissions(userId: string) {
 export async function updateUserPermissions(userId: string, updates: Array<{ permissionId: string; hasAccess: boolean; clearOverride?: boolean }>) {
   const res = await api.post(`/api/permissions/user/${userId}`, { updates });
   return res.data as { message: string };
+}
+
+export async function getPermissionsDebug(userId: string) {
+  const res = await api.get(`/api/permissions/debug/${userId}`);
+  return res.data as {
+    user: { id: string; email: string; name: string; role: 'admin' | 'manager' | 'employee' };
+    rolePermissions: Array<{ permissionId: string; name: string; hasAccess: boolean }>;
+    userOverrides: Array<{ permissionId: string; name: string; hasAccess: boolean; updatedAt: string }>;
+    finalMergedPermissions: Array<{ name: string; hasAccess: boolean }>;
+  };
 }
 
 // Task Details

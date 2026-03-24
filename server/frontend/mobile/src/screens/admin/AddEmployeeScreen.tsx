@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../api/client';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -236,6 +237,7 @@ interface EditEmployeeData {
   aadhaarNumber?: string;
   payCalculation?: string;
   isActive?: boolean;
+  photoUrl?: string;
 }
 
 type AddEmployeeRouteParams = {
@@ -276,6 +278,8 @@ const PHONE_CODES = [
   { code: '+81', country: 'Japan' },
 ];
 
+const ADD_EMPLOYEE_DRAFT_KEY = 'add_employee_form_draft_v1';
+
 export default function AddEmployeeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
@@ -288,6 +292,8 @@ export default function AddEmployeeScreen() {
   const isEditMode = !!editEmployee;
 
   const [saving, setSaving] = useState(false);
+  const [loadingEditDetails, setLoadingEditDetails] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   // Countries and States from API
   const [countries, setCountries] = useState<Country[]>([]);
@@ -352,79 +358,150 @@ export default function AddEmployeeScreen() {
     }
   }, [pendingRegistration]);
 
+  const applyEditDataToForm = (data: any) => {
+    setFirstName(data?.first_name || data?.firstName || '');
+    setLastName(data?.last_name || data?.lastName || '');
+    setEmail(data?.email || '');
+
+    const phoneStr = data?.phone || '';
+    const phoneMatch = String(phoneStr).match(/^(\+\d{1,4})\s*(.*)$/);
+    if (phoneMatch) {
+      setPhoneCode(phoneMatch[1]);
+      setPhone(phoneMatch[2]);
+    } else {
+      setPhone(String(phoneStr || ''));
+    }
+
+    if (data?.designation) {
+      setSkill(String(data.designation));
+    }
+    if (data?.designation_id) {
+      setSkillId(String(data.designation_id));
+    }
+
+    setAddress(data?.address || '');
+    setAadhaarNumber(data?.aadhar_number || data?.aadhaarNumber || '');
+
+    if (data?.date_of_birth || data?.dateOfBirth) {
+      const parsed = new Date(data.date_of_birth || data.dateOfBirth);
+      if (!Number.isNaN(parsed.getTime())) setDob(parsed);
+    }
+
+    if (data?.joining_date || data?.joiningDate) {
+      const parsed = new Date(data.joining_date || data.joiningDate);
+      if (!Number.isNaN(parsed.getTime())) setJoiningDate(parsed);
+    }
+
+    const empType = data?.employment_type || data?.employmentType;
+    if (empType === 'Full Time' || empType === 'Temporary' || empType === 'Contract') {
+      setEmployeeType(empType);
+    }
+
+    const salaryValue = data?.salary ?? data?.salaryAmount;
+    if (salaryValue !== undefined && salaryValue !== null) {
+      setAmount(String(salaryValue));
+    }
+
+    const overtimeValue = data?.overtime_rate ?? data?.overtimeRate;
+    if (overtimeValue !== undefined && overtimeValue !== null) {
+      setOvertimeRate(String(overtimeValue));
+    }
+
+    const payCalc = data?.pay_calculation || data?.payCalculation || data?.salary_type;
+    if (payCalc === 'monthly' || payCalc === 'Monthly') {
+      setPayCalculation('Monthly');
+    } else if (payCalc === 'daily' || payCalc === 'Daily') {
+      setPayCalculation('Daily');
+    } else if (payCalc === 'hourly' || payCalc === 'Hourly rate') {
+      setPayCalculation('Hourly rate');
+    }
+
+    setSalutation(data?.salutation || '');
+    setCountry(data?.country || '');
+    setCountryId(data?.country_id || '');
+    setState(data?.location || data?.state || '');
+    setStateId(data?.state_id || '');
+
+    if (data?.photo_url || data?.photoUrl) {
+      setPhotoUri(data.photo_url || data.photoUrl);
+    }
+    if (data?.aadhar_image) {
+      setAadhaarFileUri(data.aadhar_image);
+    }
+  };
+
   // Pre-fill form with existing employee data for editing
   useEffect(() => {
-    if (editEmployee) {
-      setFirstName(editEmployee.firstName || '');
-      setLastName(editEmployee.lastName || '');
-      setEmail(editEmployee.email || '');
-      
-      // Parse phone number
-      const phoneStr = editEmployee.phone || '';
-      const phoneMatch = phoneStr.match(/^(\+\d{1,4})\s*(.*)$/);
-      if (phoneMatch) {
-        setPhoneCode(phoneMatch[1]);
-        setPhone(phoneMatch[2]);
-      } else {
-        setPhone(phoneStr);
-      }
-      
-      // Set designation/skill
-      if (editEmployee.designation) {
-        setSkill(editEmployee.designation);
-      }
-      
-      // Set address
-      if (editEmployee.address) {
-        setAddress(editEmployee.address);
-      }
-      
-      // Set aadhaar
-      if (editEmployee.aadhaarNumber) {
-        setAadhaarNumber(editEmployee.aadhaarNumber);
-      }
-      
-      // Set DOB
-      if (editEmployee.dateOfBirth) {
-        setDob(new Date(editEmployee.dateOfBirth));
-      }
-      
-      // Set joining date
-      if (editEmployee.joiningDate) {
-        setJoiningDate(new Date(editEmployee.joiningDate));
-      }
-      
-      // Set employment type
-      if (editEmployee.employmentType) {
-        const empType = editEmployee.employmentType;
-        if (empType === 'Full Time' || empType === 'Temporary' || empType === 'Contract') {
-          setEmployeeType(empType);
+    if (!editEmployee) return;
+
+    // Seed immediate values (for quick render), then fetch full details.
+    applyEditDataToForm(editEmployee);
+
+    const fetchEmployeeDetails = async () => {
+      try {
+        setLoadingEditDetails(true);
+        const res = await api.get(`/api/employees/${editEmployee.id}`);
+        if (res?.data?.employee) {
+          applyEditDataToForm(res.data.employee);
         }
+      } catch (error) {
+        console.error('Failed to fetch full employee details for edit:', error);
+      } finally {
+        setLoadingEditDetails(false);
       }
-      
-      // Set salary
-      if (editEmployee.salary) {
-        setAmount(String(editEmployee.salary));
-      }
-      
-      // Set overtime rate
-      if (editEmployee.overtimeRate) {
-        setOvertimeRate(String(editEmployee.overtimeRate));
-      }
-      
-      // Set pay calculation
-      if (editEmployee.payCalculation) {
-        const payCalc = editEmployee.payCalculation;
-        if (payCalc === 'monthly' || payCalc === 'Monthly') {
-          setPayCalculation('Monthly');
-        } else if (payCalc === 'daily' || payCalc === 'Daily') {
-          setPayCalculation('Daily');
-        } else if (payCalc === 'hourly' || payCalc === 'Hourly rate') {
-          setPayCalculation('Hourly rate');
-        }
-      }
-    }
+    };
+
+    fetchEmployeeDetails();
   }, [editEmployee]);
+
+  // Restore draft in create mode so accidental reloads don't wipe form.
+  useEffect(() => {
+    const restoreDraft = async () => {
+      if (isEditMode || isApprovalMode) {
+        setDraftRestored(true);
+        return;
+      }
+      try {
+        const raw = await AsyncStorage.getItem(ADD_EMPLOYEE_DRAFT_KEY);
+        if (!raw) {
+          setDraftRestored(true);
+          return;
+        }
+        const draft = JSON.parse(raw);
+        if (draft.firstName) setFirstName(String(draft.firstName));
+        if (draft.lastName) setLastName(String(draft.lastName));
+        if (draft.email) setEmail(String(draft.email));
+        if (draft.phoneCode) setPhoneCode(String(draft.phoneCode));
+        if (draft.phone) setPhone(String(draft.phone));
+        if (draft.salutation) setSalutation(String(draft.salutation));
+        if (draft.skill) setSkill(String(draft.skill));
+        if (draft.skillId) setSkillId(String(draft.skillId));
+        if (draft.address) setAddress(String(draft.address));
+        if (draft.country) setCountry(String(draft.country));
+        if (draft.countryId) setCountryId(String(draft.countryId));
+        if (draft.state) setState(String(draft.state));
+        if (draft.stateId) setStateId(String(draft.stateId));
+        if (draft.city) setCity(String(draft.city));
+        if (draft.zipCode) setZipCode(String(draft.zipCode));
+        if (draft.photoUri) setPhotoUri(String(draft.photoUri));
+        if (draft.aadhaarNumber) setAadhaarNumber(String(draft.aadhaarNumber));
+        if (draft.aadhaarFileUri) setAadhaarFileUri(String(draft.aadhaarFileUri));
+        if (draft.joiningDate) {
+          const parsed = new Date(draft.joiningDate);
+          if (!Number.isNaN(parsed.getTime())) setJoiningDate(parsed);
+        }
+        if (draft.employeeType) setEmployeeType(draft.employeeType);
+        if (draft.payCalculation) setPayCalculation(draft.payCalculation);
+        if (draft.amount) setAmount(String(draft.amount));
+        if (draft.overtimeRate) setOvertimeRate(String(draft.overtimeRate));
+      } catch (err) {
+        console.warn('Failed to restore Add Employee draft:', (err as any)?.message);
+      } finally {
+        setDraftRestored(true);
+      }
+    };
+    restoreDraft();
+  }, [isEditMode, isApprovalMode]);
 
   // Fetch countries on mount
   useEffect(() => {
@@ -483,6 +560,69 @@ export default function AddEmployeeScreen() {
     };
     fetchStates();
   }, [countryId]);
+
+  // Auto-save draft while typing in create mode.
+  useEffect(() => {
+    if (!draftRestored || isEditMode || isApprovalMode) return;
+    const draftPayload = {
+      salutation,
+      firstName,
+      lastName,
+      skill,
+      skillId,
+      phoneCode,
+      phone,
+      email,
+      address,
+      country,
+      countryId,
+      state,
+      stateId,
+      city,
+      zipCode,
+      photoUri,
+      aadhaarNumber,
+      aadhaarFileUri,
+      joiningDate: joiningDate ? joiningDate.toISOString() : null,
+      employeeType,
+      payCalculation,
+      amount,
+      overtimeRate,
+    };
+    const timeoutId = setTimeout(() => {
+      AsyncStorage.setItem(ADD_EMPLOYEE_DRAFT_KEY, JSON.stringify(draftPayload)).catch((err) =>
+        console.warn('Failed to persist Add Employee draft:', err?.message)
+      );
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [
+    draftRestored,
+    isEditMode,
+    isApprovalMode,
+    salutation,
+    firstName,
+    lastName,
+    skill,
+    skillId,
+    phoneCode,
+    phone,
+    email,
+    address,
+    country,
+    countryId,
+    state,
+    stateId,
+    city,
+    zipCode,
+    photoUri,
+    aadhaarNumber,
+    aadhaarFileUri,
+    joiningDate,
+    employeeType,
+    payCalculation,
+    amount,
+    overtimeRate,
+  ]);
 
   // Handle country selection
   const handleCountrySelect = (countryName: string) => {
@@ -591,8 +731,18 @@ export default function AddEmployeeScreen() {
           lastName: lastName.trim(),
           email: email.trim() || undefined,
           phone: `${phoneCode} ${phone.trim()}`,
+          salutation: salutation || undefined,
+          dateOfBirth: dob ? dob.toISOString().split('T')[0] : undefined,
+          joiningDate: joiningDate ? joiningDate.toISOString().split('T')[0] : undefined,
+          employmentType: employeeType,
+          aadhaarNumber: aadhaarNumber.trim() || undefined,
+          address: address.trim() || undefined,
+          countryId: countryId || undefined,
+          stateId: stateId || undefined,
+          designationId: skillId || undefined,
           salaryType: payCalculation === 'Hourly rate' ? 'hourly' : payCalculation.toLowerCase(),
           salaryAmount: Number(amount) || 0,
+          overtimeRate: Number(overtimeRate) || 0,
           isActive: true,
         };
 
@@ -646,6 +796,9 @@ export default function AddEmployeeScreen() {
         }
       }
 
+      if (!isEditMode && !isApprovalMode) {
+        await AsyncStorage.removeItem(ADD_EMPLOYEE_DRAFT_KEY);
+      }
       Alert.alert('Success', successMsg, [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
@@ -663,64 +816,78 @@ export default function AddEmployeeScreen() {
   };
 
   const pickImage = async (fromCamera: boolean) => {
-    if (fromCamera) {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow camera access to take a photo.');
-        return;
+    try {
+      if (fromCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'Please allow camera access to take a photo.');
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          setPhotoUri(result.assets[0].uri);
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'Please allow photo library access to pick a photo.');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          setPhotoUri(result.assets[0].uri);
+        }
       }
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setPhotoUri(result.assets[0].uri);
-      }
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow photo library access to pick a photo.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setPhotoUri(result.assets[0].uri);
-      }
+    } catch (error: any) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', 'Failed to pick photo. Please try again.');
     }
   };
 
   const pickAadhaarImage = async (fromCamera: boolean) => {
-    if (fromCamera) {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow camera access to take a photo.');
-        return;
+    try {
+      if (fromCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'Please allow camera access to take a photo.');
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          // Keep this native flow simple and light; crop UI can cause restarts on some Android devices.
+          allowsEditing: false,
+          quality: 0.4,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const nextUri = result.assets[0]?.uri;
+          if (nextUri) setAadhaarFileUri(nextUri);
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'Please allow photo library access to pick a photo.');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          // Keep this native flow simple and light; crop UI can cause restarts on some Android devices.
+          allowsEditing: false,
+          quality: 0.4,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const nextUri = result.assets[0]?.uri;
+          if (nextUri) setAadhaarFileUri(nextUri);
+        }
       }
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAadhaarFileUri(result.assets[0].uri);
-      }
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow photo library access to pick a photo.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAadhaarFileUri(result.assets[0].uri);
-      }
+    } catch (error: any) {
+      console.error('Aadhaar image picker error:', error);
+      Alert.alert('Error', 'Failed to pick Aadhaar image. Please try again.');
     }
   };
 
@@ -753,7 +920,9 @@ export default function AddEmployeeScreen() {
         <View style={styles.prefillBanner}>
           <Ionicons name="create" size={20} color="#1976D2" />
           <Text style={styles.prefillBannerText}>
-            Editing {editEmployee.firstName} {editEmployee.lastName}'s details.
+            {loadingEditDetails
+              ? 'Loading complete employee details...'
+              : `Editing ${firstName || editEmployee.firstName} ${lastName || editEmployee.lastName}'s details.`}
           </Text>
         </View>
       )}
@@ -1037,7 +1206,7 @@ export default function AddEmployeeScreen() {
           {saving ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.saveButtonText}>Add Employee</Text>
+            <Text style={styles.saveButtonText}>{isEditMode ? 'Update Employee' : 'Add Employee'}</Text>
           )}
         </TouchableOpacity>
 

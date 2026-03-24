@@ -11,17 +11,58 @@ const path = require('path');
 const router = express.Router();
 router.use(authenticateToken);
 
-// Helper function to convert file path to URL
-function filePathToUrl(filePath, req) {
-  if (!filePath) return null;
-  // Extract the relative path from uploads directory
-  const uploadsIndex = filePath.indexOf('uploads');
-  if (uploadsIndex === -1) return null;
-  const relativePath = filePath.substring(uploadsIndex).replace(/\\/g, '/');
-  // Construct full URL
+// Public origin for absolute URLs (set PUBLIC_API_URL for mobile dev, e.g. http://10.0.0.5:5000)
+function publicOrigin(req) {
+  const envBase = process.env.PUBLIC_API_URL || process.env.API_PUBLIC_URL;
+  if (envBase) {
+    try {
+      return new URL(envBase).origin;
+    } catch {
+      /* fall through */
+    }
+  }
   const protocol = req.protocol || 'http';
   const host = req.get('host') || `localhost:${process.env.PORT || 5000}`;
-  return `${protocol}://${host}/${relativePath}`;
+  return `${protocol}://${host}`;
+}
+
+// Helper: DB may store full disk path, URL, or bare filename under employee-photos
+function filePathToUrl(filePath, req) {
+  if (!filePath) return null;
+  const fp = String(filePath).trim();
+  if (!fp) return null;
+
+  if (/^https?:\/\//i.test(fp)) {
+    const origin = publicOrigin(req);
+    try {
+      const parsed = new URL(fp);
+      const bad = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+      if (bad.has(parsed.hostname.toLowerCase())) {
+        const base = new URL(origin);
+        return `${base.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+    } catch {
+      return fp;
+    }
+    return fp;
+  }
+
+  const lower = fp.toLowerCase();
+  const uploadsIndex = lower.indexOf('uploads');
+  let relativePath;
+  if (uploadsIndex !== -1) {
+    relativePath = fp.substring(uploadsIndex).replace(/\\/g, '/');
+  } else {
+    const base = path.basename(fp);
+    if (/^[a-z0-9._-]+\.(jpe?g|png|gif|webp)$/i.test(base)) {
+      relativePath = `uploads/employee-photos/${base}`;
+    } else {
+      return null;
+    }
+  }
+
+  const origin = publicOrigin(req);
+  return `${origin}/${relativePath}`;
 }
 
 // Employee photo upload setup
@@ -409,15 +450,30 @@ router.put('/:id', [
   body('email').optional().isEmail().withMessage('Valid email required'),
   body('phone').optional().isString(),
   body('department').optional().isString(),
+  body('salutation').optional().isString(),
+  body('dateOfBirth').optional().isISO8601().withMessage('Valid date of birth required'),
+  body('joiningDate').optional().isISO8601().withMessage('Valid joining date required'),
+  body('employmentType').optional().isIn(['Full Time', 'Temporary', 'Contract']),
+  body('aadhaarNumber').optional().isString(),
+  body('address').optional().isString(),
+  body('countryId').optional().isUUID().withMessage('Valid country ID required'),
+  body('stateId').optional().isUUID().withMessage('Valid state ID required'),
+  body('designationId').optional().isUUID().withMessage('Valid designation ID required'),
   body('salaryType').optional().isIn(['hourly', 'daily', 'monthly']).withMessage('Valid salary type required'),
   body('salaryAmount').optional().isNumeric().withMessage('Salary amount must be a number'),
   body('hourlyRate').optional().isNumeric().withMessage('Hourly rate must be a number'),
+  body('overtimeRate').optional().isNumeric().withMessage('Overtime rate must be a number'),
   body('isActive').optional().isBoolean().withMessage('isActive must be boolean'),
 ], handleValidation, async (req, res) => {
   try {
     const db = getDbPool(req);
     const { id } = req.params;
-    const { employeeId, firstName, lastName, email, phone, department, salaryType, salaryAmount, hourlyRate, isActive } = req.body;
+    const {
+      employeeId, firstName, lastName, email, phone, department,
+      salutation, dateOfBirth, joiningDate, employmentType, aadhaarNumber,
+      address, countryId, stateId, designationId,
+      salaryType, salaryAmount, hourlyRate, overtimeRate, isActive
+    } = req.body;
     
     // Check if user exists
     const exists = await db.query('SELECT user_id FROM users WHERE user_id = $1', [id]);
@@ -433,15 +489,38 @@ router.put('/:id', [
       }
     }
 
+    // Determine role based on designation when designation is changed
+    let resolvedRole = null;
+    if (designationId) {
+      const designationResult = await db.query(
+        'SELECT name FROM designations WHERE designation_id = $1',
+        [designationId]
+      );
+      if (designationResult.rows.length > 0) {
+        resolvedRole = designationResult.rows[0].name.toLowerCase() === 'manager' ? 'manager' : 'employee';
+      }
+    }
+
     const result = await db.query(
       `UPDATE users SET first_name = COALESCE($1, first_name), last_name = COALESCE($2, last_name), 
        email_id = COALESCE($3, email_id), phone_number = COALESCE($4, phone_number), 
-       department_id = COALESCE($5, department_id), pay_calculation = COALESCE($6, pay_calculation), 
-       amount = COALESCE($7, amount), overtime_rate = COALESCE($8, overtime_rate), 
-       is_active = COALESCE($9, is_active), updated_at = CURRENT_TIMESTAMP 
-       WHERE user_id = $10 
+       department_id = COALESCE($5, department_id),
+       salutation = COALESCE($6, salutation), date_of_birth = COALESCE($7, date_of_birth),
+       joining_date = COALESCE($8, joining_date), employee_type = COALESCE($9, employee_type),
+       aadhaar_number = COALESCE($10, aadhaar_number), address = COALESCE($11, address),
+       country_id = COALESCE($12, country_id), state_id = COALESCE($13, state_id),
+       designation_id = COALESCE($14, designation_id), role = COALESCE($15, role),
+       pay_calculation = COALESCE($16, pay_calculation), amount = COALESCE($17, amount),
+       overtime_rate = COALESCE($18, overtime_rate), is_active = COALESCE($19, is_active),
+       updated_at = CURRENT_TIMESTAMP 
+       WHERE user_id = $20 
        RETURNING user_id as id, user_id as employee_id, first_name, last_name, email_id as email, phone_number as phone, department_id as department, is_active, created_at, updated_at`,
-      [firstName, lastName, email, phone, department, salaryType, salaryAmount, hourlyRate, isActive, id]
+      [
+        firstName, lastName, email, phone, department,
+        salutation, dateOfBirth, joiningDate, employmentType, aadhaarNumber,
+        address, countryId, stateId, designationId, resolvedRole,
+        salaryType, salaryAmount, (overtimeRate ?? hourlyRate), isActive, id
+      ]
     );
     res.json({ employee: result.rows[0] });
   } catch (err) {

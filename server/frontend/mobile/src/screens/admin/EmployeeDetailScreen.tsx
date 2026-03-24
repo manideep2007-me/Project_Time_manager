@@ -10,7 +10,7 @@ import { api } from '../../api/client';
 export default function EmployeeDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { id } = route.params as { id: number };
+  const { id } = (route.params || {}) as { id?: number };
   const { user } = useContext(AuthContext);
   const [employee, setEmployee] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -18,6 +18,9 @@ export default function EmployeeDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async () => {
+    if (!id) {
+      return;
+    }
     try {
       const emp = await getEmployee(id);
       setEmployee(emp.employee);
@@ -65,6 +68,10 @@ export default function EmployeeDetailScreen() {
   };
 
   useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
     loadData().finally(() => setLoading(false));
   }, [id]);
 
@@ -80,6 +87,14 @@ export default function EmployeeDetailScreen() {
 
   return (
     <View style={styles.container}>
+      {!id ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="alert-circle-outline" size={48} color="#ccc" />
+          <Text style={styles.emptyText}>Missing employee details</Text>
+          <Text style={styles.emptySubtext}>Please open this from the employee list.</Text>
+        </View>
+      ) : (
+        <>
       <View style={styles.header}>
         <Text style={styles.sectionTitle}>
           {employee ? `${employee.first_name} ${employee.last_name}'s Projects` : 'Employee Projects'}
@@ -144,6 +159,8 @@ export default function EmployeeDetailScreen() {
           </View>
         )}
       </ScrollView>
+        </>
+      )}
     </View>
   );
 }

@@ -230,6 +230,17 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   PRIMARY KEY (id)
 );
 
+-- Table: user_permissions
+CREATE TABLE IF NOT EXISTS user_permissions (
+  id uuid DEFAULT uuid_generate_v4() NOT NULL,
+  user_id uuid NOT NULL,
+  permission_id uuid NOT NULL,
+  has_access boolean DEFAULT false NOT NULL,
+  created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+
 -- Table: tasks
 CREATE TABLE IF NOT EXISTS tasks (
   project_id uuid NOT NULL,
@@ -287,6 +298,8 @@ CREATE TABLE IF NOT EXISTS task_attachments (
 -- Foreign key constraints
 DO $$ BEGIN ALTER TABLE employee_documents ADD CONSTRAINT employee_documents_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES users(user_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN ALTER TABLE role_permissions ADD CONSTRAINT role_permissions_permission_id_fkey FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$;
+DO $$ BEGIN ALTER TABLE user_permissions ADD CONSTRAINT user_permissions_permission_id_fkey FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$;
+DO $$ BEGIN ALTER TABLE user_permissions ADD CONSTRAINT user_permissions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN ALTER TABLE tasks ADD CONSTRAINT fk_tasks_client_id FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN ALTER TABLE project_attachments ADD CONSTRAINT project_attachments_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN ALTER TABLE project_attachments ADD CONSTRAINT project_attachments_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES users(user_id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN null; END $$;
@@ -300,6 +313,7 @@ CREATE INDEX IF NOT EXISTS idx_project_attachments_project_id ON public.project_
 CREATE INDEX IF NOT EXISTS idx_project_attachments_uploaded_by ON public.project_attachments USING btree (uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_projects_client_id ON public.projects USING btree (client_id);
 CREATE UNIQUE INDEX IF NOT EXISTS role_permissions_role_name_permission_id_key ON public.role_permissions USING btree (role_name, permission_id);
+CREATE UNIQUE INDEX IF NOT EXISTS user_permissions_user_id_permission_id_key ON public.user_permissions USING btree (user_id, permission_id);
 CREATE UNIQUE INDEX IF NOT EXISTS roles_name_key ON public.roles USING btree (name);
 CREATE INDEX IF NOT EXISTS idx_salaries_effective_date ON public.salaries USING btree (effective_date);
 CREATE INDEX IF NOT EXISTS idx_salaries_employee_id ON public.salaries USING btree (employee_id);

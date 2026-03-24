@@ -574,7 +574,7 @@ export default function EmployeeDashboardScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Profile"
               >
-                <Ionicons name="ellipsis-vertical" size={22} color="#FFFFFF" />
+                <Ionicons name="menu" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           </View>
@@ -1213,7 +1213,13 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerMenuButton: {
-    padding: 6,
+    width: 42,
+    height: 42,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginTop: 2,
   },
   textBlock: {

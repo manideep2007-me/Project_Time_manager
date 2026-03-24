@@ -13,6 +13,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import { getEmployee, deleteEmployee } from '../../api/endpoints';
+import { resolveUploadUrl } from '../../utils/mediaUrl';
 
 const PRIMARY_PURPLE = '#877ED2';
 const BG_COLOR = '#F0F0F0';
@@ -44,17 +45,24 @@ interface EmployeeData {
 export default function EmployeeInfoScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { id, employeeData } = route.params as { id: string; employeeData?: EmployeeData };
+  const { id, employeeData } = (route.params || {}) as { id?: string; employeeData?: EmployeeData };
   
   const [employee, setEmployee] = useState<EmployeeData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
     // Always load fresh data from API to ensure all fields are populated
     loadEmployee();
   }, [id]);
 
   const loadEmployee = async () => {
+    if (!id) {
+      return;
+    }
     try {
       setLoading(true);
       const res = await getEmployee(id);
@@ -68,7 +76,19 @@ export default function EmployeeInfoScreen() {
   };
 
   const handleEdit = () => {
-    navigation.navigate('EditEmployee', { id: employee?.id });
+    if (!employee?.id) {
+      Alert.alert('Error', 'Employee details are not loaded yet');
+      return;
+    }
+
+    navigation.navigate('AddEmployee', {
+      editEmployee: {
+        id: employee.id,
+        firstName: employee.first_name || '',
+        lastName: employee.last_name || '',
+        email: employee.email || '',
+      },
+    });
   };
 
   const handleDelete = () => {
@@ -124,13 +144,15 @@ export default function EmployeeInfoScreen() {
     return (
       <SafeAreaWrapper backgroundColor={BG_COLOR}>
         <View style={styles.loadingContainer}>
-          <Text>Employee not found</Text>
+          <Text>{id ? 'Employee not found' : 'Missing employee details'}</Text>
         </View>
       </SafeAreaWrapper>
     );
   }
 
   const fullName = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
+  const profilePhotoUri = resolveUploadUrl(employee.photo_url);
+  const aadharImageUri = resolveUploadUrl(employee.aadhar_image);
 
   return (
     <SafeAreaWrapper backgroundColor={BG_COLOR}>
@@ -156,8 +178,8 @@ export default function EmployeeInfoScreen() {
           <View style={styles.card}>
             {/* Profile Photo */}
             <View style={styles.photoContainer}>
-              {employee.photo_url ? (
-                <Image source={{ uri: employee.photo_url }} style={styles.profilePhoto} />
+              {profilePhotoUri ? (
+                <Image source={{ uri: profilePhotoUri }} style={styles.profilePhoto} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarText}>{getInitials(employee.first_name, employee.last_name)}</Text>
@@ -197,9 +219,9 @@ export default function EmployeeInfoScreen() {
                   <Text style={styles.fieldLabel}>Aadhar:</Text>
                   <Text style={styles.fieldValue}>{employee.aadhar_number || 'N/A'}</Text>
                 </View>
-                {employee.aadhar_image && (
-                  <Image source={{ uri: employee.aadhar_image }} style={styles.aadharImage} />
-                )}
+                {aadharImageUri ? (
+                  <Image source={{ uri: aadharImageUri }} style={styles.aadharImage} />
+                ) : null}
               </View>
 
               <InfoField label="Joining Date:" value={formatDate(employee.joining_date)} />

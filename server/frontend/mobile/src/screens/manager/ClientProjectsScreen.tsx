@@ -18,13 +18,21 @@ type ClientProjectsRouteProp = RouteProp<ClientProjectsRouteParams, 'ClientProje
 export default function ClientProjectsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<ClientProjectsRouteProp>();
-  const { client, projects: initialProjects, highlightProjectId } = route.params;
+  const { client, projects: initialProjects, highlightProjectId } = route.params || {
+    client: null,
+    projects: [],
+    highlightProjectId: undefined,
+  };
 
   const [projects, setProjects] = useState<any[]>(initialProjects || []);
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   const fetchProjects = async () => {
+    if (!client?.id) {
+      setProjects([]);
+      return;
+    }
     try {
       setLoading(true);
       console.log('🔄 Fetching projects for client:', client.id, client.name);
@@ -151,6 +159,13 @@ export default function ClientProjectsScreen() {
 
   return (
     <View style={styles.container}>
+      {!client?.id ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>Invalid client details</Text>
+          <Text style={styles.emptySubtext}>Please open this screen from the Clients list.</Text>
+        </View>
+      ) : (
+        <>
       <View style={styles.header}>
         <Text style={styles.title}>{projects.length} project{projects.length !== 1 ? 's' : ''}</Text>
         <TouchableOpacity
@@ -193,6 +208,8 @@ export default function ClientProjectsScreen() {
           </View>
         }
       />
+      )}
+        </>
       )}
     </View>
   );

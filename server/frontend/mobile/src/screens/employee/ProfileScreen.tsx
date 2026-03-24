@@ -10,13 +10,16 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
+import { usePermissions } from '../../context/PermissionsContext';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 
 const APP_VERSION = '1.0';
 
 export default function ProfileScreen() {
   const { logout } = useContext(AuthContext);
+  const { has, loaded } = usePermissions();
   const navigation = useNavigation<any>();
+  const canViewEmployees = loaded && has('employees.view');
 
   const handleLogout = () => {
     Alert.alert(
@@ -93,8 +96,15 @@ export default function ProfileScreen() {
             <MenuItem 
               title="My Uploads" 
               onPress={() => navigation.navigate('MyUploads')}
-              showBorder={false}
+              showBorder={canViewEmployees}
             />
+            {canViewEmployees && (
+              <MenuItem
+                title="Employees"
+                onPress={() => navigation.navigate('Employees')}
+                showBorder={false}
+              />
+            )}
           </View>
         </View>
 

@@ -391,7 +391,9 @@ router.get('/employee/:employeeId', async (req, res) => {
 // PATCH /api/tasks/:taskId - update task fields
 router.patch('/:taskId', [
   body('title').optional().trim().notEmpty(),
-  body('status').optional().isIn(['todo', 'in_progress', 'done', 'overdue']),
+  // Frontend can send UI enum values (e.g. 'Completed', 'To Do').
+  // DB enum values are: ('To Do', 'Active', 'Completed', 'Cancelled', 'On Hold')
+  body('status').optional().isString(),
   body('assignedTo').optional().isArray(),
   body('assignedTo.*').optional().isUUID(),
   body('dueDate').optional().isISO8601(),
@@ -400,6 +402,31 @@ router.patch('/:taskId', [
     const db = getDbPool(req);
     const { taskId } = req.params;
     const { title, status, assignedTo, dueDate } = req.body;
+
+    // Map API/UI status strings into DB enum values
+    const statusMap = {
+      // API-style (lowercase)
+      'todo': 'To Do',
+      'in_progress': 'Active',
+      'done': 'Completed',
+      'overdue': 'On Hold',
+      'completed': 'Completed',
+      'active': 'Active',
+      'cancelled': 'Cancelled',
+      'on_hold': 'On Hold',
+
+      // UI-style (DB enum values already)
+      'To Do': 'To Do',
+      'Active': 'Active',
+      'Completed': 'Completed',
+      'Cancelled': 'Cancelled',
+      'On Hold': 'On Hold',
+    };
+    const dbStatus = status !== undefined ? (statusMap[status] || statusMap[String(status)] || null) : null;
+
+    if (status !== undefined && dbStatus === null) {
+      return res.status(400).json({ error: 'Invalid task status format' });
+    }
     
     // Get task with its project
     const taskData = await db.query('SELECT task_id as id, project_id FROM tasks WHERE task_id = $1', [taskId]);
@@ -432,7 +459,7 @@ router.patch('/:taskId', [
            updated_at = CURRENT_TIMESTAMP
        WHERE task_id = $5
        RETURNING task_id, project_id, task_name, status, assigned_to, end_date, created_at, updated_at`,
-      [title, status, assignedToArray ? JSON.stringify(assignedToArray) : null, dueDate, taskId]
+      [title, dbStatus, assignedToArray ? JSON.stringify(assignedToArray) : null, dueDate, taskId]
     );
     // Log activity: task_assigned (if assignedTo changed)
     if (assignedToArray && assignedToArray.length > 0) {
@@ -573,7 +600,9 @@ router.put('/:taskId/approve', [
     const task = taskResult.rows[0];
 
     // Only allow approval of completed tasks
-    if (task.status !== 'done') {
+    const currentStatus = String(task.status);
+    const isCompleted = currentStatus === 'Completed' || currentStatus === 'done' || currentStatus === 'completed';
+    if (!isCompleted) {
       return res.status(400).json({ 
         error: 'Only completed tasks can be approved',
         currentStatus: task.status
@@ -620,11 +649,11 @@ router.get('/pending-approval', async (req, res) => {
       SELECT t.task_id, t.project_id, t.task_name, t.status, t.assigned_to, t.start_date, 
              t.created_at, t.updated_at, t.approved, t.approved_at, t.approval_notes,
              p.project_name as project_name, p.status as project_status,
-             e.first_name, e.last_name, u.email_id as employee_email
+             u.first_name, u.last_name, u.email_id as employee_email
       FROM tasks t
       JOIN projects p ON t.project_id = p.project_id
-      JOIN users u ON t.assigned_to = u.user_id
-      WHERE t.status = 'done' AND t.approved = false
+      JOIN users u ON t.assigned_to @> to_jsonb(u.user_id)
+      WHERE t.status = 'Completed' AND t.approved = false
       ORDER BY t.updated_at DESC
       LIMIT $1 OFFSET $2
     `;
@@ -632,7 +661,7 @@ router.get('/pending-approval', async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) as total
       FROM tasks 
-      WHERE status = 'done' AND approved = false
+      WHERE status = 'Completed' AND approved = false
     `;
 
     const [result, countResult] = await Promise.all([
@@ -664,11 +693,11 @@ router.get('/approved', async (req, res) => {
       SELECT t.task_id, t.project_id, t.task_name, t.status, t.assigned_to, t.start_date, 
              t.created_at, t.updated_at, t.approved, t.approved_at, t.approval_notes,
              p.project_name as project_name, p.status as project_status,
-             e.first_name, e.last_name, u.email_id as employee_email
+             u.first_name, u.last_name, u.email_id as employee_email
       FROM tasks t
       JOIN projects p ON t.project_id = p.project_id
-      JOIN users u ON t.assigned_to = u.user_id
-      WHERE t.status = 'done' AND t.approved = true
+      JOIN users u ON t.assigned_to @> to_jsonb(u.user_id)
+      WHERE t.status = 'Completed' AND t.approved = true
       ORDER BY t.approved_at DESC
       LIMIT $1 OFFSET $2
     `;
@@ -676,7 +705,7 @@ router.get('/approved', async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) as total
       FROM tasks 
-      WHERE status = 'done' AND approved = true
+      WHERE status = 'Completed' AND approved = true
     `;
 
     const [result, countResult] = await Promise.all([

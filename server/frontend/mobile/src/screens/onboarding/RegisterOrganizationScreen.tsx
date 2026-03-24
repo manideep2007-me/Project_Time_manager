@@ -15,11 +15,14 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import AppHeader from '../../components/shared/AppHeader';
 import Card from '../../components/shared/Card';
 import { registerOrganization } from '../../api/endpoints';
 import otp from '../../services/otpService';
+
+const ORG_REGISTER_DRAFT_KEY = 'org_register_draft_v1';
 
 interface FloatingLabelInputProps extends TextInputProps {
   label: string;
@@ -224,6 +227,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
   const [plan, setPlan] = useState<'trial' | 'buy'>('trial');
   const [showLicenseKeyModal, setShowLicenseKeyModal] = useState(false);
   const [showLicenseField, setShowLicenseField] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
 
   // Hidden/derived
   const [maxEmployees, setMaxEmployees] = useState('50');
@@ -279,6 +283,110 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
     'Singapore': ['Central Region', 'North Region', 'East Region', 'West Region', 'Other'],
     'Other': ['Other'],
   };
+
+  // Restore draft once on mount so emulator/app restarts don't wipe typed data.
+  useEffect(() => {
+    let mounted = true;
+
+    const restoreDraft = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(ORG_REGISTER_DRAFT_KEY);
+        if (!mounted) return;
+        if (!raw) {
+          setDraftHydrated(true);
+          return;
+        }
+
+        const draft = JSON.parse(raw);
+        setStep((draft.step === 1 || draft.step === 2 || draft.step === 3) ? draft.step : 1);
+        setCompanyName(draft.companyName || '');
+        setIndustry(draft.industry || '');
+        setCompanyAddress(draft.companyAddress || '');
+        setCity(draft.city || '');
+        setCountry(draft.country || '');
+        setStateProvince(draft.stateProvince || '');
+        setZipCode(draft.zipCode || '');
+        setLogoName(draft.logoName || null);
+        setLogoUri(draft.logoUri || null);
+        setAdminEmail(draft.adminEmail || '');
+        setAdminPhone(draft.adminPhone || '');
+        setAdminPassword(draft.adminPassword || '');
+        setConfirmPassword(draft.confirmPassword || '');
+        setLicenceNumber(draft.licenceNumber || '');
+        setPlan(draft.plan === 'buy' ? 'buy' : 'trial');
+        setShowLicenseField(!!draft.showLicenseField);
+        setMaxEmployees(
+          typeof draft.maxEmployees === 'string' && draft.maxEmployees.trim()
+            ? draft.maxEmployees
+            : '50'
+        );
+      } catch (e) {
+        console.warn('Failed to restore org registration draft:', e);
+      } finally {
+        if (mounted) {
+          setDraftHydrated(true);
+        }
+      }
+    };
+
+    restoreDraft();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated) return;
+
+    const payload = {
+      step,
+      companyName,
+      industry,
+      companyAddress,
+      city,
+      country,
+      stateProvince,
+      zipCode,
+      logoName,
+      logoUri,
+      adminEmail,
+      adminPhone,
+      adminPassword,
+      confirmPassword,
+      licenceNumber,
+      plan,
+      showLicenseField,
+      maxEmployees,
+    };
+
+    const timer = setTimeout(() => {
+      AsyncStorage.setItem(ORG_REGISTER_DRAFT_KEY, JSON.stringify(payload)).catch((e) => {
+        console.warn('Failed to save org registration draft:', e);
+      });
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [
+    draftHydrated,
+    step,
+    companyName,
+    industry,
+    companyAddress,
+    city,
+    country,
+    stateProvince,
+    zipCode,
+    logoName,
+    logoUri,
+    adminEmail,
+    adminPhone,
+    adminPassword,
+    confirmPassword,
+    licenceNumber,
+    plan,
+    showLicenseField,
+    maxEmployees,
+  ]);
 
   // Reset state and trim phone when country changes
   useEffect(() => {
@@ -377,6 +485,7 @@ export default function RegisterOrganizationScreen({ navigation }: any) {
         admin_phone: `${selectedPhoneCode}${adminPhone.trim()}`,
         admin_password: adminPassword,
       });
+      await AsyncStorage.removeItem(ORG_REGISTER_DRAFT_KEY);
       const code = res.organization.join_code;
       const uniqueId = res.organization.unique_id;
       navigation.replace('OrganizationQRCode', { 

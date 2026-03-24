@@ -97,6 +97,35 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/time-entries/active - List active (running) time entries
+router.get('/active', async (req, res) => {
+  try {
+    const db = getDbPool(req);
+
+    const active = await db.query(
+      `SELECT te.id,
+              te.task_id,
+              te.employee_id,
+              te.work_date,
+              te.start_time,
+              p.project_name,
+              u.first_name,
+              u.last_name
+       FROM time_entries te
+       JOIN tasks t ON te.task_id = t.task_id
+       JOIN projects p ON t.project_id = p.project_id
+       JOIN users u ON te.employee_id = u.user_id
+       WHERE te.end_time IS NULL
+       ORDER BY te.start_time DESC
+       LIMIT 100`
+    );
+
+    res.json({ activeTimeEntries: active.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/time-entries/:id - Get specific time entry
 router.get('/:id', async (req, res) => {
   try {
@@ -124,20 +153,102 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// POST /api/time-entries/start - Start a running time entry (end_time remains NULL)
+router.post('/start', [
+  body('projectId').isUUID().withMessage('Valid project ID is required'),
+  body('employeeId').optional().isUUID().withMessage('Valid employee ID is required'),
+  body('description').optional().isString().trim(),
+], handleValidation, async (req, res) => {
+  try {
+    const db = getDbPool(req);
+    const { projectId, employeeId } = req.body;
+    const userRole = req.user?.role;
+
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Determine employee ID
+    let finalEmployeeId = employeeId;
+    if (userRole === 'employee') {
+      finalEmployeeId = req.user.id;
+      if (employeeId && employeeId !== finalEmployeeId) {
+        return res.status(403).json({ error: 'Employees can only start time for themselves' });
+      }
+    } else if (userRole === 'admin' || userRole === 'manager') {
+      if (!employeeId) {
+        return res.status(400).json({ error: 'Employee ID is required' });
+      }
+      finalEmployeeId = employeeId;
+    } else {
+      return res.status(403).json({ error: 'Unauthorized to start time entries' });
+    }
+
+    // Ensure employee exists
+    const userExists = await db.query('SELECT user_id FROM users WHERE user_id = $1 AND is_active = true', [finalEmployeeId]);
+    if (userExists.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found or inactive' });
+    }
+
+    // Find a task for this project:
+    // 1) prefer a task that includes this employee in assigned_to
+    // 2) fallback to any task in the project
+    const preferredTask = await db.query(
+      `SELECT task_id
+       FROM tasks
+       WHERE project_id = $1
+         AND assigned_to @> to_jsonb($2::uuid)
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [projectId, finalEmployeeId]
+    );
+
+    const taskRow = preferredTask.rows[0]
+      ? preferredTask
+      : await db.query(
+          `SELECT task_id
+           FROM tasks
+           WHERE project_id = $1
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [projectId]
+        );
+
+    const taskId = taskRow.rows[0]?.task_id;
+    if (!taskId) {
+      return res.status(404).json({ error: 'No tasks found for the selected project' });
+    }
+
+    const now = new Date();
+    const workDate = now.toISOString().split('T')[0];
+
+    const result = await db.query(
+      `INSERT INTO time_entries (task_id, employee_id, work_date, start_time, end_time, duration_minutes)
+       VALUES ($1, $2, $3, $4, NULL, NULL)
+       RETURNING *`,
+      [taskId, finalEmployeeId, workDate, now.toISOString()]
+    );
+
+    res.status(201).json({ timeEntry: result.rows[0] });
+  } catch (err) {
+    console.error('Error starting time entry:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
+  }
+});
+
 // POST /api/time-entries - Create new time entry
 // Employees can create their own time entries, admins/managers can create for any employee
 router.post('/', [
-  body('taskId').isUUID().withMessage('Valid task ID is required'),
+  // Backwards compatible:
+  // - some calls send taskId
+  // - your frontend calls send projectId
+  body('taskId').optional().isUUID().withMessage('Valid task ID must be a UUID'),
+  body('projectId').optional().isUUID().withMessage('Valid project ID must be a UUID'),
   body('employeeId').optional().isUUID().withMessage('Valid employee ID is required'),
-  body('workDate').custom((value) => {
-    // Accept both ISO8601 dates and YYYY-MM-DD format
-    if (!value) {
-      throw new Error('Work date is required');
-    }
+  body('workDate').optional().custom((value) => {
+    if (!value) return true;
     const date = new Date(value);
-    if (isNaN(date.getTime())) {
-      throw new Error('Valid work date is required');
-    }
+    if (isNaN(date.getTime())) throw new Error('Valid work date is required');
     return true;
   }),
   body('startTime').isISO8601().withMessage('Valid start time is required'),
@@ -145,7 +256,7 @@ router.post('/', [
 ], handleValidation, async (req, res) => {
   try {
     const db = getDbPool(req);
-    const { taskId, employeeId, workDate, startTime, endTime } = req.body;
+    const { taskId, projectId, employeeId, workDate, startTime, endTime } = req.body;
     const userRole = req.user?.role;
     const userEmail = req.user?.email;
     
@@ -154,10 +265,41 @@ router.post('/', [
       return res.status(401).json({ error: 'Authentication required' });
     }
     
-    // Verify task exists
-    const taskExists = await db.query('SELECT task_id as id FROM tasks WHERE task_id = $1', [taskId]);
-    if (taskExists.rows.length === 0) {
-      return res.status(404).json({ error: 'Task not found' });
+    // Determine task ID:
+    // - If taskId provided, use it
+    // - Else pick a task from the project (prefer assigned_to match)
+    let finalTaskId = taskId;
+    if (!finalTaskId) {
+      if (!projectId) {
+        return res.status(400).json({ error: 'taskId or projectId is required' });
+      }
+
+      const preferredTask = await db.query(
+        `SELECT task_id
+         FROM tasks
+         WHERE project_id = $1
+           AND assigned_to @> to_jsonb($2::uuid)
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [projectId, employeeId || req.user.id]
+      );
+
+      const anyTask = preferredTask.rows[0]
+        ? preferredTask
+        : await db.query(
+            `SELECT task_id
+             FROM tasks
+             WHERE project_id = $1
+             ORDER BY created_at DESC
+             LIMIT 1`,
+            [projectId]
+          );
+
+      finalTaskId = anyTask.rows[0]?.task_id;
+    }
+
+    if (!finalTaskId) {
+      return res.status(404).json({ error: 'No tasks found for provided project' });
     }
     
     // Determine the employee ID to use
@@ -216,12 +358,12 @@ router.post('/', [
       return res.status(400).json({ error: 'Time entry must be at least 1 minute long' });
     }
     
-    // Validate all required fields are present
-    if (!taskId || !finalEmployeeId || !workDate || !startTime || !endTime) {
+    // Validate required fields are present
+    if (!finalTaskId || !finalEmployeeId || !startTime || !endTime) {
       return res.status(400).json({ 
         error: 'Missing required fields',
         details: {
-          taskId: !!taskId,
+          taskId: !!finalTaskId,
           employeeId: !!finalEmployeeId,
           workDate: !!workDate,
           startTime: !!startTime,
@@ -230,13 +372,15 @@ router.post('/', [
       });
     }
     
-    // Ensure workDate is in the correct format for PostgreSQL DATE type
-    // Handle both YYYY-MM-DD and ISO8601 formats
+    // Ensure workDate is in the correct format for PostgreSQL DATE type.
+    // If not provided, derive from startTime.
     let formattedWorkDate = workDate;
-    if (workDate.includes('T')) {
-      formattedWorkDate = workDate.split('T')[0]; // Extract just the date part if it's a full ISO string
-    } else if (workDate.includes(' ')) {
-      formattedWorkDate = workDate.split(' ')[0]; // Extract date if it has time with space separator
+    if (!formattedWorkDate) {
+      formattedWorkDate = startTime.includes('T') ? startTime.split('T')[0] : new Date(startTime).toISOString().split('T')[0];
+    } else if (formattedWorkDate.includes('T')) {
+      formattedWorkDate = formattedWorkDate.split('T')[0];
+    } else if (formattedWorkDate.includes(' ')) {
+      formattedWorkDate = formattedWorkDate.split(' ')[0];
     }
     
     // Insert time entry - PostgreSQL will automatically convert the string formats to the correct types
@@ -246,7 +390,7 @@ router.post('/', [
         `INSERT INTO time_entries (task_id, employee_id, work_date, start_time, end_time, duration_minutes)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *`,
-        [taskId, finalEmployeeId, formattedWorkDate, startTime, endTime, durationMinutes]
+        [finalTaskId, finalEmployeeId, formattedWorkDate, startTime, endTime, durationMinutes]
       );
       
       if (!result || !result.rows || result.rows.length === 0) {
@@ -264,8 +408,8 @@ router.post('/', [
         `SELECT t.task_name, t.project_id, p.project_name as project_name
          FROM tasks t
          JOIN projects p ON t.project_id = p.project_id
-         WHERE t.task_id = $1`,
-        [taskId]
+          WHERE t.task_id = $1`,
+        [finalTaskId]
       );
       const employeeInfo = await db.query(
         `SELECT first_name, last_name FROM users WHERE user_id = $1`,
@@ -324,6 +468,85 @@ router.post('/', [
         column: err.column
       } : undefined
     });
+  }
+});
+
+// PUT /api/time-entries/:id/stop - Stop a running time entry
+router.put('/:id/stop', [
+  body('description').optional().isString().trim(),
+], handleValidation, async (req, res) => {
+  try {
+    const db = getDbPool(req);
+    const { id } = req.params;
+    const { description } = req.body;
+    const userRole = req.user?.role;
+
+    const exists = await db.query('SELECT * FROM time_entries WHERE id = $1', [id]);
+    if (exists.rows.length === 0) {
+      return res.status(404).json({ error: 'Time entry not found' });
+    }
+
+    const timeEntry = exists.rows[0];
+
+    if (timeEntry.end_time) {
+      return res.status(400).json({ error: 'Time entry is already stopped' });
+    }
+
+    // Permission check
+    if (userRole === 'employee') {
+      if (timeEntry.employee_id !== req.user.id) {
+        return res.status(403).json({ error: 'Employees can only stop their own time entries' });
+      }
+    } else if (userRole !== 'admin' && userRole !== 'manager') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const start = new Date(timeEntry.start_time);
+    const end = new Date();
+    const durationMinutes = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60)));
+
+    const result = await db.query(
+      `UPDATE time_entries
+       SET end_time = $1,
+           duration_minutes = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3
+       RETURNING *`,
+      [end.toISOString(), durationMinutes, id]
+    );
+
+    // Non-blocking activity log (optional)
+    try {
+      const actorId = req.user?.id || null;
+      const actorName = req.user?.first_name ? `${req.user.first_name} ${req.user.last_name}` : null;
+
+      await db.query(
+        `INSERT INTO activity_logs (action_type, actor_id, actor_name, employee_id, employee_name, task_id, task_title, project_id, project_name, description)
+         SELECT
+           'time_stopped',
+           $1, $2,
+           te.employee_id,
+           CONCAT(u.first_name, ' ', u.last_name),
+           t.task_id,
+           t.task_name,
+           p.project_id,
+           p.project_name,
+           $4
+         FROM time_entries te
+         JOIN tasks t ON te.task_id = t.task_id
+         JOIN projects p ON t.project_id = p.project_id
+         JOIN users u ON te.employee_id = u.user_id
+         WHERE te.id = $3`,
+        [actorId, actorName, id, description || null]
+      );
+    } catch (e) {
+      // ignore log errors
+    }
+
+    res.json({ timeEntry: result.rows[0] });
+  } catch (err) {
+    console.error('Error stopping time entry:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
   }
 });
 

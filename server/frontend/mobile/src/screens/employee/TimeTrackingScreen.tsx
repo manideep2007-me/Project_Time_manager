@@ -12,7 +12,7 @@ import {
   TextInput
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { listProjects, listTimeEntries } from '../../api/endpoints';
+import { createTimeEntry, listProjects, listTimeEntries, startTimeEntry, stopTimeEntry } from '../../api/endpoints';
 import { AuthContext } from '../../context/AuthContext';
 import { useTimer } from '../../context/TimerContext';
 import Card from '../../components/shared/Card';
@@ -96,6 +96,8 @@ export default function TimeTrackingScreen() {
   const handleStopTracking = async () => {
     try {
       if (user?.id && activeTimers[user.id]) {
+        const active = activeTimers[user.id];
+        await stopTimeEntry(active.id, { description: '' });
         removeTimer(user.id);
         Alert.alert('Success', 'Time tracking stopped successfully!');
         await loadTimeTrackingData(); // Refresh data
@@ -121,16 +123,26 @@ export default function TimeTrackingScreen() {
         return;
       }
 
-      // Create a timer entry
-      const timerEntry = {
-        id: `temp-${Date.now()}`,
+      const startRes: any = await startTimeEntry({
+        projectId,
         employeeId: user.id,
-        employeeName: user.name || 'Me',
-        projectName: project.name,
-        startTime: new Date().toISOString()
-      };
+        description: '',
+      });
 
-      addTimer(timerEntry);
+      const timeEntry = startRes?.timeEntry;
+      if (!timeEntry?.id) {
+        Alert.alert('Error', 'Backend did not return a time entry id');
+        return;
+      }
+
+      addTimer({
+        id: String(timeEntry.id),
+        employeeId: user.id,
+        employeeName: user.name || user.first_name || 'Me',
+        projectName: project.name,
+        taskName: undefined,
+        startTime: String(timeEntry.start_time),
+      });
       setShowStartModal(false);
       setSelectedProject(null);
       
@@ -262,7 +274,12 @@ export default function TimeTrackingScreen() {
             
             <TouchableOpacity
               style={styles.quickActionCard}
-              onPress={() => setShowManualEntry(true)}
+              onPress={() => {
+                // Manual entry modal is missing a project picker; auto-pick first project
+                const firstProjectId = assignedProjects?.[0]?.id || '';
+                setManualEntry(prev => ({ ...prev, projectId: firstProjectId }));
+                setShowManualEntry(true);
+              }}
             >
               <Text style={styles.quickActionIcon}>📝</Text>
               <Text style={styles.quickActionTitle}>Manual Entry</Text>
@@ -431,10 +448,46 @@ export default function TimeTrackingScreen() {
               <Button
                 title="Add Entry"
                 onPress={() => {
-                  // In a real app, this would save to the backend
-                  Alert.alert('Success', 'Time entry added successfully!');
-                  setShowManualEntry(false);
-                  setManualEntry({ projectId: '', hours: '', description: '' });
+                  (async () => {
+                    if (!user?.id) {
+                      Alert.alert('Error', 'Not authenticated');
+                      return;
+                    }
+                    const projectId = manualEntry.projectId;
+                    const hoursNum = Number(manualEntry.hours);
+                    if (!projectId) {
+                      Alert.alert('Validation Error', 'Please select a project');
+                      return;
+                    }
+                    if (!hoursNum || hoursNum <= 0) {
+                      Alert.alert('Validation Error', 'Hours must be greater than 0');
+                      return;
+                    }
+
+                    const endTime = new Date();
+                    const startTime = new Date(endTime.getTime() - hoursNum * 60 * 60 * 1000);
+                    const diffMs = endTime.getTime() - startTime.getTime();
+                    if (diffMs < 60 * 1000) {
+                      Alert.alert('Validation Error', 'Entry must be at least 1 minute');
+                      return;
+                    }
+
+                    await createTimeEntry({
+                      projectId,
+                      employeeId: user.id,
+                      startTime: startTime.toISOString(),
+                      endTime: endTime.toISOString(),
+                      description: manualEntry.description || '',
+                    });
+
+                    Alert.alert('Success', 'Time entry added successfully!');
+                    setShowManualEntry(false);
+                    setManualEntry({ projectId: '', hours: '', description: '' });
+                    await loadTimeTrackingData();
+                  })().catch((e) => {
+                    console.error(e);
+                    Alert.alert('Error', 'Failed to add time entry. Please try again.');
+                  });
                 }}
                 disabled={!manualEntry.hours || !manualEntry.projectId}
               />

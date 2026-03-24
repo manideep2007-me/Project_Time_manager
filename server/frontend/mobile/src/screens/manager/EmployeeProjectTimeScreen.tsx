@@ -10,7 +10,7 @@ import { api } from '../../api/client';
 export default function EmployeeProjectTimeScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { projectId, projectName, employeeId, employeeName } = route.params;
+  const { projectId, projectName, employeeId, employeeName } = route.params || {};
   const { user } = useContext(AuthContext);
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -209,6 +209,10 @@ export default function EmployeeProjectTimeScreen() {
   };
 
   useEffect(() => {
+    if (!projectId || !employeeId) {
+      setLoading(false);
+      return;
+    }
     loadTimeEntries().finally(() => setLoading(false));
   }, [projectId, employeeId]);
 
@@ -224,6 +228,14 @@ export default function EmployeeProjectTimeScreen() {
   return (
     <SafeAreaWrapper>
       <View style={styles.container}>
+        {!projectId || !employeeId ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="alert-circle-outline" size={48} color="#ccc" />
+            <Text style={styles.emptyText}>Missing project details</Text>
+            <Text style={styles.emptySubtext}>Please reopen this from an employee's project card.</Text>
+          </View>
+        ) : (
+          <>
         <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#007AFF" />
@@ -285,6 +297,8 @@ export default function EmployeeProjectTimeScreen() {
           </View>
         )}
         </ScrollView>
+          </>
+        )}
       </View>
     </SafeAreaWrapper>
   );

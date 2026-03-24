@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { resolveUploadUrl } from '../../utils/mediaUrl';
 import { 
   View, 
   Text, 
@@ -44,6 +45,10 @@ interface Employee {
   aadhar_number?: string;
   aadhar_image?: string;
   pay_calculation?: string;
+  salutation?: string;
+  country_id?: string;
+  state_id?: string;
+  designation_id?: string;
 }
 
 export default function EmployeesScreen() {
@@ -73,19 +78,8 @@ export default function EmployeesScreen() {
         id: employee.id,
         firstName: employee.first_name,
         lastName: employee.last_name,
+        // Keep minimal seed data; edit screen will fetch full details by id.
         email: employee.email,
-        phone: employee.phone,
-        designation: employee.designation,
-        department: employee.department,
-        salary: employee.salary,
-        overtimeRate: employee.overtime_rate,
-        address: employee.address,
-        employmentType: employee.employment_type,
-        dateOfBirth: employee.date_of_birth,
-        joiningDate: employee.joining_date,
-        aadhaarNumber: employee.aadhar_number,
-        payCalculation: employee.pay_calculation,
-        isActive: employee.is_active,
       }
     });
   };
@@ -246,12 +240,18 @@ export default function EmployeesScreen() {
   };
 
   const EmployeeItem = ({ employee, index, total }: { employee: Employee; index: number; total: number }) => {
+    const [photoFailed, setPhotoFailed] = useState(false);
     const name = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
     const initials = getInitials(employee.first_name, employee.last_name);
     const avatarColor = getAvatarColor(name);
     const isExpanded = expandedEmployeeId === employee.id;
     const isDeleting = deletingId === employee.id;
     const isUpdatingStatus = statusUpdatingId === employee.id;
+    const photoUri = resolveUploadUrl(employee.photo_url);
+
+    useEffect(() => {
+      setPhotoFailed(false);
+    }, [employee.id, employee.photo_url]);
     
     return (
       <View style={[styles.cardContainer, index !== total - 1 && styles.cardContainerWithDivider]}>
@@ -261,8 +261,12 @@ export default function EmployeesScreen() {
             style={styles.employeeLeft}
             onPress={() => navigation.navigate('EmployeeInfo', { id: employee.id, employeeData: employee })}
           >
-            {employee.photo_url ? (
-              <Image source={{ uri: employee.photo_url }} style={styles.avatar} />
+            {photoUri && !photoFailed ? (
+              <Image
+                source={{ uri: photoUri }}
+                style={styles.avatar}
+                onError={() => setPhotoFailed(true)}
+              />
             ) : (
               <View style={[styles.avatarPlaceholder, { backgroundColor: avatarColor }]}>
                 <Text style={styles.avatarText}>{initials}</Text>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -8,9 +8,10 @@ import {
   TouchableOpacity, 
   RefreshControl,
   Platform,
+  Image,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { AuthContext } from '../../context/AuthContext';
@@ -19,6 +20,7 @@ import { getMyOrganization } from '../../api/endpoints';
 import Card from '../../components/shared/Card';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import { formatCurrencyINR } from '../../utils/currency';
+import { resolveUploadUrl } from '../../utils/mediaUrl';
 
 // Theme colors
 const PRIMARY_PURPLE = '#877ED2';
@@ -36,7 +38,7 @@ const getGreeting = () => {
 
 export default function AdminDashboardScreen() {
   const navigation = useNavigation<any>();
-  const { user } = useContext(AuthContext);
+  const { user, refreshProfile } = useContext(AuthContext);
   const { t } = useTranslation();
   
   // Admin Dashboard State
@@ -46,8 +48,66 @@ export default function AdminDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [organization, setOrganization] = useState<{ name: string; join_code: string; unique_id: string } | null>(null);
+  const [organization, setOrganization] = useState<{ name: string; join_code: string; unique_id: string; logo_url?: string | null } | null>(null);
   const [orgLoading, setOrgLoading] = useState(true);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  /** Profile sometimes has no photo_url while /api/employees list has filePathToUrl(photograph) */
+  const [avatarFromEmployee, setAvatarFromEmployee] = useState<string | null>(null);
+
+  const displayName =
+    user?.name?.trim() ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() ||
+    'Admin';
+  const avatarLetter = displayName.charAt(0).toUpperCase() || 'A';
+  /** Same as Employees list: rewrite localhost/127.0.0.1 so Android emulator can load images. */
+  const avatarUri =
+    resolveUploadUrl((user as any)?.photoUrl) ||
+    resolveUploadUrl((user as any)?.photo_url) ||
+    resolveUploadUrl((user as any)?.photograph) ||
+    resolveUploadUrl((user as any)?.avatar) ||
+    resolveUploadUrl(avatarFromEmployee) ||
+    resolveUploadUrl(organization?.logo_url);
+  const hasValidPhoto = !!avatarUri && !avatarLoadFailed;
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [user?.photoUrl, avatarFromEmployee, organization?.logo_url]);
+
+  const syncAvatarFromEmployees = useCallback(async () => {
+    try {
+      const email = user?.email?.trim().toLowerCase();
+      if (!email) {
+        setAvatarFromEmployee(null);
+        return;
+      }
+      const empRes = await dashboardApi.getEmployees({ limit: 200 });
+      const list = empRes?.employees || [];
+      const me = list.find((e: any) => String(e.email || '').trim().toLowerCase() === email);
+      setAvatarFromEmployee(
+        (me?.photo_url || me?.photoUrl || me?.photograph || me?.avatar || null) as string | null
+      );
+    } catch {
+      setAvatarFromEmployee(null);
+    }
+  }, [user?.email]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          await refreshProfile();
+        } catch {
+          /* ignore */
+        }
+        if (cancelled) return;
+        await syncAvatarFromEmployees();
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [refreshProfile, syncAvatarFromEmployees])
+  );
 
   const loadData = async () => {
     try {
@@ -75,7 +135,9 @@ export default function AdminDashboardScreen() {
         console.error('Error loading organization:', orgError);
         // Don't fail the whole dashboard if org loading fails
       }
-      
+
+      await syncAvatarFromEmployees();
+
       console.log('Admin dashboard data loaded successfully');
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -161,13 +223,20 @@ export default function AdminDashboardScreen() {
             <View style={styles.headerLeft}>
               <View style={styles.avatarContainer}>
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
-                  </Text>
+                  {hasValidPhoto ? (
+                    <Image
+                      key={avatarUri}
+                      source={{ uri: avatarUri! }}
+                      style={styles.avatarImage}
+                      onError={() => setAvatarLoadFailed(true)}
+                    />
+                  ) : (
+                    <Text style={styles.avatarText}>{avatarLetter}</Text>
+                  )}
                 </View>
               </View>
               <View style={styles.headerTextContainer}>
-                <Text style={styles.greeting}>Hello {user?.name?.split(' ')[0] || 'Admin'}</Text>
+                <Text style={styles.greeting}>Hello {displayName.split(' ')[0] || 'Admin'}</Text>
                 <Text style={styles.subGreeting}>{getGreeting()}</Text>
                 <Text style={styles.roleText}>Admin</Text>
               </View>
@@ -334,6 +403,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: PRIMARY_PURPLE,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
   },
   headerTextContainer: {
     justifyContent: 'center',

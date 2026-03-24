@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -28,7 +28,7 @@ const PRIMARY_PURPLE = '#877ED2';
 const LIGHT_PURPLE = '#E8E7ED';
 const BG_COLOR = '#F5F5F8';
 
-type Role = 'manager' | 'employee';
+type Role = 'admin' | 'manager' | 'employee';
 type PermissionAction = 'view' | 'add' | 'edit' | 'delete';
 
 interface Employee {
@@ -104,10 +104,33 @@ export default function AdminPermissionsScreen() {
   // API permissions data
   const [apiPermissions, setApiPermissions] = useState<PermissionMatrixRow[]>([]);
   const [userPermissions, setUserPermissions] = useState<UserPermissionRow[]>([]);
-  
-  // Track pending changes
-  const [pendingRoleChanges, setPendingRoleChanges] = useState<Map<string, boolean>>(new Map());
-  const [pendingUserChanges, setPendingUserChanges] = useState<Map<string, boolean>>(new Map());
+
+  /** Prevent double-submit while a toggle API call is in flight */
+  const inFlightRef = useRef<Set<string>>(new Set());
+  const refreshGlobalDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleRefreshGlobalPermissions = useCallback(() => {
+    if (refreshGlobalDebounceRef.current) {
+      clearTimeout(refreshGlobalDebounceRef.current);
+    }
+    refreshGlobalDebounceRef.current = setTimeout(() => {
+      refreshGlobalDebounceRef.current = null;
+      refreshGlobalPermissions().catch(() => {});
+    }, 450);
+  }, [refreshGlobalPermissions]);
+
+  const selectedEmployeeIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedEmployeeIdRef.current = selectedEmployee?.id ?? null;
+  }, [selectedEmployee]);
+
+  useEffect(() => {
+    return () => {
+      if (refreshGlobalDebounceRef.current) {
+        clearTimeout(refreshGlobalDebounceRef.current);
+      }
+    };
+  }, []);
   
   // Permission categories for UI display (derived from API data)
   const [permissionCategories, setPermissionCategories] = useState<PermissionCategory[]>([
@@ -163,9 +186,8 @@ export default function AdminPermissionsScreen() {
     const newOther = { setTaskPriority: false };
 
     for (const perm of permissions) {
-      // Check if there's a pending change for this permission
-      const pendingValue = pendingRoleChanges.get(`${role}:${perm.id}`);
-      const hasAccess = pendingValue !== undefined ? pendingValue : perm.access[role];
+      // API may omit `access` for some rows — never index undefined (crashes the app).
+      const hasAccess = !!(perm.access?.[role]);
       
       const info = getPermissionInfo(perm.name);
       if (!info) continue;
@@ -202,9 +224,7 @@ export default function AdminPermissionsScreen() {
     const newOther = { setTaskPriority: false };
 
     for (const perm of permissions) {
-      // Check if there's a pending change for this permission
-      const pendingValue = pendingUserChanges.get(perm.id);
-      const hasAccess = pendingValue !== undefined ? pendingValue : perm.hasAccess;
+      const hasAccess = !!perm.hasAccess;
       
       const info = getPermissionInfo(perm.name);
       if (!info) continue;
@@ -234,9 +254,13 @@ export default function AdminPermissionsScreen() {
   // Load role permissions when role changes
   useEffect(() => {
     if (activeTab === 'role' && selectedRole && apiPermissions.length > 0) {
-      updateUIFromPermissions(apiPermissions, selectedRole);
+      try {
+        updateUIFromPermissions(apiPermissions, selectedRole);
+      } catch (e) {
+        console.error('AdminPermissions: failed to apply role UI state', e);
+      }
     }
-  }, [selectedRole, apiPermissions, pendingRoleChanges]);
+  }, [selectedRole, apiPermissions]);
 
   // Load user permissions when employee changes
   useEffect(() => {
@@ -248,9 +272,13 @@ export default function AdminPermissionsScreen() {
   // Update UI when user permissions or pending changes update
   useEffect(() => {
     if (activeTab === 'individual' && userPermissions.length > 0) {
-      updateUIFromUserPermissions(userPermissions);
+      try {
+        updateUIFromUserPermissions(userPermissions);
+      } catch (e) {
+        console.error('AdminPermissions: failed to apply user UI state', e);
+      }
     }
-  }, [userPermissions, pendingUserChanges]);
+  }, [userPermissions]);
 
   const loadData = async () => {
     try {
@@ -293,19 +321,19 @@ export default function AdminPermissionsScreen() {
     }
   };
 
-  const loadUserPermissions = async (userId: string) => {
+  const loadUserPermissions = async (userId: string, opts?: { quiet?: boolean }) => {
+    const quiet = opts?.quiet === true;
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       console.log('Loading user permissions for:', userId);
       const data = await getUserPermissions(userId);
       console.log('User permissions loaded:', data.permissions?.length);
       setUserPermissions(data.permissions || []);
-      setPendingUserChanges(new Map()); // Reset pending changes for new user
     } catch (err: any) {
       console.error('Error loading user permissions:', err);
-      Alert.alert('Error', 'Failed to load user permissions');
+      if (!quiet) Alert.alert('Error', 'Failed to load user permissions');
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
 
@@ -320,211 +348,127 @@ export default function AdminPermissionsScreen() {
     return perm?.id || null;
   };
 
+  /** Persist one permission to the API immediately (real-time); refetch to match DB. */
+  const persistPermissionToggle = async (permName: string) => {
+    if (activeTab === 'role' && selectedRole) {
+      const permId = findPermissionId(permName);
+      if (!permId) {
+        console.warn('AdminPermissions: matrix missing permission', permName);
+        return;
+      }
+      const role = selectedRole;
+      const currentPerm = apiPermissions.find(p => p.id === permId);
+      const currentValue = !!(currentPerm?.access?.[role]);
+      const newValue = !currentValue;
+      const flightKey = `r:${role}:${permId}`;
+      if (inFlightRef.current.has(flightKey)) return;
+      inFlightRef.current.add(flightKey);
+      setApiPermissions(prev =>
+        prev.map(p =>
+          p.id === permId ? { ...p, access: { ...p.access, [role]: newValue } } : p
+        )
+      );
+      try {
+        await updatePermissions([{ role, permissionId: permId, hasAccess: newValue }]);
+        scheduleRefreshGlobalPermissions();
+        const permData = await getPermissionsMatrix();
+        setApiPermissions(permData.permissions || []);
+      } catch (err) {
+        console.error('AdminPermissions: role toggle failed', permName, err);
+        setApiPermissions(prev =>
+          prev.map(p =>
+            p.id === permId ? { ...p, access: { ...p.access, [role]: currentValue } } : p
+          )
+        );
+        Alert.alert('Error', 'Could not update permission');
+      } finally {
+        inFlightRef.current.delete(flightKey);
+      }
+    } else if (activeTab === 'individual' && selectedEmployee) {
+      const userId = selectedEmployee.id;
+      const permId = findUserPermissionId(permName);
+      if (!permId) {
+        console.warn('AdminPermissions: user row missing permission', permName);
+        return;
+      }
+      const currentPerm = userPermissions.find(p => p.id === permId);
+      const currentValue = !!currentPerm?.hasAccess;
+      const newValue = !currentValue;
+      const flightKey = `u:${userId}:${permId}`;
+      if (inFlightRef.current.has(flightKey)) return;
+      inFlightRef.current.add(flightKey);
+      setUserPermissions(prev =>
+        prev.map(p =>
+          p.id === permId ? { ...p, hasAccess: newValue, isOverride: true } : p
+        )
+      );
+      try {
+        await updateUserPermissions(userId, [{ permissionId: permId, hasAccess: newValue }]);
+        scheduleRefreshGlobalPermissions();
+        const data = await getUserPermissions(userId);
+        if (selectedEmployeeIdRef.current === userId) {
+          setUserPermissions(data.permissions || []);
+        }
+      } catch (err) {
+        console.error('AdminPermissions: user toggle failed', permName, err);
+        if (selectedEmployeeIdRef.current === userId) {
+          setUserPermissions(prev =>
+            prev.map(p => (p.id === permId ? { ...p, hasAccess: currentValue } : p))
+          );
+        }
+        Alert.alert('Error', 'Could not update permission');
+      } finally {
+        inFlightRef.current.delete(flightKey);
+      }
+    }
+  };
+
   const togglePermission = (categoryId: string, action: PermissionAction) => {
-    // Map category + action to permission name
     const categoryToEntity: Record<string, string> = {
-      'manage_client': 'clients',
-      'manage_project': 'projects',
-      'manage_task': 'tasks',
-      'manage_employee': 'employees',
-      'manage_attachments': 'attachments',
+      manage_client: 'clients',
+      manage_project: 'projects',
+      manage_task: 'tasks',
+      manage_employee: 'employees',
+      manage_attachments: 'attachments',
     };
     const entity = categoryToEntity[categoryId];
     if (!entity) return;
-
-    const permName = `${entity}.${action}`;
-    
-    if (activeTab === 'role' && selectedRole) {
-      const permId = findPermissionId(permName);
-      if (!permId) return;
-      
-      // Get current value
-      const currentPerm = apiPermissions.find(p => p.id === permId);
-      const pendingKey = `${selectedRole}:${permId}`;
-      const currentValue = pendingRoleChanges.has(pendingKey) 
-        ? pendingRoleChanges.get(pendingKey) 
-        : currentPerm?.access[selectedRole] || false;
-      
-      // Toggle the value
-      const newChanges = new Map(pendingRoleChanges);
-      newChanges.set(pendingKey, !currentValue);
-      setPendingRoleChanges(newChanges);
-    } else if (activeTab === 'individual' && selectedEmployee) {
-      const permId = findUserPermissionId(permName);
-      if (!permId) return;
-      
-      // Get current value
-      const currentPerm = userPermissions.find(p => p.id === permId);
-      const currentValue = pendingUserChanges.has(permId) 
-        ? pendingUserChanges.get(permId) 
-        : currentPerm?.hasAccess || false;
-      
-      // Toggle the value
-      const newChanges = new Map(pendingUserChanges);
-      newChanges.set(permId, !currentValue);
-      setPendingUserChanges(newChanges);
-    }
+    void persistPermissionToggle(`${entity}.${action}`);
   };
 
   const toggleExpensePermission = (action: 'view' | 'approve') => {
-    const permName = `expenses.${action}`;
-    
-    if (activeTab === 'role' && selectedRole) {
-      const permId = findPermissionId(permName);
-      if (!permId) return;
-      
-      const currentPerm = apiPermissions.find(p => p.id === permId);
-      const pendingKey = `${selectedRole}:${permId}`;
-      const currentValue = pendingRoleChanges.has(pendingKey) 
-        ? pendingRoleChanges.get(pendingKey) 
-        : currentPerm?.access[selectedRole] || false;
-      
-      const newChanges = new Map(pendingRoleChanges);
-      newChanges.set(pendingKey, !currentValue);
-      setPendingRoleChanges(newChanges);
-    } else if (activeTab === 'individual' && selectedEmployee) {
-      const permId = findUserPermissionId(permName);
-      if (!permId) return;
-      
-      const currentPerm = userPermissions.find(p => p.id === permId);
-      const currentValue = pendingUserChanges.has(permId) 
-        ? pendingUserChanges.get(permId) 
-        : currentPerm?.hasAccess || false;
-      
-      const newChanges = new Map(pendingUserChanges);
-      newChanges.set(permId, !currentValue);
-      setPendingUserChanges(newChanges);
-    }
+    void persistPermissionToggle(`expenses.${action}`);
   };
 
   const toggleAttendancePermission = (action: 'view' | 'approve') => {
-    const permName = `attendance.${action}`;
-    
-    if (activeTab === 'role' && selectedRole) {
-      const permId = findPermissionId(permName);
-      if (!permId) return;
-      
-      const currentPerm = apiPermissions.find(p => p.id === permId);
-      const pendingKey = `${selectedRole}:${permId}`;
-      const currentValue = pendingRoleChanges.has(pendingKey) 
-        ? pendingRoleChanges.get(pendingKey) 
-        : currentPerm?.access[selectedRole] || false;
-      
-      const newChanges = new Map(pendingRoleChanges);
-      newChanges.set(pendingKey, !currentValue);
-      setPendingRoleChanges(newChanges);
-    } else if (activeTab === 'individual' && selectedEmployee) {
-      const permId = findUserPermissionId(permName);
-      if (!permId) return;
-      
-      const currentPerm = userPermissions.find(p => p.id === permId);
-      const currentValue = pendingUserChanges.has(permId) 
-        ? pendingUserChanges.get(permId) 
-        : currentPerm?.hasAccess || false;
-      
-      const newChanges = new Map(pendingUserChanges);
-      newChanges.set(permId, !currentValue);
-      setPendingUserChanges(newChanges);
-    }
+    void persistPermissionToggle(`attendance.${action}`);
   };
 
   const toggleOtherPermission = (action: 'setTaskPriority') => {
-    const permName = action === 'setTaskPriority' ? 'tasks.priority' : '';
-    if (!permName) return;
-    
-    if (activeTab === 'role' && selectedRole) {
-      const permId = findPermissionId(permName);
-      if (!permId) return;
-      
-      const currentPerm = apiPermissions.find(p => p.id === permId);
-      const pendingKey = `${selectedRole}:${permId}`;
-      const currentValue = pendingRoleChanges.has(pendingKey) 
-        ? pendingRoleChanges.get(pendingKey) 
-        : currentPerm?.access[selectedRole] || false;
-      
-      const newChanges = new Map(pendingRoleChanges);
-      newChanges.set(pendingKey, !currentValue);
-      setPendingRoleChanges(newChanges);
-    } else if (activeTab === 'individual' && selectedEmployee) {
-      const permId = findUserPermissionId(permName);
-      if (!permId) return;
-      
-      const currentPerm = userPermissions.find(p => p.id === permId);
-      const currentValue = pendingUserChanges.has(permId) 
-        ? pendingUserChanges.get(permId) 
-        : currentPerm?.hasAccess || false;
-      
-      const newChanges = new Map(pendingUserChanges);
-      newChanges.set(permId, !currentValue);
-      setPendingUserChanges(newChanges);
-    }
+    if (action === 'setTaskPriority') void persistPermissionToggle('tasks.priority');
   };
 
-  const handleSave = async () => {
+  const handleReloadFromServer = async () => {
+    if (activeTab === 'individual' && !selectedEmployee) {
+      Alert.alert('Select employee', 'Choose an employee to reload their permissions.');
+      return;
+    }
     setSaving(true);
     try {
       if (activeTab === 'role') {
-        // Save role-based permissions
-        const updates: Array<{ role: 'admin' | 'manager' | 'employee'; permissionId: string; hasAccess: boolean }> = [];
-        
-        pendingRoleChanges.forEach((hasAccess, key) => {
-          const [role, permId] = key.split(':');
-          if (role && permId) {
-            updates.push({ role: role as 'manager' | 'employee', permissionId: permId, hasAccess });
-          }
-        });
-        
-        if (updates.length > 0) {
-          console.log('Saving role permissions:', updates.length, 'changes');
-          await updatePermissions(updates);
-          
-          // Reload permissions to get fresh data
-          const permData = await getPermissionsMatrix();
-          setApiPermissions(permData.permissions || []);
-          setPendingRoleChanges(new Map());
-          
-          // Refresh global permissions context so changes take effect immediately
-          await refreshGlobalPermissions();
-          
-          Alert.alert('Success', 'Role permissions updated successfully');
-        } else {
-          Alert.alert('Info', 'No changes to save');
-        }
-      } else if (activeTab === 'individual' && selectedEmployee) {
-        // Save user-specific permissions
-        const updates: Array<{ permissionId: string; hasAccess: boolean }> = [];
-        
-        pendingUserChanges.forEach((hasAccess, permId) => {
-          updates.push({ permissionId: permId, hasAccess });
-        });
-        
-        if (updates.length > 0) {
-          console.log('Saving user permissions:', updates.length, 'changes');
-          await updateUserPermissions(selectedEmployee.id, updates);
-          
-          // Reload user permissions
-          await loadUserPermissions(selectedEmployee.id);
-          
-          // Refresh global permissions context
-          await refreshGlobalPermissions();
-          
-          Alert.alert('Success', 'User permissions updated successfully');
-        } else {
-          Alert.alert('Info', 'No changes to save');
-        }
+        const permData = await getPermissionsMatrix();
+        setApiPermissions(permData.permissions || []);
+      } else if (selectedEmployee) {
+        await loadUserPermissions(selectedEmployee.id, { quiet: true });
       }
-    } catch (err: any) {
-      console.error('Error saving permissions:', err);
-      Alert.alert('Error', 'Failed to update permissions');
+      await refreshGlobalPermissions();
+    } catch (err) {
+      console.error('AdminPermissions: reload failed', err);
+      Alert.alert('Error', 'Failed to reload permissions from server');
     } finally {
       setSaving(false);
     }
   };
-
-  // Check if there are pending changes
-  const hasPendingChanges = activeTab === 'role' 
-    ? pendingRoleChanges.size > 0 
-    : pendingUserChanges.size > 0;
 
   if (loading) {
     return (
@@ -694,15 +638,15 @@ export default function AdminPermissionsScreen() {
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Save Button */}
+        {/* Toggles save in real time; use this to discard local drift and match DB */}
         <View style={styles.saveButtonContainer}>
-          <TouchableOpacity 
-            style={[styles.saveButton, !hasPendingChanges && !saving && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={saving || !hasPendingChanges}
+          <TouchableOpacity
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+            onPress={() => void handleReloadFromServer()}
+            disabled={saving}
           >
             <Text style={styles.saveButtonText}>
-              {saving ? 'Saving...' : hasPendingChanges ? `Save ${activeTab === 'role' ? pendingRoleChanges.size : pendingUserChanges.size} Changes` : 'Save Permission Settings'}
+              {saving ? 'Reloading…' : 'Reload from server'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -720,7 +664,7 @@ export default function AdminPermissionsScreen() {
             onPress={() => setShowRoleDropdown(false)}
           >
             <View style={styles.dropdownModal}>
-              {(['manager', 'employee'] as Role[]).map((role) => (
+              {(['admin', 'manager', 'employee'] as Role[]).map((role) => (
                 <TouchableOpacity
                   key={role}
                   style={[

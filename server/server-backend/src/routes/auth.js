@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
@@ -7,6 +8,27 @@ const { primary: registryPool, secondary, createOrgPool } = require('../config/d
 const { handleValidation } = require('../middleware/validation');
 
 const router = express.Router();
+
+/** Same idea as employees.js `publicOrigin`: mobile needs a LAN or emulator-reachable host */
+function publicOrigin(req) {
+  const envBase = process.env.PUBLIC_API_URL || process.env.API_PUBLIC_URL;
+  if (envBase) {
+    try {
+      return new URL(envBase).origin;
+    } catch {
+      /* fall through */
+    }
+  }
+  const protocol = req.protocol || 'http';
+  const host = req.get('host') || `localhost:${process.env.PORT || 5000}`;
+  return `${protocol}://${host}`;
+}
+
+function photoUrlFromPhotograph(req, photograph) {
+  if (!photograph) return null;
+  const base = path.basename(photograph);
+  return `${publicOrigin(req)}/uploads/employee-photos/${base}`;
+}
 
 router.post('/register', [
   body('email').isEmail(),
@@ -166,8 +188,7 @@ router.post('/login', [
       // Demo accounts use 'local' source - they see demo data
       const token = jwt.sign({ userId: row.id, source: 'local' }, process.env.JWT_SECRET, { expiresIn: '7d' });
       const { password_hash, photograph, ...userWithoutSensitive } = row;
-      // Build photo_url from photograph path
-      const photo_url = photograph ? `${req.protocol}://${req.get('host')}/uploads/employee-photos/${require('path').basename(photograph)}` : null;
+      const photo_url = photoUrlFromPhotograph(req, photograph);
       const user = { ...userWithoutSensitive, photo_url };
       console.log(`✅ Demo user logged in: ${email} (${row.role})`);
       return res.json({ message: 'Logged in', user, token });
@@ -221,8 +242,7 @@ router.post('/login', [
           const firstName = nameParts[0] || '';
           const lastName = nameParts.slice(1).join(' ') || '';
           
-          // Build photo_url from photograph path
-          const photo_url = row.photograph ? `${req.protocol}://${req.get('host')}/uploads/employee-photos/${require('path').basename(row.photograph)}` : null;
+          const photo_url = photoUrlFromPhotograph(req, row.photograph);
           
           // Real organization users use 'registry' source - they see their organization's data
           const token = jwt.sign({ 
@@ -280,8 +300,7 @@ router.get('/profile', async (req, res) => {
           const firstName = nameParts[0] || '';
           const lastName = nameParts.slice(1).join(' ') || '';
           
-          // Build photo_url from photograph path
-          const photo_url = row.photograph ? `${req.protocol}://${req.get('host')}/uploads/employee-photos/${require('path').basename(row.photograph)}` : null;
+          const photo_url = photoUrlFromPhotograph(req, row.photograph);
           
           return res.json({ 
             user: {
@@ -306,8 +325,7 @@ router.get('/profile', async (req, res) => {
       const result = await secondary.query('SELECT user_id as id, email_id as email, first_name, last_name, role, photograph FROM users WHERE user_id = $1', [decoded.userId]);
       if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
       const row = result.rows[0];
-      // Build photo_url from photograph path
-      const photo_url = row.photograph ? `${req.protocol}://${req.get('host')}/uploads/employee-photos/${require('path').basename(row.photograph)}` : null;
+      const photo_url = photoUrlFromPhotograph(req, row.photograph);
       return res.json({ user: { ...row, photo_url } });
     }
     

@@ -178,12 +178,14 @@ export default function AddClientScreen() {
       return false;
     }
     
-    // Email - Optional but validate format if provided
-    if (formData.email.trim()) {
-      if (!formData.email.includes('@') || !formData.email.includes('.')) {
-        Alert.alert('Validation Error', 'Please enter a valid email address');
-        return false;
-      }
+    // Email - Required (backend validates email as required & valid)
+    if (!formData.email.trim()) {
+      Alert.alert('Validation Error', 'Email is required');
+      return false;
+    }
+    if (!formData.email.includes('@') || !formData.email.includes('.')) {
+      Alert.alert('Validation Error', 'Please enter a valid email address');
+      return false;
     }
     
     // Address - Required
@@ -246,7 +248,7 @@ export default function AddClientScreen() {
         lastName: formData.lastName.trim(),
         gstNumber: formData.gst.trim() || null,
         category: formData.category.trim() || null,
-        email: formData.email.trim() || null,
+        email: formData.email.trim(),
         phone: formData.phone.trim(),
         address: formData.address.trim(),
         country: formData.country.trim(),
@@ -478,7 +480,7 @@ export default function AddClientScreen() {
                       lastName: formData.lastName.trim(),
                       gstNumber: formData.gst.trim() || null,
                       category: formData.category.trim() || null,
-                      email: formData.email.trim() || null,
+                      email: formData.email.trim(),
                       phone: formData.phone.trim(),
                       address: formData.address.trim(),
                       country: formData.country.trim(),

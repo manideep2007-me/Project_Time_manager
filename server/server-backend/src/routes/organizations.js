@@ -97,14 +97,79 @@ router.post(
       }
 
       // Step 2: Insert into project_registry database (organizations_registry table)
+      // Handle old/new schema variants so full registration data is saved consistently.
+      const schemaRes = await registryPool.query(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'organizations_registry'`
+      );
+      const availableColumns = new Set(schemaRes.rows.map((r) => r.column_name));
+      const hasColumn = (columnName) => availableColumns.has(columnName);
+
+      const insertMap = new Map([
+        ['organization_id', organizationId],
+        ['name', name],
+        ['organization_name', name],
+        ['address', address],
+        ['industry', industry || null],
+        ['city', city || null],
+        ['state_province', state_province || null],
+        ['country', country || null],
+        ['zip_code', zip_code || null],
+        ['logo_url', logo_url || null],
+        ['licence_key', licence_key],
+        ['licence_number', finalLicenceNumber],
+        ['max_employees', max_employees],
+        ['licence_type', licence_type],
+        ['admin_email', admin_email],
+        ['admin_phone', admin_phone],
+        ['admin_password', hashedPassword],
+        ['admin_password_hash', hashedPassword],
+        ['join_code', code],
+        ['database_name', orgDatabaseInfo.databaseName],
+      ]);
+
+      const selectedColumns = [];
+      const selectedValues = [];
+      for (const [column, value] of insertMap.entries()) {
+        if (!hasColumn(column)) continue;
+        selectedColumns.push(column);
+        selectedValues.push(value);
+      }
+
+      const valuePlaceholders = selectedColumns.map((_, idx) => `$${idx + 1}`).join(', ');
+      const returningColumns = [
+        'id',
+        'organization_id',
+        hasColumn('name') ? 'name' : null,
+        hasColumn('organization_name') ? 'organization_name' : null,
+        'address',
+        'industry',
+        'city',
+        'state_province',
+        'country',
+        'zip_code',
+        'logo_url',
+        'licence_key',
+        'licence_number',
+        'max_employees',
+        'licence_type',
+        'admin_email',
+        'admin_phone',
+        'join_code',
+        hasColumn('database_name') ? 'database_name' : null,
+        'created_at',
+      ].filter(Boolean).join(', ');
+
       const ins = await registryPool.query(
-        `INSERT INTO organizations_registry (organization_id, name, address, industry, city, state_province, country, zip_code, logo_url, licence_key, licence_number, max_employees, licence_type, admin_email, admin_phone, admin_password, join_code, database_name)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-         RETURNING id, organization_id, name, address, industry, city, state_province, country, zip_code, logo_url, licence_key, licence_number, max_employees, licence_type, admin_email, admin_phone, join_code, database_name, created_at`,
-        [organizationId, name, address, industry || null, city || null, state_province || null, country || null, zip_code || null, logo_url || null, licence_key, finalLicenceNumber, max_employees, licence_type, admin_email, admin_phone, hashedPassword, code, orgDatabaseInfo.databaseName]
+        `INSERT INTO organizations_registry (${selectedColumns.join(', ')})
+         VALUES (${valuePlaceholders})
+         RETURNING ${returningColumns}`,
+        selectedValues
       );
       
       const orgRecord = ins.rows[0];
+      const orgDisplayName = orgRecord.name || orgRecord.organization_name || name;
       console.log(`✅ Organization "${name}" registered in project_registry database with ID: ${organizationId}`);
       console.log(`   Database: ${orgDatabaseInfo.databaseName}`);
       
@@ -141,6 +206,7 @@ router.post(
       res.json({ 
         organization: {
           ...orgRecord,
+          name: orgDisplayName,
           unique_id: orgRecord.organization_id,
           database_name: orgDatabaseInfo.databaseName
         }
