@@ -135,10 +135,9 @@ router.post('/', [
       }
     }
     
-    // Require at least 2 team members for each task
-    if (assignedToArray.length < 2) {
-      return res.status(400).json({ 
-        error: 'Each task must have at least 2 team members assigned'
+    if (assignedToArray.length < 1) {
+      return res.status(400).json({
+        error: 'Please add at least one employee to this task',
       });
     }
     

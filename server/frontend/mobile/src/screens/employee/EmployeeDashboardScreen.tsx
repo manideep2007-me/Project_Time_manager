@@ -490,9 +490,8 @@ export default function EmployeeDashboardScreen() {
       return;
     }
 
-    // Require at least 2 team members
-    if (selectedAssignees.length < 2) {
-      Alert.alert('Error', 'Please assign at least 2 team members to this task');
+    if (selectedAssignees.length < 1) {
+      Alert.alert('Error', 'Please add employees to this task');
       return;
     }
 

@@ -13,6 +13,13 @@ import { Ionicons } from '@expo/vector-icons';
 const PRIMARY_PURPLE = '#6C5CE7';
 const TEXT_DARK = '#333333';
 
+/** Same spirit as express-validator isEmail — enough for client-side checks before API */
+function isValidEmailFormat(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
 // Floating Label Input Component
 interface FloatingLabelInputProps extends TextInputProps {
   label: string;
@@ -325,6 +332,18 @@ export default function AddEmployeeScreen() {
   const [city, setCity] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  // Attachments
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [aadhaarFileUri, setAadhaarFileUri] = useState<string | null>(null);
+
+  // Payments
+  const [joiningDate, setJoiningDate] = useState<Date | null>(null);
+  const [showJoiningDate, setShowJoiningDate] = useState(false);
+  const [employeeType, setEmployeeType] = useState<'Full Time' | 'Temporary' | 'Contract'>('Full Time');
+  const [payCalculation, setPayCalculation] = useState<'Monthly' | 'Daily' | 'Hourly rate'>('Monthly');
+  const [amount, setAmount] = useState('');
+  const [overtimeRate, setOvertimeRate] = useState('');
 
   // Pre-fill form with pending registration data
   useEffect(() => {
@@ -648,18 +667,6 @@ export default function AddEmployeeScreen() {
     setSkillId(selectedDesignation?.designation_id || '');
   };
 
-  // Attachments
-  const [aadhaarNumber, setAadhaarNumber] = useState('');
-  const [aadhaarFileUri, setAadhaarFileUri] = useState<string | null>(null);
-
-  // Payments
-  const [joiningDate, setJoiningDate] = useState<Date | null>(null);
-  const [showJoiningDate, setShowJoiningDate] = useState(false);
-  const [employeeType, setEmployeeType] = useState<'Full Time' | 'Temporary' | 'Contract'>('Full Time');
-  const [payCalculation, setPayCalculation] = useState<'Monthly' | 'Daily' | 'Hourly rate'>('Monthly');
-  const [amount, setAmount] = useState('');
-  const [overtimeRate, setOvertimeRate] = useState('');
-
   const validate = () => {
     const errors: string[] = [];
     
@@ -670,12 +677,18 @@ export default function AddEmployeeScreen() {
     
     // For edit mode, only require basic fields
     if (isEditMode) {
-      if (email && (!email.includes('@') || !email.includes('.'))) errors.push('Valid Email');
+      if (email && !isValidEmailFormat(email)) errors.push('Valid Email');
       if (errors.length) {
         Alert.alert('Validation Error', `Please provide:\n\n• ${errors.join('\n• ')}`);
         return false;
       }
       return true;
+    }
+
+    // Direct add (not QR approval): email required — backend registers employees_registry for login
+    if (!isApprovalMode) {
+      if (!email.trim()) errors.push('Email (required for app login)');
+      else if (!isValidEmailFormat(email)) errors.push('Valid email format');
     }
     
     // Full validation for new employee and approval modes
@@ -690,7 +703,6 @@ export default function AddEmployeeScreen() {
     if (!joiningDate) errors.push('Joining Date');
     if (!amount.trim()) errors.push('Amount');
     if (!overtimeRate.trim()) errors.push('Over Time rates');
-    if (email && (!email.includes('@') || !email.includes('.'))) errors.push('Valid Email');
     if (errors.length) {
       Alert.alert('Validation Error', `Please provide:\n\n• ${errors.join('\n• ')}`);
       return false;
@@ -764,7 +776,11 @@ export default function AddEmployeeScreen() {
 
         const createRes = await api.post('/api/employees', createPayload);
         newEmployeeId = createRes.data?.employee?.id;
-        successMsg = 'Employee saved successfully';
+        const tempPw = createRes.data?.tempPassword as string | undefined;
+        const loginEmail = email.trim();
+        successMsg = tempPw
+          ? `Employee added successfully.\n\nEmail: ${loginEmail}\nTemporary Password: ${tempPw}\n\nPlease share these credentials with the employee.`
+          : `Employee added successfully.\n\nEmail: ${loginEmail}\n\nPlease share the sign-in credentials with the employee.`;
       }
 
       // Upload photo and aadhaar BEFORE showing success
@@ -995,13 +1011,14 @@ export default function AddEmployeeScreen() {
             required
           />
 
-          {/* Email ID */}
+          {/* Email ID — required for direct add so backend can create employees_registry row */}
           <FloatingLabelInput
             label="Email ID"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
+            required={!isApprovalMode}
           />
 
           {/* Address */}

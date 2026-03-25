@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import { api, getStoredToken } from '../../api/client';
 import { API_BASE_URL } from '../../utils/config';
+import { uploadTaskPhotoProof } from '../../api/endpoints';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import { typography } from '../../design/tokens';
 
@@ -154,19 +155,35 @@ export default function TaskUploadScreen() {
     }
     setIsSubmitting(true);
     try {
-      const fd = new FormData();
-      fd.append('taskId',      taskId);
-      fd.append('description', newTexts || 'Status update');
-      uploadedFiles.forEach(f => fd.append('files', { uri: f.uri, name: f.name, type: f.type } as any));
-      const token = await getStoredToken();
-      if (!token) { Alert.alert('Auth Error', 'Please log in again.'); return; }
-      const res = await fetch(`${API_BASE_URL}/api/task-uploads/upload`, {
-        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd,
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload failed');
+      // IMPORTANT:
+      // Your existing /api/task-uploads/upload flow depends on `project_attachments` columns
+      // that do not match the current DB schema, so it fails. For task status images, we
+      // store them as `task_photo_proofs` instead so admins can see them.
+      if (!taskId) {
+        throw new Error('Task ID missing');
+      }
+
+      const timestamp = new Date().toISOString();
+      const workType = (newTexts || 'Status update').slice(0, 50);
+
+      // Upload every selected photo proof (best-effort per file)
+      await Promise.all(
+        uploadedFiles.map(async (f) => {
+          await uploadTaskPhotoProof({
+            taskId: String(taskId),
+            photoUri: f.uri,
+            timestamp,
+            workType,
+          });
+        })
+      );
+
       setUploadedFiles([]);
       setInputText('');
-      await loadHistory();
+      // This screen previously depended on /api/task-uploads to persist chat-style messages.
+      // Since task uploads are currently incompatible with your DB schema, clear local-only status
+      // messages after successful photo proof upload.
+      setMessages([]);
       Alert.alert('Success', 'Status submitted!');
     } catch (e) {
       Alert.alert('Failed', e instanceof Error ? e.message : 'Unknown error');

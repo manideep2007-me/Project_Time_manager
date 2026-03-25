@@ -30,6 +30,8 @@ import TimestampCamera from '../../components/camera/TimestampCamera';
 import PhotoProofViewer from '../../components/camera/PhotoProofViewer';
 import { savePhotoProof, createPhotoProof } from '../../services/photoProofService';
 import { typography } from '../../design/tokens';
+import { getTaskPhotoProofs, uploadTaskPhotoProof } from '../../api/endpoints';
+import { resolveUploadUrl } from '../../utils/mediaUrl';
 
 
 interface TaskDetails {
@@ -547,6 +549,42 @@ interface Photo {
             : undefined,
         });
 
+        // Fetch saved task photo proofs from backend (so they persist across sessions)
+        try {
+          const proofsRes = await getTaskPhotoProofs(taskId, 200);
+          const proofs = (proofsRes as any)?.proofs || [];
+          const mapped: Photo[] = proofs.map((p: any) => {
+            const uri = resolveUploadUrl(p.photo_url) || p.photo_url;
+            const timestamp = p.captured_at || p.created_at || new Date().toISOString();
+            const location =
+              p.latitude !== null && p.latitude !== undefined && p.longitude !== null && p.longitude !== undefined
+                ? {
+                    latitude: Number(p.latitude),
+                    longitude: Number(p.longitude),
+                    address: p.address || undefined,
+                  }
+                : undefined;
+            const workType = p.work_type || 'General';
+            return {
+              id: String(p.id),
+              uri,
+              timestamp,
+              location,
+              caption: `${workType} - ${new Date(timestamp).toLocaleString()}`,
+              workType,
+              metadata: {
+                taskTitle: taskData.title || 'Untitled Task',
+                projectName: taskData.project_name || 'Unknown Project',
+                taskId: taskId,
+                workType,
+              },
+            };
+          });
+          if (isMounted) setPhotos(mapped);
+        } catch (e) {
+          // keep local-only photos if fetch fails
+        }
+
         // Fetch time entries for this task
         const timeEntriesData = await dashboardApi.getTaskTimeEntries(taskId);
         console.log('Time entries data:', timeEntriesData);
@@ -837,7 +875,6 @@ interface Photo {
     };
   }) => {
     try {
-      // Save photo proof with metadata
       const proofData = await savePhotoProof(photoData.uri, {
         timestamp: photoData.timestamp,
         location: photoData.location,
@@ -847,8 +884,37 @@ interface Photo {
         workType: photoData.metadata.workType,
       });
 
+      // Upload to backend so admin can see it too (best-effort)
+      let uploadedPhotoUrl: string | null = null;
+      try {
+        const effectiveTaskId =
+          photoData.metadata?.taskId ||
+          taskId ||
+          taskDetails?.id;
+
+        const uploadRes = await uploadTaskPhotoProof({
+          taskId: effectiveTaskId,
+          photoUri: photoData.uri,
+          timestamp: photoData.timestamp,
+          latitude: photoData.location?.latitude,
+          longitude: photoData.location?.longitude,
+          address: photoData.location?.address,
+          workType: photoData.metadata.workType,
+        });
+        uploadedPhotoUrl =
+          (uploadRes as any)?.proof?.photo_url ||
+          (uploadRes as any)?.proof?.photoUrl ||
+          null;
+      } catch (uploadError) {
+        console.error('Upload failed, continuing with local proof:', uploadError);
+      }
+
+      const serverUri =
+        uploadedPhotoUrl ? resolveUploadUrl(uploadedPhotoUrl) : null;
+      const finalUri = serverUri || proofData.uri;
+
       // Create photo object
-      const photoProof = createPhotoProof(proofData.uri, proofData.metadata);
+      const photoProof = createPhotoProof(finalUri, proofData.metadata);
 
       // Add to photos list
       const newPhoto: Photo = {
@@ -1974,6 +2040,13 @@ interface Photo {
 
   // Handle time picker open
   const handleTimerTimeClick = (type: 'start' | 'end') => {
+    if (isTimerRunning) {
+      Alert.alert(
+        'Timer running',
+        'Stop the live timer before entering start and end times manually.',
+      );
+      return;
+    }
     setTimerTimePickerMode(type);
     if (type === 'start') {
       setEditableStartTime(editableStartTime || new Date());
@@ -1983,48 +2056,49 @@ interface Photo {
     setShowTimerTimePicker(true);
   };
 
-  // Handle time picker change
-  const handleTimerTimeChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      if (event.type === 'set' && selectedDate) {
-        if (timerTimePickerMode === 'start') {
-          setEditableStartTime(selectedDate);
-          setLiveStartTime(selectedDate);
-          if (!isTimerRunning) {
-            setTimerStartTime(selectedDate);
-            setManualStartTimeSet(true);
-          }
-        } else {
-          setEditableEndTime(selectedDate);
-          setLiveEndTime(selectedDate);
-          setActualEndTime(selectedDate);
-          if (!isTimerRunning) {
-            setManualEndTimeSet(true);
-          }
-        }
-        setShowTimerTimePicker(false);
-      } else if (event.type === 'dismissed') {
-        setShowTimerTimePicker(false);
+  const applyTimerTimeSelection = (selectedDate: Date) => {
+    if (timerTimePickerMode === 'start') {
+      setEditableStartTime(selectedDate);
+      setLiveStartTime(selectedDate);
+      if (!isTimerRunning) {
+        setTimerStartTime(selectedDate);
+        setManualStartTimeSet(true);
       }
     } else {
-      // iOS
-      if (selectedDate) {
-        if (timerTimePickerMode === 'start') {
-          setEditableStartTime(selectedDate);
-          setLiveStartTime(selectedDate);
-          if (!isTimerRunning) {
-            setTimerStartTime(selectedDate);
-            setManualStartTimeSet(true);
-          }
-        } else {
-          setEditableEndTime(selectedDate);
-          setLiveEndTime(selectedDate);
-          setActualEndTime(selectedDate);
-          if (!isTimerRunning) {
-            setManualEndTimeSet(true);
-          }
-        }
+      setEditableEndTime(selectedDate);
+      setLiveEndTime(selectedDate);
+      setActualEndTime(selectedDate);
+      if (!isTimerRunning) {
+        setManualEndTimeSet(true);
       }
+    }
+  };
+
+  /** Confirms iOS/web spinner selection (onChange may not fire if user never scrolls). */
+  const confirmTimerTimePicker = () => {
+    const selectedDate =
+      timerTimePickerMode === 'start'
+        ? editableStartTime
+        : editableEndTime || new Date();
+    applyTimerTimeSelection(selectedDate);
+    setShowTimerTimePicker(false);
+  };
+
+  // Handle time picker change (Android native, iOS spinner, list taps — list passes event=null)
+  const handleTimerTimeChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      if (event?.type === 'dismissed') {
+        setShowTimerTimePicker(false);
+        return;
+      }
+      if (selectedDate && (!event || event.type === 'set')) {
+        applyTimerTimeSelection(selectedDate);
+        setShowTimerTimePicker(false);
+      }
+      return;
+    }
+    if (selectedDate) {
+      applyTimerTimeSelection(selectedDate);
     }
   };
 
@@ -2437,7 +2511,7 @@ interface Photo {
                           key={`${hour}-${minutes}`}
                           style={styles.timePickerListItem}
                           onPress={() => {
-                            handleTimerTimeChange(null, time);
+                            applyTimerTimeSelection(time);
                             setShowTimerTimePicker(false);
                           }}
                         >
@@ -2460,7 +2534,7 @@ interface Photo {
                 {Platform.OS === 'ios' && (
                   <TouchableOpacity
                     style={styles.timePickerConfirmButton}
-                    onPress={() => setShowTimerTimePicker(false)}
+                    onPress={confirmTimerTimePicker}
                   >
                     <Text style={styles.timePickerConfirmButtonText}>Confirm</Text>
                   </TouchableOpacity>
@@ -2487,7 +2561,7 @@ interface Photo {
         onPhotoTaken={handlePhotoTaken}
         taskTitle={taskDetails.title}
         projectName={taskDetails.projectName}
-        taskId={taskDetails.id}
+        taskId={taskId}
         workType={filterWorkType !== 'All' ? filterWorkType : 'General'}
       />
 

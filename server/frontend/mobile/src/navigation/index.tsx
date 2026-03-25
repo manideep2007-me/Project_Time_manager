@@ -23,6 +23,7 @@ import ManagerProfileScreen from '../screens/manager/ProfileScreen';
 // Employee screens
 import EmployeeClientProjectsScreen from '../screens/employee/ClientProjectsScreen';
 import EmployeeProfileScreen from '../screens/employee/ProfileScreen';
+import ChangePasswordScreen from '../screens/employee/ChangePasswordScreen';
 // Onboarding screens
 import OnboardingChoiceScreen from '../screens/onboarding/OnboardingChoiceScreen';
 import RegisterOrganizationScreen from '../screens/onboarding/RegisterOrganizationScreen';
@@ -639,6 +640,7 @@ export default function RootNavigator() {
             <Stack.Screen name="PendingApprovals" component={PendingApprovalsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="LanguageOptions" component={LanguageOptionsScreen} options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }} />
             <Stack.Screen name="Profile" component={AdminProfileScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: false }} />
             {/* Proof of Work */}
             <Stack.Screen name="ProofOfWorkCapture" component={ProofOfWorkCaptureScreen} options={{ headerShown: false }} />
           </>

@@ -72,7 +72,7 @@ export default function ProfileScreen() {
       >
         {/* Section 1: My Task */}
         <View style={styles.myTaskSection}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.myTaskItem}
             onPress={() => navigation.navigate('EmployeeAllTasks')}
             activeOpacity={0.6}
@@ -117,7 +117,7 @@ export default function ProfileScreen() {
             />
             <MenuItem 
               title="Change Password" 
-              onPress={() => Alert.alert('Change Password', 'Coming soon!')}
+              onPress={() => navigation.navigate('ChangePassword')}
             />
             <MenuItem 
               title="Language option" 

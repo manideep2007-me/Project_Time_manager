@@ -350,11 +350,43 @@ router.post('/', [
       address, countryId, stateId, designationId,
       salaryType, salaryAmount, hourlyRate, overtimeRate 
     } = req.body;
-    
-    // Check if user with this email already exists
-    const existing = await db.query('SELECT user_id FROM users WHERE email_id = $1', [email]);
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ error: 'User with this email already exists' });
+
+    // Real org sign-in uses employees_registry (see /api/auth/login). QR approvals write there;
+    // direct add must also, or the user exists only in the org DB and cannot log in.
+    const isRegistryOrg =
+      req.user &&
+      req.user.source === 'registry' &&
+      req.user.organization_id &&
+      req.user.database_name;
+
+    if (isRegistryOrg) {
+      const emailTrim = email && String(email).trim();
+      if (!emailTrim) {
+        return res.status(400).json({
+          error: 'Email is required so the employee can sign in.',
+        });
+      }
+      const dupReg = await registryPool.query(
+        `SELECT id FROM employees_registry
+         WHERE organization_id = $1 AND LOWER(TRIM(employee_email)) = LOWER(TRIM($2))`,
+        [req.user.organization_id, emailTrim]
+      );
+      if (dupReg.rows.length > 0) {
+        return res.status(409).json({
+          error: 'An account with this email already exists for this organization.',
+        });
+      }
+    }
+
+    // Check if user with this email already exists in this org database
+    if (email && String(email).trim()) {
+      const existing = await db.query(
+        'SELECT user_id FROM users WHERE LOWER(TRIM(email_id)) = LOWER(TRIM($1))',
+        [String(email).trim()]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ error: 'User with this email already exists' });
+      }
     }
 
     // Get IT Department ID (default department)
@@ -422,8 +454,44 @@ router.post('/', [
       ]
     );
 
-    // Also create a salary record in the salaries table for proper salary tracking
     const newEmployeeId = result.rows[0].id;
+
+    if (isRegistryOrg) {
+      const emailTrim = String(email).trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+      const phoneForRegistry = phone != null && String(phone).trim() ? String(phone).trim() : '';
+      try {
+        await registryPool.query(
+          `INSERT INTO employees_registry (
+            organization_id, organization_name, employee_email, employee_phone, employee_name,
+            password_hash, role, database_name, is_active
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)`,
+          [
+            req.user.organization_id,
+            req.user.organization_name || '',
+            emailTrim,
+            phoneForRegistry,
+            fullName,
+            passwordHash,
+            userRole,
+            req.user.database_name,
+          ]
+        );
+      } catch (regErr) {
+        console.error('employees_registry insert failed:', regErr);
+        await db.query('DELETE FROM users WHERE user_id = $1', [newEmployeeId]);
+        if (String(regErr.message || '').includes('duplicate')) {
+          return res.status(409).json({
+            error: 'An account with this email already exists for this organization.',
+          });
+        }
+        return res.status(500).json({
+          error: 'Failed to register employee for sign-in. Please try again.',
+        });
+      }
+    }
+
+    // Salary record after user + registry rows succeed
     if (salaryAmount) {
       await db.query(
         `INSERT INTO salaries (employee_id, salary_type, salary_amount, hourly_rate, effective_date, is_current, notes)

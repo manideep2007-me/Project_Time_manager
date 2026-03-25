@@ -6,6 +6,7 @@ const { body } = require('express-validator');
 const pool = require('../config/database');
 const { primary: registryPool, secondary, createOrgPool } = require('../config/databases');
 const { handleValidation } = require('../middleware/validation');
+const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -278,6 +279,107 @@ router.post('/login', [
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// PUT /api/auth/change-password - Change password and force logout
+// Works for:
+// - organization users (decoded.source === 'registry') -> updates employees_registry + org users table
+// - demo/local users (decoded.source === 'local') -> updates users table in secondary DB
+router.put(
+  '/change-password',
+  authenticateToken,
+  [
+    body('currentPassword').isString().trim().notEmpty().withMessage('Current password is required'),
+    body('newPassword').isString().trim().isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  ],
+  handleValidation,
+  async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const bcrypt = require('bcryptjs');
+      const hash = await bcrypt.hash(newPassword, 10);
+
+      // Organization users: employees_registry is the source of truth for login
+      if (req.user && req.user.source === 'registry' && registryPool) {
+        const id = req.user.id;
+        const email = req.user.email;
+
+        const regUser = await registryPool.query(
+          'SELECT id, employee_email as email, password_hash FROM employees_registry WHERE id = $1 LIMIT 1',
+          [id]
+        );
+        if (regUser.rows.length === 0) {
+          return res.status(404).json({ error: 'Account not found' });
+        }
+
+        const storedHash = regUser.rows[0].password_hash;
+        if (!storedHash) {
+          return res.status(401).json({ error: 'Password not set. Please contact your administrator.' });
+        }
+
+        const ok = await bcrypt.compare(currentPassword, storedHash);
+        if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+
+        await registryPool.query(
+          'UPDATE employees_registry SET password_hash = $1, is_active = true WHERE id = $2',
+          [hash, id]
+        );
+
+        // Keep org users table consistent (not used for login directly, but used by many org APIs)
+        try {
+          if (req.orgPool && email) {
+            await req.orgPool.query(
+              'UPDATE users SET password_hash = $1 WHERE LOWER(email_id) = LOWER($2)',
+              [hash, email]
+            );
+          } else if (req.user.database_name && email) {
+            const orgPool = createOrgPool(req.user.database_name);
+            await orgPool.query(
+              'UPDATE users SET password_hash = $1 WHERE LOWER(email_id) = LOWER($2)',
+              [hash, email]
+            );
+          }
+        } catch (orgErr) {
+          // Non-blocking: login will already work via employees_registry.
+          console.log('org users password update failed (non-blocking):', orgErr.message);
+        }
+
+        return res.json({ message: 'Password updated successfully' });
+      }
+
+      // Demo/local users
+      if (req.orgPool) {
+        const id = req.user.id;
+        const localUser = await req.orgPool.query(
+          'SELECT user_id as id, password_hash FROM users WHERE user_id = $1 LIMIT 1',
+          [id]
+        );
+        if (localUser.rows.length === 0) {
+          return res.status(404).json({ error: 'Account not found' });
+        }
+
+        const storedHash = localUser.rows[0].password_hash;
+        if (!storedHash) {
+          return res.status(401).json({ error: 'Password not set. Please contact your administrator.' });
+        }
+
+        const ok = await bcrypt.compare(currentPassword, storedHash);
+        if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+
+        await req.orgPool.query(
+          'UPDATE users SET password_hash = $1 WHERE user_id = $2',
+          [hash, id]
+        );
+
+        return res.json({ message: 'Password updated successfully' });
+      }
+
+      return res.status(400).json({ error: 'Password change is not supported for this account type' });
+    } catch (err) {
+      console.error('Change password error:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
 
 router.get('/profile', async (req, res) => {
   try {

@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Image } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { AuthContext } from '../../context/AuthContext';
 import { api } from '../../api/client';
 import Card from '../../components/shared/Card';
 import SafeAreaWrapper from '../../components/shared/SafeAreaWrapper';
 import { Ionicons } from '@expo/vector-icons';
+import { getTaskPhotoProofs, TaskPhotoProof } from '../../api/endpoints';
+import { resolveUploadUrl } from '../../utils/mediaUrl';
 
 const PRIMARY_PURPLE = '#877ED2';
 const BG_COLOR = '#F5F5F8';
@@ -45,6 +47,8 @@ export default function TaskViewScreen() {
   const [totalCost, setTotalCost] = useState(0);
   const [departmentData, setDepartmentData] = useState<DepartmentData[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [taskPhotoProofs, setTaskPhotoProofs] = useState<TaskPhotoProof[]>([]);
+  const [photoLoading, setPhotoLoading] = useState(false);
 
   const loadData = async () => {
     try {
@@ -129,6 +133,18 @@ export default function TaskViewScreen() {
         timestamp: entry.work_date ? new Date(entry.work_date) : new Date(),
         description: entry.description,
       })));
+
+      // Load admin-visible task photo proofs (Task Status images)
+      setPhotoLoading(true);
+      try {
+        const proofsRes = await getTaskPhotoProofs(taskId, 30);
+        const proofs = (proofsRes as any)?.proofs || [];
+        setTaskPhotoProofs(proofs);
+      } catch (e) {
+        setTaskPhotoProofs([]);
+      } finally {
+        setPhotoLoading(false);
+      }
 
     } catch (error: any) {
       console.error('Error loading task data:', error);
@@ -237,6 +253,55 @@ export default function TaskViewScreen() {
             <Text style={styles.infoLabel}>Due date</Text>
             <Text style={styles.infoValue}>{formatDate(task.due_date)}</Text>
           </View>
+        </Card>
+
+        {/* Task Status Photos */}
+        <Card style={styles.photoProofCard}>
+          <View style={styles.photoProofHeader}>
+            <Text style={styles.photoProofTitle}>Task Status Photos</Text>
+            <Text style={styles.photoProofCount}>{taskPhotoProofs.length}</Text>
+          </View>
+
+          {photoLoading ? (
+            <ActivityIndicator size="small" color={PRIMARY_PURPLE} />
+          ) : taskPhotoProofs.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.photoProofRow}>
+                {taskPhotoProofs.map((p) => {
+                  const uri = resolveUploadUrl(p.photo_url) || '';
+                  const capturedAt = p.captured_at || p.created_at;
+                  const dateStr = capturedAt ? new Date(capturedAt).toLocaleString() : '';
+                  const locationStr =
+                    p.address ||
+                    (p.latitude != null && p.longitude != null
+                      ? `${Number(p.latitude).toFixed(6)}, ${Number(p.longitude).toFixed(6)}`
+                      : 'Location not available');
+
+                  return (
+                    <TouchableOpacity
+                      key={String(p.id)}
+                      style={styles.photoProofItem}
+                      activeOpacity={0.85}
+                    >
+                      <Image
+                        source={{ uri }}
+                        style={styles.photoProofImage}
+                        resizeMode="cover"
+                      />
+                      <Text style={styles.photoProofMeta} numberOfLines={2}>
+                        {dateStr}
+                      </Text>
+                      <Text style={styles.photoProofMetaSmall} numberOfLines={2}>
+                        {locationStr}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          ) : (
+            <Text style={styles.noPhotosText}>No photo proofs uploaded yet.</Text>
+          )}
         </Card>
 
         {/* Overall Summary */}
@@ -425,6 +490,68 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     fontWeight: '500',
+  },
+  photoProofCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 16,
+  },
+  photoProofHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  photoProofTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2B2B2B',
+  },
+  photoProofCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: PRIMARY_PURPLE,
+  },
+  photoProofRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  photoProofItem: {
+    width: 140,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    paddingBottom: 10,
+  },
+  photoProofImage: {
+    width: 140,
+    height: 110,
+    backgroundColor: '#F0F0F0',
+  },
+  photoProofMeta: {
+    marginTop: 8,
+    marginHorizontal: 8,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2B2B2B',
+  },
+  photoProofMetaSmall: {
+    marginTop: 4,
+    marginHorizontal: 8,
+    fontSize: 10,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  noPhotosText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontWeight: '600',
   },
   singleColumnContainer: {
     paddingHorizontal: 16,

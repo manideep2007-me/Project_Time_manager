@@ -225,6 +225,7 @@ app.use('/api/time-entries', auditLog, routes.timeEntries);
 app.use('/api/tasks', auditLog, routes.tasks);
 app.use('/api/dashboard', auditLog, routes.dashboard);
 app.use('/api/task-uploads', auditLog, routes.taskUploads);
+app.use('/api/task-photo-proofs', auditLog, routes.taskPhotoProofs);
 app.use('/api/salaries', auditLog, routes.salaries);
 app.use('/api/otp', generalLimiter, auditLog, routes.otp);
 app.use('/api/permissions', auditLog, routes.permissions);

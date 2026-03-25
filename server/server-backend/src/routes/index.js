@@ -7,6 +7,7 @@ module.exports = {
   tasks: require('./tasks'),
   dashboard: require('./dashboard'),
   taskUploads: require('./taskUploads'),
+  taskPhotoProofs: require('./taskPhotoProofs'),
   otp: require('./otp'),
   salaries: require('./salaries'),
   permissions: require('./permissions'),

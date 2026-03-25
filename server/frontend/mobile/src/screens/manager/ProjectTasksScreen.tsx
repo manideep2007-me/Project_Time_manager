@@ -334,20 +334,19 @@ export default function ProjectTasksScreen() {
       return;
     }
 
+    const assigneeIds = selectedTeamMembers.map(m => m.id);
+    if (assigneeIds.length < 1) {
+      Alert.alert('Error', 'Please add employees to this task');
+      return;
+    }
+
     try {
       setSubmitting(true);
-      
-      // Create task via API
-      const assigneeIds = selectedTeamMembers.map(m => m.id);
-      if (assigneeIds.length < 2) {
-        Alert.alert('Error', 'Please select at least 2 team members for this task');
-        return;
-      }
+
       await api.post('/api/tasks', {
         project_id: projectId,
         title: taskName,
         status: 'To Do',
-        // Backend expects `assigned_to` to be an array (min length 2)
         assigned_to: assigneeIds,
         // Extra fields are ignored by backend; keep payload minimal for correctness
         assigned_employees: assigneeIds,

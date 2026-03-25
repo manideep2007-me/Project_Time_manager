@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,22 +10,28 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import Card from '../../components/shared/Card';
+import { api } from '../../api/client';
+import { resolveUploadUrl } from '../../utils/mediaUrl';
 
 interface TaskUpload {
   id: string;
   task_id: string;
   task_name: string;
   project_name: string;
-  client_name: string;
-  description: string;
-  files: any[];
+  client_name?: string;
+  description?: string;
   submitted_at: string;
-  feedback?: string;
+  photo_url?: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  work_type?: string | null;
 }
 
 export default function MyUploadsScreen() {
@@ -37,34 +43,51 @@ export default function MyUploadsScreen() {
   const [showDetails, setShowDetails] = useState(false);
   const [selectedUpload, setSelectedUpload] = useState<TaskUpload | null>(null);
 
-  const loadUploads = async () => {
+  const loadUploads = useCallback(async () => {
     try {
-      // Create a proper JWT token for the current user
-      const token = user?.token || `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmZjYxYzQ5Ny1hZTk5LTQ5MjAtODkwNS1mYjRlMzRmZmU4ZTMiLCJlbWFpbCI6ImFkbWluQGNvbXBhbnkuY29tIiwiaWF0IjoxNzU5OTkyNTA5LCJleHAiOjE3NjAwNzg5MDl9.SMsR6X9BHivpADWB4X9Xxwqe8wvOMkOX38NmXnd49tE`;
-
-      const response = await fetch('http://10.5.52.252:5000/api/task-uploads/my-uploads', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load uploads');
+      if (!user?.id) {
+        setUploads([]);
+        return;
       }
 
-      const data = await response.json();
-      setUploads(data.uploads || []);
+      // Backend endpoint: GET /api/task-photo-proofs/me
+      const res = await api.get('/api/task-photo-proofs/me', {
+        // Cache-bust so we never get a 304 with empty body after a new upload
+        params: { limit: 50, _t: Date.now() },
+      });
+
+      const list = Array.isArray(res.data?.proofs) ? res.data.proofs : null;
+      // If server didn't include a body (rare 304/empty response), don't wipe UI.
+      if (!list) return;
+
+      const mapped: TaskUpload[] = list.map((p: any) => ({
+        id: String(p.id),
+        task_id: String(p.task_id),
+        task_name: p.task_name || 'Task',
+        project_name: p.project_name || '',
+        client_name: p.client_name,
+        description: p.address || p.work_type || 'Photo proof',
+        submitted_at: p.captured_at || p.created_at || new Date().toISOString(),
+        photo_url: p.photo_url,
+        address: p.address,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        work_type: p.work_type,
+      }));
+
+      setUploads(mapped);
     } catch (error) {
       console.error('Error loading uploads:', error);
       Alert.alert('Error', 'Failed to load uploads. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
-    loadUploads();
-  }, []);
+    // Wait for user to be available
+    if (user?.id) void loadUploads();
+  }, [user?.id, loadUploads]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -94,9 +117,19 @@ export default function MyUploadsScreen() {
     >
       <Card style={styles.uploadCard}>
         <View style={styles.uploadHeader}>
+          {upload.photo_url ? (
+            <Image
+              source={{ uri: resolveUploadUrl(upload.photo_url) || undefined }}
+              style={styles.uploadThumb}
+            />
+          ) : (
+            <View style={styles.uploadThumbPlaceholder} />
+          )}
           <View style={styles.uploadInfo}>
             <Text style={styles.taskName}>{upload.task_name}</Text>
-            <Text style={styles.projectName}>{upload.project_name} • {upload.client_name}</Text>
+            <Text style={styles.projectName}>
+              {upload.project_name} • {upload.client_name || 'No client'}
+            </Text>
           </View>
         </View>
 
@@ -106,21 +139,14 @@ export default function MyUploadsScreen() {
 
         <View style={styles.uploadMeta}>
           <View style={styles.metaItem}>
-            <Ionicons name="document-outline" size={16} color="#666" />
-            <Text style={styles.metaText}>{upload.files.length} file(s)</Text>
+            <Ionicons name="image-outline" size={16} color="#666" />
+            <Text style={styles.metaText}>1 photo proof</Text>
           </View>
           <View style={styles.metaItem}>
             <Ionicons name="time-outline" size={16} color="#666" />
             <Text style={styles.metaText}>{formatDate(upload.submitted_at)}</Text>
           </View>
         </View>
-
-        {upload.feedback && (
-          <View style={styles.feedbackContainer}>
-            <Text style={styles.feedbackLabel}>Feedback:</Text>
-            <Text style={styles.feedbackText}>{upload.feedback}</Text>
-          </View>
-        )}
       </Card>
     </TouchableOpacity>
   );
@@ -173,23 +199,26 @@ export default function MyUploadsScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Upload Details</Text>
             <ScrollView style={styles.modalBody}>
+              {selectedUpload?.photo_url ? (
+                <Image
+                  source={{ uri: resolveUploadUrl(selectedUpload.photo_url) || undefined }}
+                  style={styles.modalImage}
+                />
+              ) : null}
               <Text style={styles.modalLabel}>Description</Text>
               <Text style={styles.modalDescription}>{selectedUpload?.description || '-'}</Text>
 
-              <Text style={[styles.modalLabel, { marginTop: 16 }]}>Files</Text>
-              {selectedUpload?.files?.length ? (
-                selectedUpload.files.map((f: any, idx: number) => (
-                  <View key={idx} style={styles.fileRow}>
-                    <Ionicons name="document-outline" size={18} color="#666" />
-                    <Text style={styles.fileRowText} numberOfLines={1}>{f.name || f.originalName || `file_${idx+1}`}</Text>
-                    {typeof f.size === 'number' && (
-                      <Text style={styles.fileRowSize}>{Math.ceil((f.size as number)/1024)} KB</Text>
-                    )}
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.fileRowText}>No files</Text>
-              )}
+              <Text style={[styles.modalLabel, { marginTop: 16 }]}>Captured At</Text>
+              <Text style={styles.modalDescription}>
+                {selectedUpload ? formatDate(selectedUpload.submitted_at) : '-'}
+              </Text>
+
+              {selectedUpload?.address ? (
+                <>
+                  <Text style={[styles.modalLabel, { marginTop: 16 }]}>Location</Text>
+                  <Text style={styles.modalDescription}>{selectedUpload.address}</Text>
+                </>
+              ) : null}
             </ScrollView>
             <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowDetails(false)}>
               <Text style={styles.modalCloseText}>Close</Text>
@@ -244,6 +273,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  uploadThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#F0F0F0',
+    marginRight: 12,
+  },
+  uploadThumbPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#F0F0F0',
+    marginRight: 12,
   },
   uploadInfo: {
     flex: 1,
@@ -390,6 +433,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#444',
     lineHeight: 20,
+  },
+  modalImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: '#F0F0F0',
   },
   fileRow: {
     flexDirection: 'row',

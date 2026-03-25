@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import { api } from '../../api/client';
 import { tokens } from '../../design/tokens';
+import { resolveUploadUrl } from '../../utils/mediaUrl';
 
 const { typography } = tokens;
 
@@ -36,6 +37,8 @@ export default function ProjectsScreen() {
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [expandedProjectId, setExpandedProjectId] = useState<number | null>(null);
+  const [projectTeamMembersByProjectId, setProjectTeamMembersByProjectId] = useState<Record<string, any[]>>({});
+  const [teamLoadingByProjectId, setTeamLoadingByProjectId] = useState<Record<string, boolean>>({});
 
   const loadProjects = async () => {
     try {
@@ -189,8 +192,33 @@ export default function ProjectsScreen() {
     navigation.navigate('ProjectDetails', { id: project.id });
   };
 
-  const toggleExpand = (projectId: number) => {
-    setExpandedProjectId(expandedProjectId === projectId ? null : projectId);
+  const loadProjectTeamMembers = async (projectId: any) => {
+    const pid = String(projectId);
+
+    const hasTeamInCache = Object.prototype.hasOwnProperty.call(projectTeamMembersByProjectId, pid);
+    const isLoading = !!teamLoadingByProjectId[pid];
+    if (hasTeamInCache || isLoading) return;
+
+    setTeamLoadingByProjectId(prev => ({ ...prev, [pid]: true }));
+    try {
+      const response = await api.get(`/api/projects/${pid}/team`);
+      const members = response.data?.teamMembers || [];
+      setProjectTeamMembersByProjectId(prev => ({ ...prev, [pid]: members }));
+    } catch (e) {
+      console.error('Error loading project team members:', e);
+      setProjectTeamMembersByProjectId(prev => ({ ...prev, [pid]: [] }));
+    } finally {
+      setTeamLoadingByProjectId(prev => ({ ...prev, [pid]: false }));
+    }
+  };
+
+  const toggleExpand = (projectId: any) => {
+    const willExpand = expandedProjectId !== projectId;
+    setExpandedProjectId(willExpand ? projectId : null);
+    if (willExpand) {
+      // Load team only when needed (expanded).
+      void loadProjectTeamMembers(projectId);
+    }
   };
 
   const selectedClientName = selectedClientId
@@ -225,41 +253,53 @@ export default function ProjectsScreen() {
     return partA || partB || project.client_name || 'No location';
   };
 
-  // Resolve real employee avatars from project members
-  const getTeamAvatars = (project: any) => {
-    const members = project.team_members || project.assigned_to || [];
-    const findEmployeeById = (id: string) =>
-      employees.find((e: any) => String(e.id) === String(id) || String(e.employee_id) === String(id));
+  // Build avatars from real project team members (`/api/projects/:id/team`)
+  // so the count matches exactly what was added in that project.
+  const getTeamAvatars = (projectId: any) => {
+    const pid = String(projectId);
+    const teamMembers = projectTeamMembersByProjectId[pid];
+    if (!Array.isArray(teamMembers)) return [];
 
-    const toAvatar = (member: any) => {
-      if (!member) return null;
-      if (typeof member === 'string') {
-        const mapped = findEmployeeById(member);
-        if (mapped) {
-          const initial = (mapped.first_name || mapped.name || '?').charAt(0).toUpperCase();
-          return { initial, photoUrl: mapped.photo_url || mapped.photoUrl || mapped.photograph || '' };
-        }
-        return { initial: member.charAt(0).toUpperCase(), photoUrl: '' };
-      }
+    const findEmployeeById = (id: any) =>
+      employees.find(
+        (e: any) =>
+          String(e?.id ?? '') === String(id) ||
+          String(e?.employee_id ?? '') === String(id) ||
+          String(e?.user_id ?? '') === String(id),
+      );
 
-      const mapped = findEmployeeById(member.id || member.employee_id || member.user_id);
-      const firstName = member.first_name || mapped?.first_name || member.name || mapped?.name || '?';
+    const seenEmployeeIds = new Set<string>();
+    const avatars: Array<{ key: string; initial: string; photoUrl: string }> = [];
+
+    for (const member of teamMembers) {
+      // `/api/projects/:id/team` returns `id` and `employee_id`.
+      const employeeId = member?.employee_id ?? member?.employeeId ?? member?.id ?? '';
+      const dedupeKey = String(employeeId);
+      if (!dedupeKey || seenEmployeeIds.has(dedupeKey)) continue;
+      seenEmployeeIds.add(dedupeKey);
+
+      const employee = findEmployeeById(employeeId);
+      const firstName =
+        employee?.first_name ||
+        employee?.name ||
+        member?.first_name ||
+        member?.employee_name ||
+        '?';
+
       const photoUrl =
-        member.photo_url || member.photoUrl || member.photograph ||
-        mapped?.photo_url || mapped?.photoUrl || mapped?.photograph || '';
-      return { initial: String(firstName).charAt(0).toUpperCase(), photoUrl };
-    };
+        resolveUploadUrl(employee?.photo_url || employee?.photoUrl || employee?.photograph) || '';
 
-    if (Array.isArray(members)) {
-      const extracted = members.slice(0, 3).map((m: any) => toAvatar(m)).filter(Boolean);
-      if (extracted.length > 0) return extracted;
+      avatars.push({
+        key: dedupeKey,
+        initial: String(firstName).charAt(0).toUpperCase(),
+        photoUrl,
+      });
+
+      // UI currently shows an overlapping stack; cap to 3 for layout.
+      if (avatars.length >= 3) break;
     }
 
-    // Fallback to real company employees, not ABC placeholders
-    return employees.slice(0, 3).map((e: any) => ({
-      initial: (e.first_name || e.name || '?').charAt(0).toUpperCase(),
-      photoUrl: e.photo_url || e.photoUrl || e.photograph || '',
-    }));
+    return avatars;
   };
 
   const renderProjectCard = ({ item, index }: { item: any; index: number }) => {
@@ -267,7 +307,7 @@ export default function ProjectsScreen() {
     const isLast = index === filteredProjects.length - 1;
     const timing = getProjectTiming(item.start_date || item.startDate, item.end_date || item.endDate);
     const statusColor = getStatusColor(item.status);
-    const avatars = getTeamAvatars(item);
+    const avatars = getTeamAvatars(item.id);
     const avatarColors = ['#FF9500', '#877ED2', '#34C759', '#FF3B30', '#007AFF'];
 
     return (
@@ -325,25 +365,31 @@ export default function ProjectsScreen() {
             </View>
 
             {/* Team Members Avatars */}
-            {avatars.length > 0 && (
-              <View style={styles.avatarsRow}>
-                {avatars.map((avatar: any, i: number) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.avatarCircle,
-                      { backgroundColor: avatarColors[i % avatarColors.length] },
-                      i > 0 && { marginLeft: -8 },
-                    ]}
-                  >
-                    {avatar.photoUrl ? (
-                      <Image source={{ uri: avatar.photoUrl }} style={styles.avatarImage} />
-                    ) : (
-                      <Text style={styles.avatarText}>{avatar.initial}</Text>
-                    )}
-                  </View>
-                ))}
+            {teamLoadingByProjectId[String(item.id)] ? (
+              <View style={{ marginBottom: 10 }}>
+                <ActivityIndicator size="small" color="#877ED2" />
               </View>
+            ) : (
+              avatars.length > 0 && (
+                <View style={styles.avatarsRow}>
+                  {avatars.map((avatar: any, i: number) => (
+                    <View
+                      key={avatar.key ?? i}
+                      style={[
+                        styles.avatarCircle,
+                        { backgroundColor: avatarColors[i % avatarColors.length] },
+                        i > 0 && { marginLeft: -8 },
+                      ]}
+                    >
+                      {avatar.photoUrl ? (
+                        <Image source={{ uri: avatar.photoUrl }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatarText}>{avatar.initial}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )
             )}
 
             {/* Overdue / In Progress Bar (date-accurate) */}

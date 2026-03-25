@@ -375,3 +375,61 @@ export async function getTaskTimeEntries(taskId: string) {
   const res = await api.get('/api/time-entries', { params: { taskId, limit: 1000 } });
   return res.data as { timeEntries: any[]; pagination: any };
 }
+
+// Task Photo Proofs (Task Status photos)
+export type TaskPhotoProof = {
+  id: number;
+  task_id: string;
+  employee_id: string;
+  photo_url: string;
+  captured_at: string;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  address?: string | null;
+  work_type?: string | null;
+  created_at: string;
+  first_name?: string;
+  last_name?: string;
+  task_title?: string;
+  project_name?: string;
+  project_id?: string;
+};
+
+export async function uploadTaskPhotoProof(payload: {
+  taskId: string;
+  photoUri: string;
+  timestamp: string;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+  workType?: string;
+}) {
+  const form = new FormData();
+  form.append('taskId', payload.taskId);
+  form.append('timestamp', payload.timestamp);
+  if (payload.latitude !== undefined) form.append('latitude', String(payload.latitude));
+  if (payload.longitude !== undefined) form.append('longitude', String(payload.longitude));
+  if (payload.address) form.append('address', payload.address);
+  if (payload.workType) form.append('workType', payload.workType);
+
+  // On RN, backend uploads can fail if the uri doesn't include the `file://` scheme.
+  const uri = payload.photoUri?.startsWith('file://') ? payload.photoUri : `file://${payload.photoUri}`;
+  const name = `task-photo-proof-${Date.now()}.jpg`;
+  const type = 'image/jpeg';
+  form.append('photo', { uri, name, type } as any);
+
+  const res = await api.post('/api/task-photo-proofs/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data as { success: true; proof: TaskPhotoProof };
+}
+
+export async function getTaskPhotoProofs(taskId: string, limit = 100) {
+  const res = await api.get(`/api/task-photo-proofs/task/${taskId}`, { params: { limit } });
+  return res.data as { success: true; proofs: TaskPhotoProof[] };
+}
+
+export async function getRecentTaskPhotoProofs(limit = 10) {
+  const res = await api.get('/api/task-photo-proofs/recent', { params: { limit } });
+  return res.data as { success: true; proofs: TaskPhotoProof[] };
+}
