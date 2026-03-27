@@ -11,6 +11,66 @@ const path = require('path');
 const router = express.Router();
 router.use(authenticateToken);
 
+async function resolveOrgUserId(db, req) {
+  // For registry users, JWT `req.user.id` is employees_registry.id (not users.user_id).
+  // Resolve to the organization-local users.user_id via email when possible.
+  const email = req.user?.email;
+  if (email) {
+    const { rows } = await db.query(
+      'SELECT user_id FROM users WHERE LOWER(email_id) = LOWER($1) LIMIT 1',
+      [email]
+    );
+    if (rows.length > 0) return rows[0].user_id;
+  }
+  return req.user?.id || null;
+}
+
+async function hasEffectivePermission(db, req, permissionName) {
+  try {
+    const role = String(req.user?.role || 'employee').toLowerCase();
+    if (role === 'admin') return true;
+
+    const userId = await resolveOrgUserId(db, req);
+    if (!userId) return false;
+
+    // Role-based default
+    const base = await db.query(
+      `SELECT rp.has_access
+       FROM role_permissions rp
+       JOIN permissions p ON p.id = rp.permission_id
+       WHERE rp.role_name = $1 AND p.name = $2
+       LIMIT 1`,
+      [role, permissionName]
+    );
+    const baseAccess = base.rows[0]?.has_access === true;
+
+    // User-specific overrides: match existing behavior of /api/permissions/my
+    // (only explicit grants elevate access; explicit false does not revoke role default).
+    const override = await db.query(
+      `SELECT up.has_access
+       FROM user_permissions up
+       JOIN permissions p ON p.id = up.permission_id
+       WHERE up.user_id = $1 AND p.name = $2
+       LIMIT 1`,
+      [userId, permissionName]
+    );
+    const userGrant = override.rows[0]?.has_access === true;
+
+    return baseAccess || userGrant;
+  } catch (e) {
+    console.warn('[employees] permission lookup failed:', e.message);
+    return false;
+  }
+}
+
+async function canViewEmployeeCompensation(db, req) {
+  // Salary/overtime is shown to admins, and to managers who were granted employees.view.
+  const role = String(req.user?.role || 'employee').toLowerCase();
+  if (role === 'admin') return true;
+  if (role !== 'manager') return false;
+  return await hasEffectivePermission(db, req, 'employees.view');
+}
+
 // Public origin for absolute URLs (set PUBLIC_API_URL for mobile dev, e.g. http://10.0.0.5:5000)
 function publicOrigin(req) {
   const envBase = process.env.PUBLIC_API_URL || process.env.API_PUBLIC_URL;
@@ -215,8 +275,8 @@ router.get('/', async (req, res) => {
       where += ' AND u.is_active = false';
     }
     
-    // Determine if user can see salary information (only admin)
-    const canViewSalary = req.user && req.user.role === 'admin';
+    // Determine if user can see salary information (admin or permitted manager)
+    const canViewSalary = await canViewEmployeeCompensation(db, req);
     const salaryFields = canViewSalary 
       ? ', u.amount as salary, u.pay_calculation, u.overtime_rate'
       : '';
@@ -271,8 +331,8 @@ router.get('/:id', async (req, res) => {
     const db = getDbPool(req);
     const { id } = req.params;
     
-    // Determine if user can see salary information (only admin)
-    const canViewSalary = req.user && req.user.role === 'admin';
+    // Determine if user can see salary information (admin or permitted manager)
+    const canViewSalary = await canViewEmployeeCompensation(db, req);
     
     // If user is a manager, check if the employee is not a manager
     let whereClause = 'WHERE u.user_id = $1';
@@ -697,8 +757,8 @@ router.get('/:id/summary', async (req, res) => {
     const { id } = req.params;
     const { startDate, endDate } = req.query;
     
-    // Determine if user can see salary information (only admin)
-    const canViewSalary = req.user && req.user.role === 'admin';
+    // Determine if user can see salary information (admin or permitted manager)
+    const canViewSalary = await canViewEmployeeCompensation(db, req);
     
     // If user is a manager, check if the employee is not a manager
     let whereClause = 'WHERE user_id = $1';

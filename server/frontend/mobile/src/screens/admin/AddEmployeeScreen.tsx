@@ -726,7 +726,7 @@ export default function AddEmployeeScreen() {
         joiningDate: joiningDate ? joiningDate.toISOString().split('T')[0] : undefined,
         employmentType: employeeType,
         salaryType: payCalculation === 'Hourly rate' ? 'hourly' : payCalculation.toLowerCase(),
-        salaryAmount: Number(amount) || 0,
+        salaryAmount: Number(amount) || 0,  
         overtimeRate: Number(overtimeRate) || 0,
       };
 

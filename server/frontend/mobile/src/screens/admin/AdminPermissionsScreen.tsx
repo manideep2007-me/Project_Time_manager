@@ -646,7 +646,7 @@ export default function AdminPermissionsScreen() {
             disabled={saving}
           >
             <Text style={styles.saveButtonText}>
-              {saving ? 'Reloading…' : 'Reload from server'}
+              {saving ? 'Saving...' : 'Save Permission Settings'}
             </Text>
           </TouchableOpacity>
         </View>
